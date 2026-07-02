@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend import config
 from backend.database import get_db
-from backend.models import TaskListResponse
+from backend.models import TaskListResponse, TaskRetranscribeRequest
 from backend.services import exports as export_service
 from backend.services import tasks as task_service
 
@@ -59,6 +59,22 @@ async def retry_task(task_id: str, db: Session = Depends(get_db)):
     return task
 
 
+@router.post("/{task_id}/retranscribe")
+async def retranscribe_task(task_id: str, request: TaskRetranscribeRequest, db: Session = Depends(get_db)):
+    task = task_service.retranscribe_task(
+        db,
+        task_id,
+        backend=request.backend,
+        model_name=request.model_name,
+        provider_id=request.provider_id,
+        language=request.language,
+        output_formats=request.output_formats,
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
 @router.delete("/{task_id}")
 async def delete_task(task_id: str, db: Session = Depends(get_db)):
     if not task_service.delete_task(db, task_id):
@@ -99,4 +115,3 @@ async def export_task(task_id: str, fmt: str, db: Session = Depends(get_db)):
             media_type="application/json",
         )
     raise HTTPException(status_code=400, detail=f"Unsupported export format: {fmt}")
-
