@@ -1,0 +1,10 @@
+{
+  "name": "@asrbox/tauri",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"Tauri shell is reserved for phase 2\"",
+    "build": "echo \"Tauri shell is reserved for phase 2\""
+  }
+}
