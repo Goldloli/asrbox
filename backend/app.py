@@ -7,11 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import __version__
 from backend.database import init_db
+from backend.database import session as db_session
 from backend.routes import register_routers
+from backend.services.tasks import mark_interrupted_tasks
 
 
 def create_app() -> FastAPI:
     init_db()
+    _mark_interrupted_tasks()
     app = FastAPI(
         title="ASRbox API",
         description="Web-first ASR model and provider workspace",
@@ -34,6 +37,14 @@ def create_app() -> FastAPI:
     return app
 
 
+def _mark_interrupted_tasks() -> None:
+    db = db_session.SessionLocal()
+    try:
+        mark_interrupted_tasks(db)
+    finally:
+        db.close()
+
+
 def _mount_frontend(app: FastAPI) -> None:
     frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
     if not frontend_dir.is_dir():
@@ -54,4 +65,3 @@ def _mount_frontend(app: FastAPI) -> None:
 
 
 app = create_app()
-

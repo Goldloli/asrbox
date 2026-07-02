@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any, BinaryIO
 from sqlalchemy.orm import Session
 
 from backend import config
+from backend.database import session as db_session
 from backend.database.models import TranscriptSegment as DBSegment
 from backend.database.models import TranscriptionTask
 from backend.models import TranscriptSegment, TranscriptionTaskResponse
@@ -19,6 +21,16 @@ from backend.services import models as model_service
 from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
 
 CHUNK_SIZE = 1024 * 1024
+LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
+ACTIVE_TASK_STATUSES = {
+    "queued",
+    "preprocessing",
+    "waiting_model",
+    "downloading_model",
+    "transcribing",
+    "postprocessing",
+    "exporting",
+}
 
 
 def _segments_for_task(db: Session, task_id: str) -> list[TranscriptSegment]:
@@ -39,6 +51,18 @@ def _segments_for_task(db: Session, task_id: str) -> list[TranscriptSegment]:
         )
         for row in rows
     ]
+
+
+def mark_interrupted_tasks(db: Session) -> int:
+    rows = db.query(TranscriptionTask).filter(TranscriptionTask.status.in_(ACTIVE_TASK_STATUSES)).all()
+    for row in rows:
+        row.status = "interrupted"
+        row.progress = 100
+        row.error = "Task was interrupted before the server restarted"
+        row.updated_at = datetime.utcnow()
+    if rows:
+        db.commit()
+    return len(rows)
 
 
 def to_response(db: Session, row: TranscriptionTask) -> TranscriptionTaskResponse:
@@ -84,8 +108,8 @@ def _create_task_row(
         filename=filename,
         source=backend,
         audio_path=config.to_storage_path(audio_path),
-        status="preprocessing",
-        progress=5,
+        status="queued",
+        progress=0,
         language=language,
         model_name=model_name,
         provider_id=provider_id,
@@ -95,9 +119,26 @@ def _create_task_row(
     db.commit()
     db.refresh(row)
 
-    run_task(db, row)
-    db.refresh(row)
-    return to_response(db, row)
+    response = to_response(db, row)
+    start_task_in_background(row.id)
+    return response
+
+
+def start_task_in_background(task_id: str) -> None:
+    thread = threading.Thread(target=_run_task_in_background, args=(task_id,), daemon=True)
+    thread.start()
+
+
+def _run_task_in_background(task_id: str) -> None:
+    if db_session.SessionLocal is None:
+        db_session.init_db()
+    db = db_session.SessionLocal()
+    try:
+        row = get_task_row(db, task_id)
+        if row is not None:
+            run_task(db, row)
+    finally:
+        db.close()
 
 
 def create_task(
@@ -213,11 +254,38 @@ def _transcribe_with_local_model(db: Session, row: TranscriptionTask):
         row.normalized_audio_path = config.to_storage_path(normalized_path)
         db.commit()
 
-    return transcribe_with_local_model(
-        model_name,
-        str(normalized_path),
-        {"language": row.language},
+    stop_progress = threading.Event()
+    progress_thread = threading.Thread(
+        target=_advance_local_transcription_progress,
+        args=(row.id, stop_progress),
+        daemon=True,
     )
+    progress_thread.start()
+    try:
+        return transcribe_with_local_model(
+            model_name,
+            str(normalized_path),
+            {"language": row.language},
+        )
+    finally:
+        stop_progress.set()
+        progress_thread.join(timeout=LOCAL_PROGRESS_INTERVAL_SECONDS)
+
+
+def _advance_local_transcription_progress(task_id: str, stop_progress: threading.Event) -> None:
+    if db_session.SessionLocal is None:
+        db_session.init_db()
+    while not stop_progress.wait(LOCAL_PROGRESS_INTERVAL_SECONDS):
+        db = db_session.SessionLocal()
+        try:
+            row = get_task_row(db, task_id)
+            if row is None or row.status != "transcribing":
+                return
+            if row.progress < 88:
+                row.progress = min(88, row.progress + 1)
+                db.commit()
+        finally:
+            db.close()
 
 
 def run_task(db: Session, row: TranscriptionTask) -> None:
@@ -291,9 +359,10 @@ def retry_task(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
     row.error = None
     row.progress = 0
     db.commit()
-    run_task(db, row)
     db.refresh(row)
-    return to_response(db, row)
+    response = to_response(db, row)
+    start_task_in_background(row.id)
+    return response
 
 
 def cancel_task(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
