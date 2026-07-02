@@ -11,8 +11,8 @@ export function TranscribePage() {
   const queryClient = useQueryClient();
   const { t, statusLabel: localizedStatus } = useI18n();
   const [file, setFile] = useState<File | null>(null);
-  const [backend, setBackend] = useState('provider');
-  const [modelName, setModelName] = useState('faster-whisper-small');
+  const [backend, setBackend] = useState('local');
+  const [modelName, setModelName] = useState('whisper-base');
   const [providerId, setProviderId] = useState('bcut');
   const [language, setLanguage] = useState('zh');
   const [outputFormats, setOutputFormats] = useState<string[]>(['txt', 'srt', 'json']);

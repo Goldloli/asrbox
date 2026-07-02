@@ -168,8 +168,26 @@ def test_provider_crud_masks_secrets_and_supports_defaults(tmp_path: Path) -> No
     assert settings.json()["default_provider_id"] == provider_id
 
 
-def test_transcription_task_runs_and_exports_outputs(tmp_path: Path) -> None:
+def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        return TranscriptionResult(
+            text="sample local transcript",
+            language=options.get("language"),
+            duration=1.8,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.8, text="sample local transcript")],
+        )
+
+    def fake_normalize(path: Path) -> Path:
+        return path
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
     client = make_client(tmp_path)
+    model_dir = tmp_path / "models" / "whisper-base"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.json").write_text("{}")
+    (model_dir / "model.safetensors").write_bytes(b"weights")
 
     payload = b"fake audio bytes"
     response = client.post(
@@ -200,7 +218,7 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path) -> None:
 
     txt_export = client.get(f"/tasks/{task_id}/export/txt")
     assert txt_export.status_code == 200
-    assert "sample.wav" in txt_export.text
+    assert "sample local transcript" in txt_export.text
 
     srt_export = client.get(f"/tasks/{task_id}/export/srt")
     assert srt_export.status_code == 200
@@ -258,8 +276,76 @@ def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monke
     assert calls[0][1]["language"] == "zh"
 
 
-def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path) -> None:
+def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[str, str, dict]] = []
+
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        calls.append((model_name, audio_path, options))
+        return TranscriptionResult(
+            text="本地模型真实转写结果",
+            language=options.get("language"),
+            duration=2.4,
+            model_name=model_name,
+            segments=[
+                TranscriptSegment(id=1, start=0.0, end=1.0, text="本地模型真实"),
+                TranscriptSegment(id=2, start=1.0, end=2.4, text="转写结果"),
+            ],
+        )
+
+    def fake_normalize(path: Path) -> Path:
+        target = path.with_suffix(".mp3")
+        target.write_bytes(b"mp3")
+        return target
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+
     client = make_client(tmp_path)
+    model_dir = tmp_path / "models" / "whisper-base"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.json").write_text("{}")
+    (model_dir / "model.safetensors").write_bytes(b"weights")
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("local-video.mp4", b"video", "video/mp4")},
+        data={
+            "backend": "local",
+            "model_name": "whisper-base",
+            "language": "zh",
+            "output_formats": json.dumps(["txt", "srt"]),
+        },
+    )
+
+    assert response.status_code == 200
+    task = response.json()
+    assert task["status"] == "completed"
+    assert task["text"] == "本地模型真实转写结果"
+    assert task["model_name"] == "whisper-base"
+    assert task["duration_ms"] == 2400
+    assert [segment["text"] for segment in task["segments"]] == ["本地模型真实", "转写结果"]
+    assert calls == [("whisper-base", str(tmp_path / "uploads" / f"{task['id']}.mp3"), {"language": "zh"})]
+
+
+def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        return TranscriptionResult(
+            text="retry local transcript",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="retry local transcript")],
+        )
+
+    def fake_normalize(path: Path) -> Path:
+        return path
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    client = make_client(tmp_path)
+    model_dir = tmp_path / "models" / "whisper-base"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.json").write_text("{}")
+    (model_dir / "model.safetensors").write_bytes(b"weights")
     response = client.post(
         "/transcriptions",
         files={"file": ("retry.wav", b"audio", "audio/wav")},
