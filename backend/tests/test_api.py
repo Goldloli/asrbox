@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from backend.models import TranscriptSegment, TranscriptionResult
+
 
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["ASRBOX_DATA_DIR"] = str(tmp_path)
@@ -207,6 +209,53 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path) -> None:
     json_export = client.get(f"/tasks/{task_id}/export/json")
     assert json_export.status_code == 200
     assert json_export.json()["id"] == task_id
+
+
+def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    def fake_transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
+        calls.append((audio_path, options))
+        return TranscriptionResult(
+            text="真实 provider 转写结果",
+            language=options.get("language"),
+            duration=3.2,
+            provider_id="bcut",
+            segments=[
+                TranscriptSegment(id=1, start=0.0, end=1.2, text="真实 provider"),
+                TranscriptSegment(id=2, start=1.2, end=3.2, text="转写结果"),
+            ],
+        )
+
+    def fake_normalize(path: Path) -> Path:
+        target = path.with_suffix(".mp3")
+        target.write_bytes(b"mp3")
+        return target
+
+    monkeypatch.setattr("backend.providers.bcut.BcutProvider.transcribe", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+
+    client = make_client(tmp_path)
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("real-video.mp4", b"video", "video/mp4")},
+        data={
+            "backend": "provider",
+            "provider_id": "bcut",
+            "language": "zh",
+            "output_formats": json.dumps(["txt", "srt"]),
+        },
+    )
+
+    assert response.status_code == 200
+    task = response.json()
+    assert task["status"] == "completed"
+    assert task["text"] == "真实 provider 转写结果"
+    assert task["provider_id"] == "bcut"
+    assert task["duration_ms"] == 3200
+    assert [segment["text"] for segment in task["segments"]] == ["真实 provider", "转写结果"]
+    assert calls[0][0].endswith(".mp3")
+    assert calls[0][1]["language"] == "zh"
 
 
 def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path) -> None:

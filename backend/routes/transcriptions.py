@@ -12,7 +12,7 @@ router = APIRouter(prefix="/transcriptions", tags=["transcriptions"])
 
 
 @router.post("")
-async def create_transcription(
+def create_transcription(
     file: UploadFile = File(...),
     backend: str = Form("local"),
     model_name: str | None = Form(None),
@@ -21,7 +21,6 @@ async def create_transcription(
     output_formats: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    audio_bytes = await file.read()
     parsed_formats = ["txt", "srt"]
     if output_formats:
         try:
@@ -30,14 +29,13 @@ async def create_transcription(
                 parsed_formats = [str(item) for item in parsed]
         except json.JSONDecodeError:
             parsed_formats = [item.strip() for item in output_formats.split(",") if item.strip()]
-    return task_service.create_task(
+    return task_service.create_task_from_file(
         db,
         filename=file.filename or "audio",
-        audio_bytes=audio_bytes,
+        file_obj=file.file,
         backend=backend,
         model_name=model_name,
         provider_id=provider_id,
         language=language,
         output_formats=parsed_formats,
     )
-

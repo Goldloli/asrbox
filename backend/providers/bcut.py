@@ -32,7 +32,7 @@ class BcutProvider:
     async def list_models(self) -> list[str]:
         return ["bcut-free"]
 
-    async def transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
+    def transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
         audio = Path(audio_path).read_bytes()
         response = self._run(audio)
         segments = [
@@ -122,4 +122,3 @@ class BcutProvider:
         )
         response.raise_for_status()
         return response.json()["data"]
-

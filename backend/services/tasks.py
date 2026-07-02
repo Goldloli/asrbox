@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from sqlalchemy.orm import Session
 
@@ -12,8 +14,11 @@ from backend import config
 from backend.database.models import TranscriptSegment as DBSegment
 from backend.database.models import TranscriptionTask
 from backend.models import TranscriptSegment, TranscriptionTaskResponse
+from backend.providers import BcutProvider
 from backend.services import models as model_service
 from backend.services.transcribe import transcribe_placeholder
+
+CHUNK_SIZE = 1024 * 1024
 
 
 def _segments_for_task(db: Session, task_id: str) -> list[TranscriptSegment]:
@@ -63,24 +68,19 @@ def to_response(db: Session, row: TranscriptionTask) -> TranscriptionTaskRespons
     )
 
 
-def create_task(
+def _create_task_row(
     db: Session,
     *,
     filename: str,
-    audio_bytes: bytes,
+    audio_path: Path,
     backend: str,
     model_name: str | None,
     provider_id: str | None,
     language: str | None,
     output_formats: list[str],
 ) -> TranscriptionTaskResponse:
-    task_id = str(uuid.uuid4())
-    suffix = Path(filename).suffix or ".audio"
-    audio_path = config.get_uploads_dir() / f"{task_id}{suffix}"
-    audio_path.write_bytes(audio_bytes)
-
     row = TranscriptionTask(
-        id=task_id,
+        id=audio_path.stem,
         filename=filename,
         source=backend,
         audio_path=config.to_storage_path(audio_path),
@@ -100,6 +100,108 @@ def create_task(
     return to_response(db, row)
 
 
+def create_task(
+    db: Session,
+    *,
+    filename: str,
+    audio_bytes: bytes,
+    backend: str,
+    model_name: str | None,
+    provider_id: str | None,
+    language: str | None,
+    output_formats: list[str],
+) -> TranscriptionTaskResponse:
+    task_id = str(uuid.uuid4())
+    suffix = Path(filename).suffix or ".audio"
+    audio_path = config.get_uploads_dir() / f"{task_id}{suffix}"
+    audio_path.write_bytes(audio_bytes)
+    return _create_task_row(
+        db,
+        filename=filename,
+        audio_path=audio_path,
+        backend=backend,
+        model_name=model_name,
+        provider_id=provider_id,
+        language=language,
+        output_formats=output_formats,
+    )
+
+
+def create_task_from_file(
+    db: Session,
+    *,
+    filename: str,
+    file_obj: BinaryIO,
+    backend: str,
+    model_name: str | None,
+    provider_id: str | None,
+    language: str | None,
+    output_formats: list[str],
+) -> TranscriptionTaskResponse:
+    task_id = str(uuid.uuid4())
+    suffix = Path(filename).suffix or ".audio"
+    audio_path = config.get_uploads_dir() / f"{task_id}{suffix}"
+    with audio_path.open("wb") as output:
+        shutil.copyfileobj(file_obj, output, length=CHUNK_SIZE)
+    return _create_task_row(
+        db,
+        filename=filename,
+        audio_path=audio_path,
+        backend=backend,
+        model_name=model_name,
+        provider_id=provider_id,
+        language=language,
+        output_formats=output_formats,
+    )
+
+
+def normalize_media_for_asr(path: Path) -> Path:
+    if path.suffix.lower() == ".mp3":
+        return path
+
+    target = path.with_suffix(".mp3")
+    command = [
+        "ffmpeg",
+        "-i",
+        str(path),
+        "-ac",
+        "1",
+        "-f",
+        "mp3",
+        "-af",
+        "aresample=async=1",
+        "-y",
+        str(target),
+    ]
+    try:
+        subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg is required to extract audio from video files") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        raise RuntimeError(f"Failed to extract audio with ffmpeg: {detail}") from exc
+    return target
+
+
+def _transcribe_with_provider(db: Session, row: TranscriptionTask):
+    provider_id = row.provider_id or "bcut"
+    audio_path = config.resolve_storage_path(row.audio_path)
+    if audio_path is None:
+        raise RuntimeError("Task audio file not found")
+
+    normalized_path = normalize_media_for_asr(audio_path)
+    if normalized_path != audio_path:
+        row.normalized_audio_path = config.to_storage_path(normalized_path)
+        db.commit()
+
+    if provider_id == "bcut":
+        return BcutProvider().transcribe(
+            str(normalized_path),
+            {"language": row.language, "provider_id": provider_id},
+        )
+    raise RuntimeError(f"Provider {provider_id} transcription is not implemented")
+
+
 def run_task(db: Session, row: TranscriptionTask) -> None:
     try:
         row.status = "waiting_model" if row.model_name else "transcribing"
@@ -110,12 +212,15 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         row.status = "transcribing"
         row.progress = 60
         db.commit()
-        result = transcribe_placeholder(
-            row.filename,
-            row.model_name,
-            row.provider_id,
-            row.language,
-        )
+        if row.source == "provider" or row.provider_id:
+            result = _transcribe_with_provider(db, row)
+        else:
+            result = transcribe_placeholder(
+                row.filename,
+                row.model_name,
+                row.provider_id,
+                row.language,
+            )
         row.status = "postprocessing"
         row.progress = 90
         row.text = result.text
@@ -199,4 +304,3 @@ def delete_task(db: Session, task_id: str) -> bool:
 
 def task_as_dict(task: TranscriptionTaskResponse) -> dict[str, Any]:
     return task.model_dump()
-

@@ -9,9 +9,8 @@ class ASRProvider(Protocol):
     async def test_connection(self) -> ProviderHealth:
         ...
 
-    async def transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
+    def transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
         ...
 
     async def list_models(self) -> list[str]:
         ...
-
