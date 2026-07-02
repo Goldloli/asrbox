@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -57,6 +58,19 @@ def wait_for_model_status(client: TestClient, model_name: str, key: str, value: 
             return last_status
         time.sleep(0.05)
     raise AssertionError(f"{model_name} never reached {key}={value}; last={last_status}")
+
+
+def wait_for_task(client: TestClient, task_id: str, predicate, description: str) -> dict:
+    deadline = time.time() + 3
+    last_task = {}
+    while time.time() < deadline:
+        response = client.get(f"/tasks/{task_id}")
+        assert response.status_code == 200
+        last_task = response.json()
+        if predicate(last_task):
+            return last_task
+        time.sleep(0.05)
+    raise AssertionError(f"{task_id} never reached {description}; last={last_task}")
 
 
 def test_huggingface_model_download_uses_snapshot_and_marks_downloaded(tmp_path: Path, monkeypatch) -> None:
@@ -168,6 +182,38 @@ def test_provider_crud_masks_secrets_and_supports_defaults(tmp_path: Path) -> No
     assert settings.json()["default_provider_id"] == provider_id
 
 
+def test_running_tasks_are_marked_interrupted_on_startup(tmp_path: Path) -> None:
+    os.environ["ASRBOX_DATA_DIR"] = str(tmp_path)
+    from backend.database.models import TranscriptionTask
+    from backend.database import session as db_session
+    from backend.services.tasks import mark_interrupted_tasks
+
+    db_session.init_db()
+    db = db_session.SessionLocal()
+    try:
+        db.add(
+            TranscriptionTask(
+                id="stale-task",
+                filename="stale.mp4",
+                source="local",
+                audio_path="uploads/stale.mp4",
+                status="transcribing",
+                progress=60,
+                model_name="whisper-base",
+            )
+        )
+        db.commit()
+
+        assert mark_interrupted_tasks(db) == 1
+
+        row = db.query(TranscriptionTask).filter(TranscriptionTask.id == "stale-task").one()
+        assert row.status == "interrupted"
+        assert row.progress == 100
+        assert row.error == "Task was interrupted before the server restarted"
+    finally:
+        db.close()
+
+
 def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch) -> None:
     def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
         return TranscriptionResult(
@@ -201,13 +247,13 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
         },
     )
     assert response.status_code == 200
-    task = response.json()
+    task_id = response.json()["id"]
+    task = wait_for_task(client, task_id, lambda item: item["status"] == "completed", "completed")
     assert task["status"] == "completed"
     assert task["filename"] == "sample.wav"
     assert task["text"]
     assert task["segments"]
 
-    task_id = task["id"]
     fetched = client.get(f"/tasks/{task_id}")
     assert fetched.status_code == 200
     assert fetched.json()["id"] == task_id
@@ -266,7 +312,7 @@ def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monke
     )
 
     assert response.status_code == 200
-    task = response.json()
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
     assert task["status"] == "completed"
     assert task["text"] == "真实 provider 转写结果"
     assert task["provider_id"] == "bcut"
@@ -318,13 +364,75 @@ def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypat
     )
 
     assert response.status_code == 200
-    task = response.json()
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
     assert task["status"] == "completed"
     assert task["text"] == "本地模型真实转写结果"
     assert task["model_name"] == "whisper-base"
     assert task["duration_ms"] == 2400
     assert [segment["text"] for segment in task["segments"]] == ["本地模型真实", "转写结果"]
     assert calls == [("whisper-base", str(tmp_path / "uploads" / f"{task['id']}.mp3"), {"language": "zh"})]
+
+
+def test_local_model_task_returns_before_transcription_finishes_and_advances_progress(
+    tmp_path: Path, monkeypatch
+) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        started.set()
+        release.wait(timeout=1)
+        return TranscriptionResult(
+            text="background local transcript",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="background local transcript")],
+        )
+
+    def fake_normalize(path: Path) -> Path:
+        target = path.with_suffix(".mp3")
+        target.write_bytes(b"mp3")
+        return target
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.LOCAL_PROGRESS_INTERVAL_SECONDS", 0.02)
+
+    client = make_client(tmp_path)
+    model_dir = tmp_path / "models" / "whisper-base"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.json").write_text("{}")
+    (model_dir / "model.safetensors").write_bytes(b"weights")
+
+    started_at = time.monotonic()
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("long-local-video.mp4", b"video", "video/mp4")},
+        data={
+            "backend": "local",
+            "model_name": "whisper-base",
+            "language": "zh",
+            "output_formats": json.dumps(["txt"]),
+        },
+    )
+    elapsed = time.monotonic() - started_at
+
+    assert response.status_code == 200
+    assert elapsed < 0.2
+    task_id = response.json()["id"]
+    assert started.wait(timeout=1)
+
+    progressing = wait_for_task(
+        client,
+        task_id,
+        lambda task: task["status"] == "transcribing" and task["progress"] > 60,
+        "transcribing progress above 60",
+    )
+    assert progressing["normalized_audio_path"].endswith(".mp3")
+
+    release.set()
+    completed = wait_for_task(client, task_id, lambda task: task["status"] == "completed", "completed")
+    assert completed["text"] == "background local transcript"
 
 
 def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypatch) -> None:
@@ -355,7 +463,8 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypa
 
     retry = client.post(f"/tasks/{task_id}/retry")
     assert retry.status_code == 200
-    assert retry.json()["status"] == "completed"
+    retried = wait_for_task(client, task_id, lambda item: item["status"] == "completed", "completed")
+    assert retried["status"] == "completed"
 
     cancel = client.post(f"/tasks/{task_id}/cancel")
     assert cancel.status_code == 200
