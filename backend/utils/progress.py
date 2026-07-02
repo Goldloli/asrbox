@@ -10,8 +10,15 @@ from typing import Any
 class ProgressManager:
     def __init__(self) -> None:
         self._progress: dict[str, dict[str, Any]] = {}
-        self._listeners: dict[str, list[asyncio.Queue]] = {}
+        self._listeners: dict[str, list[tuple[asyncio.Queue, asyncio.AbstractEventLoop]]] = {}
         self._lock = threading.Lock()
+
+    @staticmethod
+    def _put_nowait(queue: asyncio.Queue, data: dict[str, Any]) -> None:
+        try:
+            queue.put_nowait(data)
+        except asyncio.QueueFull:
+            pass
 
     def update_progress(
         self,
@@ -36,11 +43,9 @@ class ProgressManager:
         with self._lock:
             self._progress[key] = data
             listeners = list(self._listeners.get(key, []))
-        for queue in listeners:
-            try:
-                queue.put_nowait(data)
-            except asyncio.QueueFull:
-                pass
+        for queue, loop in listeners:
+            if loop.is_running():
+                loop.call_soon_threadsafe(self._put_nowait, queue, data.copy())
 
     def mark_complete(self, key: str) -> None:
         self.update_progress(key, 1, 1, status="complete")
@@ -53,10 +58,15 @@ class ProgressManager:
             data = self._progress.get(key)
             return data.copy() if data else None
 
+    def clear_progress(self, key: str) -> None:
+        with self._lock:
+            self._progress.pop(key, None)
+
     async def subscribe(self, key: str):
         queue: asyncio.Queue = asyncio.Queue(maxsize=10)
+        loop = asyncio.get_running_loop()
         with self._lock:
-            self._listeners.setdefault(key, []).append(queue)
+            self._listeners.setdefault(key, []).append((queue, loop))
             initial = self._progress.get(key)
         try:
             if initial:
@@ -74,8 +84,10 @@ class ProgressManager:
         finally:
             with self._lock:
                 listeners = self._listeners.get(key, [])
-                if queue in listeners:
-                    listeners.remove(queue)
+                for listener in list(listeners):
+                    if listener[0] is queue:
+                        listeners.remove(listener)
+                        break
                 if not listeners and key in self._listeners:
                     del self._listeners[key]
 
@@ -88,4 +100,3 @@ def get_progress_manager() -> ProgressManager:
     if _progress_manager is None:
         _progress_manager = ProgressManager()
     return _progress_manager
-

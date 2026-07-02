@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -41,6 +42,87 @@ def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Pa
     assert response.status_code == 200
     names = {model["model_name"] for model in response.json()["models"]}
     assert {"whisper-base", "faster-whisper-small", "mlx-whisper-turbo", "sensevoice-small"} <= names
+
+
+def wait_for_model_status(client: TestClient, model_name: str, key: str, value: object) -> dict:
+    deadline = time.time() + 3
+    last_status = {}
+    while time.time() < deadline:
+        response = client.get("/models/status")
+        assert response.status_code == 200
+        last_status = next(model for model in response.json()["models"] if model["model_name"] == model_name)
+        if last_status[key] == value:
+            return last_status
+        time.sleep(0.05)
+    raise AssertionError(f"{model_name} never reached {key}={value}; last={last_status}")
+
+
+def test_huggingface_model_download_uses_snapshot_and_marks_downloaded(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[str, Path, tuple[str, ...] | None]] = []
+
+    def fake_download(config, model_dir: Path) -> str:
+        calls.append((config.repo_id, model_dir, tuple(config.allow_patterns or [])))
+        model_dir.mkdir(parents=True, exist_ok=True)
+        (model_dir / "model.safetensors").write_bytes(b"weights")
+        return str(model_dir)
+
+    monkeypatch.setattr("backend.services.models._download_huggingface_snapshot", fake_download)
+    client = make_client(tmp_path)
+
+    response = client.post("/models/download", json={"model_name": "whisper-base"})
+    assert response.status_code == 200
+    wait_for_model_status(client, "whisper-base", "downloaded", True)
+
+    assert calls
+    assert calls[0][0] == "openai/whisper-base"
+    assert calls[0][1] == tmp_path / "models" / "whisper-base"
+    assert "*.safetensors" in calls[0][2]
+    marker = tmp_path / "models" / "whisper-base" / "model.json"
+    assert json.loads(marker.read_text())["snapshot_path"] == str(tmp_path / "models" / "whisper-base")
+
+    second = client.post("/models/download", json={"model_name": "whisper-base"})
+    assert second.status_code == 200
+    assert len(calls) == 1
+
+
+def test_modelscope_model_download_uses_modelscope_snapshot(tmp_path: Path, monkeypatch) -> None:
+    calls: list[tuple[str, Path]] = []
+
+    def fake_download(config, model_dir: Path) -> str:
+        calls.append((config.repo_id, model_dir))
+        model_dir.mkdir(parents=True, exist_ok=True)
+        (model_dir / "model.pt").write_bytes(b"weights")
+        return str(model_dir)
+
+    monkeypatch.setattr("backend.services.models._download_modelscope_snapshot", fake_download)
+    client = make_client(tmp_path)
+
+    response = client.post("/models/download", json={"model_name": "sensevoice-small"})
+    assert response.status_code == 200
+    status = wait_for_model_status(client, "sensevoice-small", "downloaded", True)
+
+    assert status["source"] == "modelscope"
+    assert calls == [("iic/SenseVoiceSmall", tmp_path / "models" / "sensevoice-small")]
+
+
+def test_model_download_error_is_reported_and_delete_clears_cache(tmp_path: Path, monkeypatch) -> None:
+    def failing_download(config, model_dir: Path) -> str:
+        model_dir.mkdir(parents=True, exist_ok=True)
+        (model_dir / "partial.incomplete").write_text("partial")
+        raise RuntimeError("network unavailable")
+
+    monkeypatch.setattr("backend.services.models._download_huggingface_snapshot", failing_download)
+    client = make_client(tmp_path)
+
+    response = client.post("/models/download", json={"model_name": "whisper-base"})
+    assert response.status_code == 200
+    status = wait_for_model_status(client, "whisper-base", "error", "network unavailable")
+    assert status["downloaded"] is False
+
+    delete = client.delete("/models/whisper-base")
+    assert delete.status_code == 200
+    status = wait_for_model_status(client, "whisper-base", "downloaded", False)
+    assert status["error"] is None
 
 
 def test_provider_crud_masks_secrets_and_supports_defaults(tmp_path: Path) -> None:
@@ -143,4 +225,3 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path) -> None:
     cancel = client.post(f"/tasks/{task_id}/cancel")
     assert cancel.status_code == 200
     assert cancel.json()["status"] in {"completed", "cancelled"}
-

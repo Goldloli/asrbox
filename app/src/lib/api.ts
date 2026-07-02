@@ -69,6 +69,17 @@ export interface ModelStatus {
   error?: string | null;
 }
 
+export interface ModelProgress {
+  model_name: string;
+  current: number;
+  total: number;
+  progress: number;
+  filename?: string | null;
+  status: 'downloading' | 'extracting' | 'complete' | 'error';
+  error?: string | null;
+  timestamp: string;
+}
+
 export interface Provider {
   id: string;
   name: string;
@@ -190,6 +201,10 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ model_name: modelName }),
     });
+  }
+
+  modelProgressUrl(modelName: string) {
+    return `${this.baseUrl()}/models/progress/${modelName}`;
   }
 
   unloadModel(modelName: string) {

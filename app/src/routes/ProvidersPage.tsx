@@ -2,9 +2,11 @@ import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Plus, Trash2 } from 'lucide-react';
 import { apiClient } from '../lib/api';
+import { useI18n } from '../lib/i18n';
 
 export function ProvidersPage() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [providerType, setProviderType] = useState('custom');
   const [baseUrl, setBaseUrl] = useState('');
@@ -49,8 +51,8 @@ export function ProvidersPage() {
       <div>
         <header className="page-header">
           <div>
-            <p className="eyebrow">Online ASR</p>
-            <h1>Providers</h1>
+            <p className="eyebrow">{t('providers.eyebrow')}</p>
+            <h1>{t('providers.title')}</h1>
           </div>
         </header>
 
@@ -61,18 +63,18 @@ export function ProvidersPage() {
                 <Activity size={20} />
                 <div>
                   <h2>{provider.name}</h2>
-                  <p>{provider.provider_type} · {provider.base_url ?? 'built-in'} · key {provider.api_key_masked ?? 'not set'}</p>
+                  <p>{provider.provider_type} · {provider.base_url ?? t('providers.builtIn')} · key {provider.api_key_masked ?? t('providers.notSet')}</p>
                 </div>
               </div>
               <div className="chip-line">
-                <span className={`chip ${provider.enabled ? 'ok' : ''}`}>{provider.enabled ? 'enabled' : 'disabled'}</span>
-                {settingsQuery.data?.default_provider_id === provider.id && <span className="chip ok">default</span>}
+                <span className={`chip ${provider.enabled ? 'ok' : ''}`}>{provider.enabled ? t('providers.enabled') : t('providers.disabled')}</span>
+                {settingsQuery.data?.default_provider_id === provider.id && <span className="chip ok">{t('common.default')}</span>}
                 {provider.default_model && <span className="chip">{provider.default_model}</span>}
               </div>
               <div className="row-actions">
-                <button className="secondary-button" onClick={() => test.mutate(provider.id)}>Test</button>
-                <button className="secondary-button" onClick={() => setDefault.mutate(provider.id)}>Default</button>
-                <button className="icon-button danger" title="Delete" onClick={() => remove.mutate(provider.id)}>
+                <button className="secondary-button" onClick={() => test.mutate(provider.id)}>{t('common.test')}</button>
+                <button className="secondary-button" onClick={() => setDefault.mutate(provider.id)}>{t('common.default')}</button>
+                <button className="icon-button danger" title={t('common.delete')} onClick={() => remove.mutate(provider.id)}>
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -84,23 +86,23 @@ export function ProvidersPage() {
 
       <form className="panel form-panel" onSubmit={submit}>
         <div>
-          <p className="eyebrow">Add</p>
-          <h2>Custom provider</h2>
+          <p className="eyebrow">{t('providers.add')}</p>
+          <h2>{t('providers.customProvider')}</h2>
         </div>
-        <label className="field"><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
+        <label className="field"><span>{t('providers.name')}</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label>
         <label className="field">
-          <span>Type</span>
+          <span>{t('providers.type')}</span>
           <select value={providerType} onChange={(event) => setProviderType(event.target.value)}>
             <option value="custom">Generic HTTP</option>
             <option value="openai-compatible">OpenAI compatible</option>
             <option value="aliyun">Aliyun ASR</option>
           </select>
         </label>
-        <label className="field"><span>Base URL</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} /></label>
-        <label className="field"><span>API key</span><input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" /></label>
-        <label className="field"><span>Default model</span><input value={defaultModel} onChange={(event) => setDefaultModel(event.target.value)} /></label>
+        <label className="field"><span>{t('providers.baseUrl')}</span><input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} /></label>
+        <label className="field"><span>{t('providers.apiKey')}</span><input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" /></label>
+        <label className="field"><span>{t('providers.defaultModel')}</span><input value={defaultModel} onChange={(event) => setDefaultModel(event.target.value)} /></label>
         {create.error && <p className="error">{create.error.message}</p>}
-        <button className="primary-button" disabled={create.isPending}><Plus size={17} /> Add provider</button>
+        <button className="primary-button" disabled={create.isPending}><Plus size={17} /> {t('providers.addProvider')}</button>
       </form>
     </section>
   );
