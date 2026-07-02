@@ -27,10 +27,10 @@ async def cache_dir():
 @router.post("/download")
 async def download_model(request: ModelDownloadRequest):
     try:
-        model_service.download_model(request.model_name)
+        message = model_service.download_model(request.model_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"message": f"Model {request.model_name} download started"}
+    return {"message": message}
 
 
 @router.get("/progress/{model_name}")

@@ -18,6 +18,7 @@ class ASRModelConfig:
     supports_word_timestamps: bool = False
     supports_diarization: bool = False
     supports_streaming: bool = False
+    allow_patterns: list[str] | None = None
 
 
 def get_all_model_configs() -> list[ASRModelConfig]:
@@ -33,6 +34,18 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             languages=["auto", "zh", "en", "ja", "ko", "de", "fr", "es"],
             runtime="torch",
             supports_word_timestamps=False,
+            allow_patterns=[
+                "*.json",
+                "*.txt",
+                "*.model",
+                "*.safetensors",
+                "*.bin",
+                "tokenizer*",
+                "preprocessor*",
+                "vocab*",
+                "merges*",
+                "normalizer*",
+            ],
         ),
         ASRModelConfig(
             model_name="faster-whisper-small",
@@ -45,6 +58,18 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             languages=["auto", "zh", "en", "ja", "ko", "de", "fr", "es"],
             runtime="ctranslate2",
             supports_word_timestamps=True,
+            allow_patterns=[
+                "*.json",
+                "*.txt",
+                "*.model",
+                "*.safetensors",
+                "*.bin",
+                "tokenizer*",
+                "preprocessor*",
+                "vocab*",
+                "merges*",
+                "normalizer*",
+            ],
         ),
         ASRModelConfig(
             model_name="mlx-whisper-turbo",
@@ -57,6 +82,18 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             languages=["auto", "zh", "en", "ja", "ko", "de", "fr", "es"],
             runtime="mlx",
             supports_word_timestamps=True,
+            allow_patterns=[
+                "*.json",
+                "*.txt",
+                "*.model",
+                "*.safetensors",
+                "*.bin",
+                "tokenizer*",
+                "preprocessor*",
+                "vocab*",
+                "merges*",
+                "normalizer*",
+            ],
         ),
         ASRModelConfig(
             model_name="sensevoice-small",
@@ -75,4 +112,3 @@ def get_all_model_configs() -> list[ASRModelConfig]:
 
 def get_model_config(model_name: str) -> ASRModelConfig | None:
     return next((config for config in get_all_model_configs() if config.model_name == model_name), None)
-

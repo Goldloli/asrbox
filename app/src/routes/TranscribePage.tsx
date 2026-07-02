@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileAudio, Play, RefreshCw } from 'lucide-react';
 import { apiClient, type TranscriptionTask } from '../lib/api';
-import { formatDate, formatDuration, statusLabel } from '../lib/format';
+import { formatDate, formatDuration } from '../lib/format';
+import { useI18n } from '../lib/i18n';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 
 export function TranscribePage() {
   const queryClient = useQueryClient();
+  const { t, statusLabel: localizedStatus } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [backend, setBackend] = useState('local');
   const [modelName, setModelName] = useState('faster-whisper-small');
@@ -59,17 +61,17 @@ export function TranscribePage() {
       <aside className="panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Input</p>
-            <h1>Transcription</h1>
+            <p className="eyebrow">{t('transcribe.input')}</p>
+            <h1>{t('transcribe.title')}</h1>
           </div>
-          <button className="icon-button" onClick={() => tasksQuery.refetch()} title="Refresh tasks">
+          <button className="icon-button" onClick={() => tasksQuery.refetch()} title={t('common.refresh')}>
             <RefreshCw size={17} />
           </button>
         </div>
 
         <label className="dropzone">
           <FileAudio size={24} />
-          <span>{file ? file.name : 'Choose audio or video'}</span>
+          <span>{file ? file.name : t('transcribe.chooseFile')}</span>
           <input type="file" accept="audio/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         </label>
 
@@ -81,10 +83,10 @@ export function TranscribePage() {
               onClick={() => setSelectedTaskId(task.id)}
             >
               <span>{task.filename}</span>
-              <small>{statusLabel(task.status)} · {Math.round(task.progress)}%</small>
+              <small>{localizedStatus(task.status)} · {Math.round(task.progress)}%</small>
             </button>
           ))}
-          {tasks.length === 0 && <p className="muted">No tasks yet.</p>}
+          {tasks.length === 0 && <p className="muted">{t('transcribe.noTasks')}</p>}
         </div>
       </aside>
 
@@ -95,22 +97,22 @@ export function TranscribePage() {
       <aside className="panel control-panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">Engine</p>
-            <h2>Run options</h2>
+            <p className="eyebrow">{t('transcribe.engine')}</p>
+            <h2>{t('transcribe.runOptions')}</h2>
           </div>
         </div>
 
         <label className="field">
-          <span>Backend</span>
+          <span>{t('transcribe.backend')}</span>
           <select value={backend} onChange={(event) => setBackend(event.target.value)}>
-            <option value="local">Local model</option>
-            <option value="provider">Online provider</option>
+            <option value="local">{t('settings.local')}</option>
+            <option value="provider">{t('settings.provider')}</option>
           </select>
         </label>
 
         {backend === 'local' ? (
           <label className="field">
-            <span>Model</span>
+            <span>{t('transcribe.model')}</span>
             <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
               {(modelsQuery.data?.models ?? []).map((model) => (
                 <option key={model.model_name} value={model.model_name}>
@@ -121,7 +123,7 @@ export function TranscribePage() {
           </label>
         ) : (
           <label className="field">
-            <span>Provider</span>
+            <span>{t('transcribe.provider')}</span>
             <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
               {(providersQuery.data?.items ?? []).map((provider) => (
                 <option key={provider.id} value={provider.id}>
@@ -133,12 +135,12 @@ export function TranscribePage() {
         )}
 
         <label className="field">
-          <span>Language</span>
+          <span>{t('transcribe.language')}</span>
           <input value={language} onChange={(event) => setLanguage(event.target.value)} placeholder="zh, en, auto" />
         </label>
 
         <div className="field">
-          <span>Exports</span>
+          <span>{t('transcribe.exports')}</span>
           <div className="segmented wrap">
             {formats.map((format) => (
               <button
@@ -156,7 +158,7 @@ export function TranscribePage() {
         {createMutation.error && <p className="error">{createMutation.error.message}</p>}
         <button className="primary-button" onClick={() => createMutation.mutate()} disabled={!file || createMutation.isPending}>
           <Play size={17} />
-          {createMutation.isPending ? 'Starting' : 'Start transcription'}
+          {createMutation.isPending ? t('transcribe.starting') : t('transcribe.start')}
         </button>
       </aside>
     </section>
@@ -164,11 +166,12 @@ export function TranscribePage() {
 }
 
 function Transcript({ task }: { task: TranscriptionTask }) {
+  const { t, statusLabel: localizedStatus } = useI18n();
   return (
     <>
       <div className="panel-header">
         <div>
-          <p className="eyebrow">{statusLabel(task.status)} · {Math.round(task.progress)}%</p>
+          <p className="eyebrow">{localizedStatus(task.status)} · {Math.round(task.progress)}%</p>
           <h2>{task.filename}</h2>
           <p className="muted">{formatDate(task.created_at)} · {formatDuration(task.duration_ms)}</p>
         </div>
@@ -177,13 +180,13 @@ function Transcript({ task }: { task: TranscriptionTask }) {
       <div className="meter"><span style={{ width: `${Math.min(task.progress, 100)}%` }} /></div>
 
       <section className="transcript-text">
-        <h3>Text</h3>
-        <textarea value={task.text ?? ''} readOnly placeholder="Transcript will appear here." />
+        <h3>{t('transcribe.text')}</h3>
+        <textarea value={task.text ?? ''} readOnly placeholder={t('transcribe.placeholder')} />
       </section>
 
       <section>
         <div className="section-title">
-          <h3>Segments</h3>
+          <h3>{t('transcribe.segments')}</h3>
           {task.status === 'completed' && (
             <a className="secondary-button" href={apiClient.exportTaskUrl(task.id, 'srt')}>
               <Download size={16} /> SRT
@@ -197,7 +200,7 @@ function Transcript({ task }: { task: TranscriptionTask }) {
               <span>{segment.text}</span>
             </div>
           ))}
-          {task.segments.length === 0 && <p className="muted">No segments yet.</p>}
+          {task.segments.length === 0 && <p className="muted">{t('transcribe.noSegments')}</p>}
         </div>
       </section>
     </>
@@ -205,10 +208,11 @@ function Transcript({ task }: { task: TranscriptionTask }) {
 }
 
 function EmptyTranscript() {
+  const { t } = useI18n();
   return (
     <div className="empty-state">
       <FileAudio size={32} />
-      <p>Select a file and start a transcription.</p>
+      <p>{t('transcribe.empty')}</p>
     </div>
   );
 }

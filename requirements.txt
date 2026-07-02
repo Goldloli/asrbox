@@ -6,4 +6,6 @@ requests
 pydantic
 pytest
 httpx2
-
+huggingface_hub
+tqdm
+modelscope

@@ -2,10 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { apiClient } from '../lib/api';
 import { formatDate } from '../lib/format';
+import { useI18n } from '../lib/i18n';
 
 const exportFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 
 export function ExportsPage() {
+  const { t } = useI18n();
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => apiClient.listTasks() });
   const completed = (tasksQuery.data?.items ?? []).filter((task) => task.status === 'completed');
 
@@ -13,8 +15,8 @@ export function ExportsPage() {
     <section className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Output</p>
-          <h1>Exports</h1>
+          <p className="eyebrow">{t('exports.eyebrow')}</p>
+          <h1>{t('exports.title')}</h1>
         </div>
       </header>
 
@@ -22,9 +24,9 @@ export function ExportsPage() {
         <table>
           <thead>
             <tr>
-              <th>Task</th>
-              <th>Completed</th>
-              <th>Formats</th>
+              <th>{t('exports.task')}</th>
+              <th>{t('exports.completedAt')}</th>
+              <th>{t('exports.formats')}</th>
             </tr>
           </thead>
           <tbody>
@@ -43,7 +45,7 @@ export function ExportsPage() {
             ))}
           </tbody>
         </table>
-        {completed.length === 0 && <p className="muted table-empty">No completed transcriptions yet.</p>}
+        {completed.length === 0 && <p className="muted table-empty">{t('exports.empty')}</p>}
       </div>
     </section>
   );

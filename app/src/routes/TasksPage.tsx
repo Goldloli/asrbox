@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Square, Trash2 } from 'lucide-react';
 import { apiClient, type TaskStatus } from '../lib/api';
-import { formatDate, formatDuration, statusLabel } from '../lib/format';
+import { formatDate, formatDuration } from '../lib/format';
+import { useI18n } from '../lib/i18n';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'cancelled'];
 
 export function TasksPage() {
   const queryClient = useQueryClient();
+  const { t, statusLabel } = useI18n();
   const [status, setStatus] = useState<'all' | TaskStatus>('all');
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => apiClient.listTasks(), refetchInterval: 4000 });
 
@@ -25,8 +27,8 @@ export function TasksPage() {
     <section className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Queue</p>
-          <h1>Tasks</h1>
+          <p className="eyebrow">{t('tasks.eyebrow')}</p>
+          <h1>{t('tasks.title')}</h1>
         </div>
         <div className="segmented">
           {statuses.map((item) => (
@@ -41,11 +43,11 @@ export function TasksPage() {
         <table>
           <thead>
             <tr>
-              <th>File</th>
-              <th>Status</th>
-              <th>Engine</th>
-              <th>Duration</th>
-              <th>Updated</th>
+              <th>{t('tasks.file')}</th>
+              <th>{t('tasks.status')}</th>
+              <th>{t('tasks.engine')}</th>
+              <th>{t('tasks.duration')}</th>
+              <th>{t('tasks.updated')}</th>
               <th />
             </tr>
           </thead>
@@ -63,13 +65,13 @@ export function TasksPage() {
                 <td className="row-actions">
                   <button className="icon-button" title="Cancel" onClick={() => cancel.mutate(task.id)}><Square size={16} /></button>
                   <button className="icon-button" title="Retry" onClick={() => retry.mutate(task.id)}><RotateCcw size={16} /></button>
-                  <button className="icon-button danger" title="Delete" onClick={() => remove.mutate(task.id)}><Trash2 size={16} /></button>
+                  <button className="icon-button danger" title={t('common.delete')} onClick={() => remove.mutate(task.id)}><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {tasks.length === 0 && <p className="muted table-empty">No matching tasks.</p>}
+        {tasks.length === 0 && <p className="muted table-empty">{t('tasks.noMatching')}</p>}
       </div>
     </section>
   );

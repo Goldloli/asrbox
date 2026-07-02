@@ -423,7 +423,7 @@ th {
 
 .list-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(180px, 260px) auto;
   gap: 14px;
   align-items: center;
   padding: 14px;
@@ -466,6 +466,33 @@ th {
   border-color: #b7dacf;
   background: #edf8f4;
   color: #176b55;
+}
+
+.model-progress {
+  min-width: 180px;
+}
+
+.model-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #5f6b73;
+  font-size: 12px;
+}
+
+.meter.compact {
+  height: 6px;
+  margin: 7px 0 0;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .settings-list {
