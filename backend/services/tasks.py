@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+import queue
 import shutil
-import subprocess
 import threading
 import uuid
 from datetime import datetime
@@ -18,10 +18,14 @@ from backend.database.models import TranscriptionTask
 from backend.models import TranscriptSegment, TranscriptionTaskResponse
 from backend.providers import BcutProvider
 from backend.services import models as model_service
+from backend.services import settings as settings_service
+from backend.services.media import prepare_media_for_asr
 from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
 
 CHUNK_SIZE = 1024 * 1024
 LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
+LOCAL_QUEUE = "local"
+PROVIDER_QUEUE = "provider"
 ACTIVE_TASK_STATUSES = {
     "queued",
     "preprocessing",
@@ -31,6 +35,9 @@ ACTIVE_TASK_STATUSES = {
     "postprocessing",
     "exporting",
 }
+_task_queues = {LOCAL_QUEUE: queue.Queue(), PROVIDER_QUEUE: queue.Queue()}
+_worker_counts = {LOCAL_QUEUE: 0, PROVIDER_QUEUE: 0}
+_queue_lock = threading.Lock()
 
 
 def _segments_for_task(db: Session, task_id: str) -> list[TranscriptSegment]:
@@ -92,6 +99,17 @@ def to_response(db: Session, row: TranscriptionTask) -> TranscriptionTaskRespons
     )
 
 
+def _read_options(row: TranscriptionTask) -> dict:
+    try:
+        return json.loads(row.options_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+
+
+def _write_options(row: TranscriptionTask, options: dict) -> None:
+    row.options_json = json.dumps(options, ensure_ascii=False)
+
+
 def _create_task_row(
     db: Session,
     *,
@@ -125,20 +143,48 @@ def _create_task_row(
 
 
 def start_task_in_background(task_id: str) -> None:
-    thread = threading.Thread(target=_run_task_in_background, args=(task_id,), daemon=True)
-    thread.start()
-
-
-def _run_task_in_background(task_id: str) -> None:
     if db_session.SessionLocal is None:
         db_session.init_db()
     db = db_session.SessionLocal()
     try:
         row = get_task_row(db, task_id)
-        if row is not None:
-            run_task(db, row)
+        if row is None:
+            return
+        settings = settings_service.get_settings(db)
+        _ensure_task_workers(settings.max_concurrent_local_tasks, settings.max_concurrent_provider_tasks)
+        _task_queues[_queue_name_for_row(row)].put(task_id)
     finally:
         db.close()
+
+
+def _queue_name_for_row(row: TranscriptionTask) -> str:
+    return PROVIDER_QUEUE if row.source == "provider" or row.provider_id else LOCAL_QUEUE
+
+
+def _ensure_task_workers(local_count: int, provider_count: int) -> None:
+    desired = {LOCAL_QUEUE: local_count, PROVIDER_QUEUE: provider_count}
+    with _queue_lock:
+        for queue_name, count in desired.items():
+            while _worker_counts[queue_name] < count:
+                thread = threading.Thread(target=_task_worker, args=(queue_name,), daemon=True)
+                thread.start()
+                _worker_counts[queue_name] += 1
+
+
+def _task_worker(queue_name: str) -> None:
+    work_queue = _task_queues[queue_name]
+    while True:
+        task_id = work_queue.get()
+        try:
+            db = db_session.SessionLocal()
+            try:
+                row = get_task_row(db, task_id)
+                if row is not None and row.status != "cancelled":
+                    run_task(db, row)
+            finally:
+                db.close()
+        finally:
+            work_queue.task_done()
 
 
 def create_task(
@@ -196,44 +242,28 @@ def create_task_from_file(
     )
 
 
-def normalize_media_for_asr(path: Path) -> Path:
-    if path.suffix.lower() == ".mp3":
-        return path
-
-    target = path.with_suffix(".mp3")
-    command = [
-        "ffmpeg",
-        "-i",
-        str(path),
-        "-ac",
-        "1",
-        "-f",
-        "mp3",
-        "-af",
-        "aresample=async=1",
-        "-y",
-        str(target),
-    ]
-    try:
-        subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
-    except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg is required to extract audio from video files") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
-        raise RuntimeError(f"Failed to extract audio with ffmpeg: {detail}") from exc
-    return target
-
-
-def _transcribe_with_provider(db: Session, row: TranscriptionTask):
-    provider_id = row.provider_id or "bcut"
+def _prepare_task_media(db: Session, row: TranscriptionTask) -> Path:
     audio_path = config.resolve_storage_path(row.audio_path)
     if audio_path is None:
         raise RuntimeError("Task audio file not found")
 
-    normalized_path = normalize_media_for_asr(audio_path)
+    normalized_path, metadata = prepare_media_for_asr(audio_path)
     if normalized_path != audio_path:
         row.normalized_audio_path = config.to_storage_path(normalized_path)
-        db.commit()
+    options = _read_options(row)
+    options["audio_metadata"] = metadata
+    _write_options(row, options)
+    if metadata.get("duration_ms") is not None:
+        row.duration_ms = metadata["duration_ms"]
+    db.commit()
+    return normalized_path
+
+
+def _transcribe_with_provider(db: Session, row: TranscriptionTask):
+    provider_id = row.provider_id or "bcut"
+    normalized_path = config.resolve_storage_path(row.normalized_audio_path or row.audio_path)
+    if normalized_path is None:
+        raise RuntimeError("Task audio file not found")
 
     if provider_id == "bcut":
         return BcutProvider().transcribe(
@@ -245,14 +275,16 @@ def _transcribe_with_provider(db: Session, row: TranscriptionTask):
 
 def _transcribe_with_local_model(db: Session, row: TranscriptionTask):
     model_name = row.model_name or "whisper-base"
-    audio_path = config.resolve_storage_path(row.audio_path)
-    if audio_path is None:
+    normalized_path = config.resolve_storage_path(row.normalized_audio_path or row.audio_path)
+    if normalized_path is None:
         raise RuntimeError("Task audio file not found")
-
-    normalized_path = normalize_media_for_asr(audio_path)
-    if normalized_path != audio_path:
-        row.normalized_audio_path = config.to_storage_path(normalized_path)
-        db.commit()
+    settings = settings_service.get_settings(db)
+    options = _read_options(row)
+    transcribe_options = {
+        "language": row.language,
+        "vad": options.get("vad", settings.vad),
+        "word_timestamps": options.get("word_timestamps", settings.word_timestamps),
+    }
 
     stop_progress = threading.Event()
     progress_thread = threading.Thread(
@@ -265,7 +297,7 @@ def _transcribe_with_local_model(db: Session, row: TranscriptionTask):
         return transcribe_with_local_model(
             model_name,
             str(normalized_path),
-            {"language": row.language},
+            transcribe_options,
         )
     finally:
         stop_progress.set()
@@ -290,6 +322,12 @@ def _advance_local_transcription_progress(task_id: str, stop_progress: threading
 
 def run_task(db: Session, row: TranscriptionTask) -> None:
     try:
+        if row.status == "cancelled":
+            return
+        row.status = "preprocessing"
+        row.progress = 10
+        db.commit()
+        _prepare_task_media(db, row)
         row.status = "waiting_model" if row.model_name else "transcribing"
         row.progress = 20
         db.commit()
@@ -309,10 +347,14 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
                 row.provider_id,
                 row.language,
             )
+        db.refresh(row)
+        if row.status == "cancelled":
+            return
         row.status = "postprocessing"
         row.progress = 90
         row.text = result.text
-        row.duration_ms = int((result.duration or 0) * 1000)
+        if row.duration_ms is None:
+            row.duration_ms = int((result.duration or 0) * 1000)
         db.query(DBSegment).filter(DBSegment.task_id == row.id).delete()
         for segment in result.segments:
             db.add(
@@ -331,6 +373,9 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         row.completed_at = datetime.utcnow()
         db.commit()
     except Exception as exc:
+        db.refresh(row)
+        if row.status == "cancelled":
+            return
         row.status = "failed"
         row.error = str(exc)
         row.progress = 100
@@ -358,6 +403,46 @@ def retry_task(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
     row.status = "queued"
     row.error = None
     row.progress = 0
+    db.commit()
+    db.refresh(row)
+    response = to_response(db, row)
+    start_task_in_background(row.id)
+    return response
+
+
+def retranscribe_task(
+    db: Session,
+    task_id: str,
+    *,
+    backend: str | None = None,
+    model_name: str | None = None,
+    provider_id: str | None = None,
+    language: str | None = None,
+    output_formats: list[str] | None = None,
+) -> TranscriptionTaskResponse | None:
+    row = get_task_row(db, task_id)
+    if row is None:
+        return None
+    row.source = backend or row.source
+    if model_name is not None:
+        row.model_name = model_name
+    if provider_id is not None:
+        row.provider_id = provider_id
+    if language is not None:
+        row.language = language
+    options = _read_options(row)
+    if output_formats is not None:
+        options["output_formats"] = output_formats
+    options.pop("audio_metadata", None)
+    _write_options(row, options)
+    row.normalized_audio_path = None
+    row.status = "queued"
+    row.progress = 0
+    row.duration_ms = None
+    row.text = None
+    row.error = None
+    row.completed_at = None
+    db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
     db.commit()
     db.refresh(row)
     response = to_response(db, row)

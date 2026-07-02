@@ -6,12 +6,12 @@ import threading
 from pathlib import Path
 
 from backend import config
+from backend.backends.local_asr import is_model_loaded, unload_model as unload_local_model
 from backend.backends import ASRModelConfig, get_all_model_configs, get_model_config
 from backend.models import ASRModelStatus
 from backend.utils.hf_progress import track_hf_download
 from backend.utils.progress import get_progress_manager
 
-_loaded_models: set[str] = set()
 _active_downloads: set[str] = set()
 _download_errors: dict[str, str] = {}
 _state_lock = threading.Lock()
@@ -72,7 +72,7 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 supports_streaming=item.supports_streaming,
                 downloaded=is_model_downloaded(item.model_name),
                 downloading=item.model_name in _active_downloads,
-                loaded=item.model_name in _loaded_models,
+                loaded=is_model_loaded(item.model_name, item.engine),
                 error=error,
             )
         )
@@ -180,10 +180,10 @@ def download_model(model_name: str) -> str:
 
 
 def unload_model(model_name: str) -> bool:
-    if model_name in _loaded_models:
-        _loaded_models.remove(model_name)
-        return True
-    return False
+    model_config = get_model_config(model_name)
+    if model_config is None:
+        return False
+    return unload_local_model(model_name, model_config.engine)
 
 
 def delete_model(model_name: str) -> None:
@@ -198,4 +198,5 @@ def delete_model(model_name: str) -> None:
 def ensure_model_ready(model_name: str) -> None:
     if get_model_config(model_name) is None:
         raise ValueError(f"Unknown model: {model_name}")
-    _loaded_models.add(model_name)
+    if not is_model_downloaded(model_name):
+        raise RuntimeError(f"Model {model_name} is not downloaded")

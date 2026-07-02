@@ -73,6 +73,14 @@ def wait_for_task(client: TestClient, task_id: str, predicate, description: str)
     raise AssertionError(f"{task_id} never reached {description}; last={last_task}")
 
 
+def create_downloaded_model(tmp_path: Path, model_name: str, weight_name: str = "model.safetensors") -> Path:
+    model_dir = tmp_path / "models" / model_name
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "model.json").write_text("{}", encoding="utf-8")
+    (model_dir / weight_name).write_bytes(b"weights")
+    return model_dir
+
+
 def test_huggingface_model_download_uses_snapshot_and_marks_downloaded(tmp_path: Path, monkeypatch) -> None:
     calls: list[tuple[str, Path, tuple[str, ...] | None]] = []
 
@@ -224,16 +232,10 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
             segments=[TranscriptSegment(id=1, start=0.0, end=1.8, text="sample local transcript")],
         )
 
-    def fake_normalize(path: Path) -> Path:
-        return path
-
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1800}))
     client = make_client(tmp_path)
-    model_dir = tmp_path / "models" / "whisper-base"
-    model_dir.mkdir(parents=True)
-    (model_dir / "model.json").write_text("{}")
-    (model_dir / "model.safetensors").write_bytes(b"weights")
+    create_downloaded_model(tmp_path, "whisper-base")
 
     payload = b"fake audio bytes"
     response = client.post(
@@ -251,6 +253,8 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
     task = wait_for_task(client, task_id, lambda item: item["status"] == "completed", "completed")
     assert task["status"] == "completed"
     assert task["filename"] == "sample.wav"
+    assert task["duration_ms"] == 1800
+    assert task["options"]["audio_metadata"]["duration_ms"] == 1800
     assert task["text"]
     assert task["segments"]
 
@@ -291,13 +295,13 @@ def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monke
             ],
         )
 
-    def fake_normalize(path: Path) -> Path:
+    def fake_prepare(path: Path) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
-        return target
+        return target, {"duration_ms": 3200}
 
     monkeypatch.setattr("backend.providers.bcut.BcutProvider.transcribe", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", fake_prepare)
 
     client = make_client(tmp_path)
     response = client.post(
@@ -338,19 +342,16 @@ def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypat
             ],
         )
 
-    def fake_normalize(path: Path) -> Path:
+    def fake_prepare(path: Path) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
-        return target
+        return target, {"duration_ms": 2400}
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", fake_prepare)
 
     client = make_client(tmp_path)
-    model_dir = tmp_path / "models" / "whisper-base"
-    model_dir.mkdir(parents=True)
-    (model_dir / "model.json").write_text("{}")
-    (model_dir / "model.safetensors").write_bytes(b"weights")
+    create_downloaded_model(tmp_path, "whisper-base")
 
     response = client.post(
         "/transcriptions",
@@ -370,7 +371,60 @@ def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypat
     assert task["model_name"] == "whisper-base"
     assert task["duration_ms"] == 2400
     assert [segment["text"] for segment in task["segments"]] == ["本地模型真实", "转写结果"]
-    assert calls == [("whisper-base", str(tmp_path / "uploads" / f"{task['id']}.mp3"), {"language": "zh"})]
+    assert calls == [
+        (
+            "whisper-base",
+            str(tmp_path / "uploads" / f"{task['id']}.mp3"),
+            {"language": "zh", "vad": True, "word_timestamps": False},
+        )
+    ]
+
+
+def test_media_preprocess_generates_wav_metadata_and_rejects_unsupported_input(tmp_path: Path, monkeypatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_probe(path: Path) -> dict:
+        return {"duration_ms": 12340, "format": "mov,mp4", "audio_codec": "aac"}
+
+    def fake_run(command, capture_output, check, encoding, errors):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"wav")
+
+    monkeypatch.setattr("backend.services.media.probe_media", fake_probe)
+    monkeypatch.setattr("backend.services.media.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "backend.services.tasks.transcribe_with_local_model",
+        lambda model_name, audio_path, options: TranscriptionResult(
+            text="wav transcript",
+            duration=12.34,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=12.34, text="wav transcript")],
+        ),
+    )
+
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("clip.mp4", b"video", "video/mp4")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    )
+
+    assert response.status_code == 200
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
+    assert task["normalized_audio_path"].endswith(".wav")
+    assert task["duration_ms"] == 12340
+    assert task["options"]["audio_metadata"]["audio_codec"] == "aac"
+    assert commands[0][-2:] == ["-y", str(tmp_path / "uploads" / f"{task['id']}.wav")]
+
+    unsupported = client.post(
+        "/transcriptions",
+        files={"file": ("notes.txt", b"text", "text/plain")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    )
+    failed = wait_for_task(client, unsupported.json()["id"], lambda item: item["status"] == "failed", "failed")
+    assert "Unsupported media format" in failed["error"]
 
 
 def test_local_model_task_returns_before_transcription_finishes_and_advances_progress(
@@ -389,20 +443,17 @@ def test_local_model_task_returns_before_transcription_finishes_and_advances_pro
             segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="background local transcript")],
         )
 
-    def fake_normalize(path: Path) -> Path:
+    def fake_prepare(path: Path) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
-        return target
+        return target, {"duration_ms": 1000}
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", fake_prepare)
     monkeypatch.setattr("backend.services.tasks.LOCAL_PROGRESS_INTERVAL_SECONDS", 0.02)
 
     client = make_client(tmp_path)
-    model_dir = tmp_path / "models" / "whisper-base"
-    model_dir.mkdir(parents=True)
-    (model_dir / "model.json").write_text("{}")
-    (model_dir / "model.safetensors").write_bytes(b"weights")
+    create_downloaded_model(tmp_path, "whisper-base")
 
     started_at = time.monotonic()
     response = client.post(
@@ -444,16 +495,10 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypa
             segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="retry local transcript")],
         )
 
-    def fake_normalize(path: Path) -> Path:
-        return path
-
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.normalize_media_for_asr", fake_normalize)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
     client = make_client(tmp_path)
-    model_dir = tmp_path / "models" / "whisper-base"
-    model_dir.mkdir(parents=True)
-    (model_dir / "model.json").write_text("{}")
-    (model_dir / "model.safetensors").write_bytes(b"weights")
+    create_downloaded_model(tmp_path, "whisper-base")
     response = client.post(
         "/transcriptions",
         files={"file": ("retry.wav", b"audio", "audio/wav")},
@@ -469,3 +514,206 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypa
     cancel = client.post(f"/tasks/{task_id}/cancel")
     assert cancel.status_code == 200
     assert cancel.json()["status"] in {"completed", "cancelled"}
+
+
+def test_local_asr_backend_dispatches_transformers_and_faster_whisper(tmp_path: Path, monkeypatch) -> None:
+    from backend.backends.local_asr import transcribe_local
+    from backend.backends.registry import get_model_config
+
+    calls: list[tuple[str, str, dict]] = []
+
+    class FakeBackend:
+        def transcribe(self, audio_path: str, model_config, options: dict) -> TranscriptionResult:
+            calls.append((model_config.engine, audio_path, options))
+            return TranscriptionResult(
+                text=f"{model_config.engine} result",
+                duration=1.0,
+                model_name=model_config.model_name,
+                segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="ok")],
+            )
+
+        def is_loaded(self, model_name: str) -> bool:
+            return False
+
+        def unload(self, model_name: str) -> bool:
+            return False
+
+    monkeypatch.setattr("backend.backends.local_asr._backends", {"whisper_transformers": FakeBackend(), "faster_whisper": FakeBackend()})
+
+    whisper = transcribe_local("audio.wav", get_model_config("whisper-base"), {"language": "zh"})
+    faster = transcribe_local("audio.wav", get_model_config("faster-whisper-small"), {"word_timestamps": True})
+
+    assert whisper.text == "whisper_transformers result"
+    assert faster.text == "faster_whisper result"
+    assert calls == [
+        ("whisper_transformers", "audio.wav", {"language": "zh"}),
+        ("faster_whisper", "audio.wav", {"word_timestamps": True}),
+    ]
+
+
+def test_faster_whisper_backend_maps_segments_and_words(tmp_path: Path, monkeypatch) -> None:
+    from backend.backends.local_asr import FasterWhisperBackend
+    from backend.backends.registry import get_model_config
+
+    created: list[tuple[str, str, str]] = []
+
+    class Word:
+        start = 0.1
+        end = 0.3
+        word = "你"
+        probability = 0.9
+
+    class Segment:
+        id = 7
+        start = 0.0
+        end = 1.2
+        text = "你好"
+        avg_logprob = -0.2
+        words = [Word()]
+
+    class FakeWhisperModel:
+        def __init__(self, model_path, device, compute_type):
+            created.append((model_path, device, compute_type))
+
+        def transcribe(self, audio_path, **kwargs):
+            return [Segment()], type("Info", (), {"language": "zh", "duration": 1.2})()
+
+    monkeypatch.setattr("backend.backends.local_asr.WhisperModel", FakeWhisperModel)
+    monkeypatch.setattr("backend.backends.local_asr._faster_whisper_device", lambda: ("cpu", "int8"))
+
+    model_dir = create_downloaded_model(tmp_path, "faster-whisper-small", "model.bin")
+    monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
+
+    result = FasterWhisperBackend().transcribe(
+        "audio.wav",
+        get_model_config("faster-whisper-small"),
+        {"language": "auto", "vad": True, "word_timestamps": True},
+    )
+
+    assert created == [(str(model_dir), "cpu", "int8")]
+    assert result.text == "你好"
+    assert result.language == "zh"
+    assert result.duration == 1.2
+    assert result.segments[0].confidence == -0.2
+    assert result.words == [{"start": 0.1, "end": 0.3, "word": "你", "probability": 0.9}]
+
+
+def test_local_queue_limits_concurrency_and_cancelled_queued_task_does_not_run(tmp_path: Path, monkeypatch) -> None:
+    started: list[str] = []
+    release = threading.Event()
+
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        task_id = Path(audio_path).stem
+        started.append(task_id)
+        release.wait(timeout=1)
+        return TranscriptionResult(
+            text=f"{task_id} done",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text=f"{task_id} done")],
+        )
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+
+    client = make_client(tmp_path)
+    client.put("/settings/asr", json={"max_concurrent_local_tasks": 1})
+    create_downloaded_model(tmp_path, "whisper-base")
+
+    first = client.post("/transcriptions", files={"file": ("one.wav", b"1", "audio/wav")}, data={"backend": "local", "model_name": "whisper-base"}).json()
+    second = client.post("/transcriptions", files={"file": ("two.wav", b"2", "audio/wav")}, data={"backend": "local", "model_name": "whisper-base"}).json()
+
+    wait_for_task(client, first["id"], lambda item: item["status"] == "transcribing", "first running")
+    assert started == [first["id"]]
+
+    cancelled = client.post(f"/tasks/{second['id']}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+
+    release.set()
+    wait_for_task(client, first["id"], lambda item: item["status"] == "completed", "first completed")
+    time.sleep(0.1)
+    assert started == [first["id"]]
+    assert client.get(f"/tasks/{second['id']}").json()["status"] == "cancelled"
+
+
+def test_cancel_running_task_prevents_completed_result(tmp_path: Path, monkeypatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        started.set()
+        release.wait(timeout=1)
+        return TranscriptionResult(
+            text="should not persist",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="should not persist")],
+        )
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+
+    response = client.post("/transcriptions", files={"file": ("run.wav", b"1", "audio/wav")}, data={"backend": "local", "model_name": "whisper-base"}).json()
+    assert started.wait(timeout=1)
+    cancelled = client.post(f"/tasks/{response['id']}/cancel")
+    assert cancelled.status_code == 200
+    release.set()
+    task = wait_for_task(client, response["id"], lambda item: item["status"] == "cancelled", "cancelled")
+    assert task["text"] is None
+    assert task["segments"] == []
+
+
+def test_retranscribe_resets_task_and_runs_again(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        calls.append(model_name)
+        return TranscriptionResult(
+            text=f"{model_name} transcript",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text=f"{model_name} transcript")],
+        )
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+    create_downloaded_model(tmp_path, "faster-whisper-small", "model.bin")
+    original = client.post("/transcriptions", files={"file": ("again.wav", b"1", "audio/wav")}, data={"backend": "local", "model_name": "whisper-base"}).json()
+    wait_for_task(client, original["id"], lambda item: item["status"] == "completed", "completed")
+
+    response = client.post(f"/tasks/{original['id']}/retranscribe", json={"model_name": "faster-whisper-small", "language": "en"})
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+    rerun = wait_for_task(client, original["id"], lambda item: item["status"] == "completed" and item["model_name"] == "faster-whisper-small", "rerun completed")
+    assert rerun["text"] == "faster-whisper-small transcript"
+    assert rerun["language"] == "en"
+    assert calls == ["whisper-base", "faster-whisper-small"]
+
+
+def test_transcription_readiness_reports_local_and_provider_state(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    missing = client.get("/transcriptions/readiness")
+    assert missing.status_code == 200
+    assert missing.json()["ready"] is False
+    assert missing.json()["model"]["model_name"] == "whisper-base"
+
+    create_downloaded_model(tmp_path, "whisper-base")
+    ready = client.get("/transcriptions/readiness").json()
+    assert ready["backend"] == "local"
+    assert ready["ready"] is True
+
+    providers = client.get("/providers").json()["items"]
+    aliyun_id = next(item["id"] for item in providers if item["provider_type"] == "aliyun")
+    client.put("/settings/asr", json={"default_backend": "provider", "default_provider_id": aliyun_id})
+    provider = client.get("/transcriptions/readiness").json()
+    assert provider["backend"] == "provider"
+    assert provider["ready"] is False
+    assert provider["provider"]["id"] == aliyun_id

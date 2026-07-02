@@ -172,6 +172,22 @@ class ASRSettingsUpdate(BaseModel):
     max_concurrent_provider_tasks: int | None = Field(None, ge=1, le=8)
 
 
+class TaskRetranscribeRequest(BaseModel):
+    backend: str | None = None
+    model_name: str | None = None
+    provider_id: str | None = None
+    language: str | None = None
+    output_formats: list[str] | None = None
+
+
+class TranscriptionReadinessResponse(BaseModel):
+    backend: str
+    ready: bool
+    message: str
+    model: dict[str, Any] | None = None
+    provider: dict[str, Any] | None = None
+
+
 class TranscriptionTaskResponse(BaseModel):
     id: str
     filename: str
@@ -196,4 +212,3 @@ class TranscriptionTaskResponse(BaseModel):
 class TaskListResponse(BaseModel):
     items: list[TranscriptionTaskResponse]
     total: int
-
