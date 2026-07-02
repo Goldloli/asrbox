@@ -16,7 +16,7 @@ from backend.database.models import TranscriptionTask
 from backend.models import TranscriptSegment, TranscriptionTaskResponse
 from backend.providers import BcutProvider
 from backend.services import models as model_service
-from backend.services.transcribe import transcribe_placeholder
+from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -202,6 +202,24 @@ def _transcribe_with_provider(db: Session, row: TranscriptionTask):
     raise RuntimeError(f"Provider {provider_id} transcription is not implemented")
 
 
+def _transcribe_with_local_model(db: Session, row: TranscriptionTask):
+    model_name = row.model_name or "whisper-base"
+    audio_path = config.resolve_storage_path(row.audio_path)
+    if audio_path is None:
+        raise RuntimeError("Task audio file not found")
+
+    normalized_path = normalize_media_for_asr(audio_path)
+    if normalized_path != audio_path:
+        row.normalized_audio_path = config.to_storage_path(normalized_path)
+        db.commit()
+
+    return transcribe_with_local_model(
+        model_name,
+        str(normalized_path),
+        {"language": row.language},
+    )
+
+
 def run_task(db: Session, row: TranscriptionTask) -> None:
     try:
         row.status = "waiting_model" if row.model_name else "transcribing"
@@ -214,6 +232,8 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         db.commit()
         if row.source == "provider" or row.provider_id:
             result = _transcribe_with_provider(db, row)
+        elif row.source == "local" and row.model_name:
+            result = _transcribe_with_local_model(db, row)
         else:
             result = transcribe_placeholder(
                 row.filename,

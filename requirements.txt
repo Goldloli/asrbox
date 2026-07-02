@@ -9,3 +9,5 @@ httpx2
 huggingface_hub
 tqdm
 modelscope
+torch
+transformers
