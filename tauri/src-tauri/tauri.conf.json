@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ASRbox",
+  "version": "0.1.0",
+  "identifier": "com.goldloli.asrbox",
+  "build": {
+    "beforeDevCommand": "bun run dev:web",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "ASRbox",
+        "width": 1280,
+        "height": 820
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}

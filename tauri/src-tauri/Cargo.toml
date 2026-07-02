@@ -1,0 +1,10 @@
+[package]
+name = "asrbox"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
