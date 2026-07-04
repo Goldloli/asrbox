@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 
 from backend.models import ProviderHealth, TranscriptSegment, TranscriptionResult
+from backend.providers.base import ProviderError
 
 API_BASE_URL = "https://member.bilibili.com/x/bcut/rubick-interface"
 API_REQ_UPLOAD = f"{API_BASE_URL}/resource/create"
@@ -21,7 +22,7 @@ class BcutProvider:
         "Content-Type": "application/json",
     }
 
-    async def test_connection(self) -> ProviderHealth:
+    def test_connection(self) -> ProviderHealth:
         return ProviderHealth(
             ok=True,
             provider_type="bcut",
@@ -29,12 +30,12 @@ class BcutProvider:
             models=["bcut-free"],
         )
 
-    async def list_models(self) -> list[str]:
+    def list_models(self) -> list[str]:
         return ["bcut-free"]
 
     def transcribe(self, audio_path: str, options: dict) -> TranscriptionResult:
         audio = Path(audio_path).read_bytes()
-        response = self._run(audio)
+        response = self._run(audio, options.get("should_cancel") or (lambda: False))
         segments = [
             TranscriptSegment(
                 id=index,
@@ -52,17 +53,34 @@ class BcutProvider:
             provider_id="bcut",
         )
 
-    def _run(self, audio: bytes) -> dict:
+    def _run(self, audio: bytes, should_cancel) -> dict:
+        self._raise_if_cancelled(should_cancel)
         upload_data = self._request_upload(audio)
+        self._raise_if_cancelled(should_cancel)
         etags = self._upload_parts(audio, upload_data)
+        self._raise_if_cancelled(should_cancel)
         download_url = self._commit_upload(upload_data, etags)
+        self._raise_if_cancelled(should_cancel)
         task_id = self._create_task(download_url)
         for _ in range(500):
+            self._raise_if_cancelled(should_cancel)
             result = self._query_result(task_id)
             if result.get("state") == 4:
                 return json.loads(result["result"])
-            time.sleep(1)
+            self._sleep_or_cancel(1, should_cancel)
         raise RuntimeError("Bcut ASR task timed out")
+
+    @staticmethod
+    def _raise_if_cancelled(should_cancel) -> None:
+        if should_cancel():
+            raise ProviderError("Task was cancelled", code="TASK_CANCELLED", stage="cancel")
+
+    @classmethod
+    def _sleep_or_cancel(cls, seconds: float, should_cancel) -> None:
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            cls._raise_if_cancelled(should_cancel)
+            time.sleep(min(0.2, deadline - time.time()))
 
     def _request_upload(self, audio: bytes) -> dict:
         payload = json.dumps(

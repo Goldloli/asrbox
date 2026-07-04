@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileAudio, Play, RefreshCw } from 'lucide-react';
-import { apiClient, type TranscriptionTask } from '../lib/api';
+import { apiClient, type TranscriptionPreflight, type TranscriptionTask } from '../lib/api';
 import { formatDate, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 
@@ -17,6 +17,7 @@ export function TranscribePage() {
   const [language, setLanguage] = useState('zh');
   const [outputFormats, setOutputFormats] = useState<string[]>(['txt', 'srt', 'json']);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<TranscriptionPreflight | null>(null);
 
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => apiClient.listTasks(), refetchInterval: 3500 });
   const modelsQuery = useQuery({ queryKey: ['models'], queryFn: () => apiClient.listModels() });
@@ -33,8 +34,13 @@ export function TranscribePage() {
   }, [selectedTaskId, tasks]);
 
   const createMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!file) throw new Error('Please choose an audio or video file.');
+      const check = await apiClient.preflightTranscription(file);
+      setPreflight(check);
+      if (!check.supported_format || !check.has_audio_stream) {
+        throw new Error(check.warnings[0] || 'This file cannot be transcribed.');
+      }
       return apiClient.createTranscription({
         file,
         backend,
@@ -72,8 +78,16 @@ export function TranscribePage() {
         <label className="dropzone">
           <FileAudio size={24} />
           <span>{file ? file.name : t('transcribe.chooseFile')}</span>
-          <input type="file" accept="audio/*,video/*" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+          <input type="file" accept="audio/*,video/*" onChange={(event) => {
+            setFile(event.target.files?.[0] ?? null);
+            setPreflight(null);
+          }} />
         </label>
+        {preflight && (
+          <p className="muted">
+            {formatDuration(preflight.duration_ms)} · {preflight.will_chunk ? `${preflight.chunk_count} chunks` : 'single pass'}
+          </p>
+        )}
 
         <div className="task-stack">
           {tasks.map((task) => (
@@ -178,6 +192,8 @@ function Transcript({ task }: { task: TranscriptionTask }) {
       </div>
 
       <div className="meter"><span style={{ width: `${Math.min(task.progress, 100)}%` }} /></div>
+      {task.error_code && <p className="error">{task.error_code}</p>}
+      {task.options?.quality_report && <p className="muted">{JSON.stringify(task.options.quality_report)}</p>}
 
       <section className="transcript-text">
         <h3>{t('transcribe.text')}</h3>

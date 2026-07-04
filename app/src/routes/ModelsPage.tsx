@@ -71,7 +71,11 @@ export function ModelsPage() {
                 {model.downloaded ? t('common.downloaded') : t('common.notDownloaded')}
               </span>
               {model.loaded && <span className="chip ok">{t('common.loaded')}</span>}
+              {model.compatible === false && <span className="chip danger">incompatible</span>}
             </div>
+            {model.size_on_disk_mb != null && <p className="muted">{model.size_on_disk_mb} MB on disk</p>}
+            {model.compatibility_error && <p className="error">{model.compatibility_error}</p>}
+            {model.download_error && <p className="error">{model.download_error}</p>}
             <ModelDownloadProgress progress={progressByModel[model.model_name]} error={model.error} />
             <div className="row-actions">
               <button className="secondary-button" onClick={() => download.mutate(model.model_name)} disabled={download.isPending || model.downloading}>

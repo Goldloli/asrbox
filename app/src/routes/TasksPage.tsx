@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RotateCcw, Square, Trash2 } from 'lucide-react';
+import { ArchiveX, RotateCcw, Square, Trash2 } from 'lucide-react';
 import { apiClient, type TaskStatus } from '../lib/api';
 import { formatDate, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -20,6 +20,8 @@ export function TasksPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['tasks'] });
   const retry = useMutation({ mutationFn: apiClient.retryTask.bind(apiClient), onSuccess: refresh });
+  const retryChunks = useMutation({ mutationFn: apiClient.retryFailedChunks.bind(apiClient), onSuccess: refresh });
+  const cleanupArtifacts = useMutation({ mutationFn: apiClient.cleanupTaskArtifacts.bind(apiClient), onSuccess: refresh });
   const cancel = useMutation({ mutationFn: apiClient.cancelTask.bind(apiClient), onSuccess: refresh });
   const remove = useMutation({ mutationFn: apiClient.deleteTask.bind(apiClient), onSuccess: refresh });
 
@@ -56,6 +58,7 @@ export function TasksPage() {
               <tr key={task.id}>
                 <td>
                   <strong>{task.filename}</strong>
+                  {task.error_code && <small className="block">{task.error_code}</small>}
                   {task.error && <small className="error block">{task.error}</small>}
                 </td>
                 <td>{statusLabel(task.status)} · {Math.round(task.progress)}%</td>
@@ -65,6 +68,10 @@ export function TasksPage() {
                 <td className="row-actions">
                   <button className="icon-button" title="Cancel" onClick={() => cancel.mutate(task.id)}><Square size={16} /></button>
                   <button className="icon-button" title="Retry" onClick={() => retry.mutate(task.id)}><RotateCcw size={16} /></button>
+                  {task.status === 'failed_resumable' && (
+                    <button className="icon-button" title="Retry failed chunks" onClick={() => retryChunks.mutate(task.id)}><RotateCcw size={16} /></button>
+                  )}
+                  <button className="icon-button" title="Cleanup artifacts" onClick={() => cleanupArtifacts.mutate(task.id)}><ArchiveX size={16} /></button>
                   <button className="icon-button danger" title={t('common.delete')} onClick={() => remove.mutate(task.id)}><Trash2 size={16} /></button>
                 </td>
               </tr>
