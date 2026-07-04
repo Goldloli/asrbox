@@ -5,6 +5,7 @@ import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask 
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
 import { Button, EmptyState, ErrorState, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { toastErrorMessage, useToast } from '../components/Toast';
 import { StatusPill } from '../components/StatusPill';
 import { TaskTimeline } from '../components/TaskTimeline';
 import { TranscriptViewer } from '../components/TranscriptViewer';
@@ -49,13 +50,13 @@ export function TasksPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.activeTasks });
   };
 
-  const cancel = useTaskMutation(apiClient.cancelTask.bind(apiClient), refresh);
-  const retry = useTaskMutation(apiClient.retryTask.bind(apiClient), refresh);
-  const retranscribe = useTaskMutation(apiClient.retranscribeTask.bind(apiClient), refresh);
-  const postprocess = useTaskMutation(apiClient.postprocessTask.bind(apiClient), refresh);
-  const retryChunks = useTaskMutation(apiClient.retryFailedChunks.bind(apiClient), refresh);
-  const cleanupArtifacts = useTaskMutation(apiClient.cleanupTaskArtifacts.bind(apiClient), refresh);
-  const remove = useTaskMutation(apiClient.deleteTask.bind(apiClient), refresh);
+  const cancel = useTaskMutation(apiClient.cancelTask.bind(apiClient), refresh, t('toast.taskCancelled'));
+  const retry = useTaskMutation(apiClient.retryTask.bind(apiClient), refresh, t('toast.taskRetried'));
+  const retranscribe = useTaskMutation(apiClient.retranscribeTask.bind(apiClient), refresh, t('toast.taskRetranscribed'));
+  const postprocess = useTaskMutation(apiClient.postprocessTask.bind(apiClient), refresh, t('toast.taskPostprocessStarted'));
+  const retryChunks = useTaskMutation(apiClient.retryFailedChunks.bind(apiClient), refresh, t('toast.taskChunksRetried'));
+  const cleanupArtifacts = useTaskMutation(apiClient.cleanupTaskArtifacts.bind(apiClient), refresh, t('toast.taskArtifactsCleaned'));
+  const remove = useTaskMutation(apiClient.deleteTask.bind(apiClient), refresh, t('toast.taskDeleted'));
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -196,6 +197,15 @@ function Metric({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function useTaskMutation<T>(mutationFn: (id: string) => Promise<T>, onSuccess: () => void) {
-  return useMutation({ mutationFn, onSuccess });
+function useTaskMutation<T>(mutationFn: (id: string) => Promise<T>, onSuccess: () => void, successMessage: string) {
+  const { t } = useI18n();
+  const toast = useToast();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      onSuccess();
+      toast.success(successMessage);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
 }

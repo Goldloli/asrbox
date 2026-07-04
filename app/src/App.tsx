@@ -3,6 +3,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { router } from './router';
 import { TooltipProvider } from './components/weiui';
+import { ToastProvider } from './components/Toast';
 import { useAppEvents } from './lib/useAppEvents';
 import { useUiStore } from './stores/uiStore';
 
@@ -36,8 +37,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <ThemeRuntime />
-        <AppRuntime />
+        <ToastProvider>
+          <ThemeRuntime />
+          <AppRuntime />
+        </ToastProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

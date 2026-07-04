@@ -6,12 +6,14 @@ import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuer
 import { formatBytes } from '../lib/format';
 import { ModelDownloadCard } from '../components/ModelDownloadCard';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
+import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type ModelCategory } from '../lib/modelCatalog';
 import { useI18n } from '../lib/i18n';
 
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
+  const toast = useToast();
   const [category, setCategory] = useState<ModelCategory | 'all'>('recommended');
   const modelsQuery = useModelsQuery();
   const downloadsQuery = useActiveDownloadsQuery();
@@ -28,10 +30,38 @@ export function ModelsPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
     queryClient.invalidateQueries({ queryKey: queryKeys.modelStorage });
   };
-  const download = useMutation({ mutationFn: apiClient.downloadModel.bind(apiClient), onSuccess: refresh });
-  const cancel = useMutation({ mutationFn: apiClient.cancelModelDownload.bind(apiClient), onSuccess: refresh });
-  const unload = useMutation({ mutationFn: apiClient.unloadModel.bind(apiClient), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: apiClient.deleteModel.bind(apiClient), onSuccess: refresh });
+  const download = useMutation({
+    mutationFn: (modelName: string) => apiClient.downloadModel(modelName),
+    onSuccess: (_, modelName) => {
+      refresh();
+      toast.success(t('toast.modelDownloadStarted'), modelName);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const cancel = useMutation({
+    mutationFn: (modelName: string) => apiClient.cancelModelDownload(modelName),
+    onSuccess: () => {
+      refresh();
+      toast.info(t('toast.modelDownloadCancelled'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const unload = useMutation({
+    mutationFn: (modelName: string) => apiClient.unloadModel(modelName),
+    onSuccess: () => {
+      refresh();
+      toast.success(t('toast.modelUnloaded'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const remove = useMutation({
+    mutationFn: (modelName: string) => apiClient.deleteModel(modelName),
+    onSuccess: () => {
+      refresh();
+      toast.success(t('toast.modelDeleted'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
 
   const downloadedCount = models.filter((model) => model.downloaded).length;
   const loadedCount = models.filter((model) => model.loaded).length;
