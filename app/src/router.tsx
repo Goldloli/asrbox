@@ -1,7 +1,6 @@
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { Layout } from './components/Layout';
 import { ModelsPage } from './routes/ModelsPage';
-import { ProvidersPage } from './routes/ProvidersPage';
 import { SettingsPage } from './routes/SettingsPage';
 import { TasksPage } from './routes/TasksPage';
 import { TranscribePage } from './routes/TranscribePage';
@@ -29,7 +28,9 @@ const modelsRoute = createRoute({
 const providersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/providers',
-  component: ProvidersPage,
+  beforeLoad: () => {
+    throw redirect({ to: '/settings' });
+  },
 });
 
 const exportsRoute = createRoute({

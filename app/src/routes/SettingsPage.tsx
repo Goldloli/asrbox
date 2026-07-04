@@ -6,10 +6,11 @@ import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } fr
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type Locale } from '../stores/uiStore';
-import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
+import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
+import { ProvidersPage } from './ProvidersPage';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -57,85 +58,114 @@ export function SettingsPage() {
   });
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
+    <Tabs defaultValue="general" className="grid gap-4">
       <Panel className="overflow-hidden">
-        <PanelHeader
-          eyebrow={t('settings.eyebrow')}
-          title={t('settings.title')}
-          description={t('settings.description')}
-          action={
-            <Button onClick={() => save.mutate()} disabled={save.isPending}>
-              <Save className="size-4" />
-              {t('common.save')}
-            </Button>
-          }
-        />
-        <div className="grid gap-5 p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label={t('settings.interfaceLanguage')}>
-              <Select
-                value={locale}
-                onValueChange={(value) => setLocale(value as Locale)}
-                options={[
-                  { value: 'zh', label: '中文' },
-                  { value: 'en', label: 'English' },
-                ]}
-              />
-            </Field>
-            <Field label={t('settings.serverUrl')}>
-              <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} />
-            </Field>
-            <Field label={t('settings.defaultBackend')}>
-              <Select
-                value={backend}
-                onValueChange={setBackend}
-                options={[
-                  { value: 'local', label: t('settings.local') },
-                  { value: 'provider', label: t('settings.provider') },
-                ]}
-              />
-            </Field>
-            <Field label={t('settings.defaultLanguage')}>
-              <Select value={language} onValueChange={(value) => setLanguage(normalizeLanguageValue(value))} options={languageOptions(locale)} />
-            </Field>
-            <Field label={t('settings.localConcurrency')}>
-              <Input type="number" min={1} max={4} value={localConcurrency} onChange={(event) => setLocalConcurrency(Number(event.target.value))} />
-            </Field>
-            <Field label={t('settings.providerConcurrency')}>
-              <Input type="number" min={1} max={8} value={providerConcurrency} onChange={(event) => setProviderConcurrency(Number(event.target.value))} />
-            </Field>
-          </div>
-
-          <div className="grid gap-2">
-            <ToggleRow label={t('settings.timestamps')} checked={timestamps} onCheckedChange={setTimestamps} />
-            <ToggleRow label={t('settings.wordTimestamps')} checked={wordTimestamps} onCheckedChange={setWordTimestamps} />
-            <ToggleRow label={t('settings.diarization')} checked={diarization} onCheckedChange={setDiarization} />
-            <ToggleRow label={t('settings.vad')} checked={vad} onCheckedChange={setVad} />
-          </div>
-
-          {save.error && <ErrorState title={t('common.unableToLoad')} error={save.error} />}
-          {settingsQuery.error && <ErrorState title={t('settings.unavailable')} error={settingsQuery.error} />}
+        <PanelHeader eyebrow={t('settings.eyebrow')} title={t('settings.title')} description={t('settings.description')} />
+        <div className="border-b border-white/10 px-5 py-4">
+          <TabsList className="flex w-full flex-wrap gap-1 md:w-fit">
+            <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
+            <TabsTrigger value="transcription">{t('settings.tabTranscription')}</TabsTrigger>
+            <TabsTrigger value="providers">{t('settings.tabProviders')}</TabsTrigger>
+            <TabsTrigger value="storage">{t('settings.tabStorage')}</TabsTrigger>
+          </TabsList>
         </div>
       </Panel>
 
-      <div className="grid content-start gap-4">
-        <RuntimeHealthCard runtime={runtimeQuery.data} />
+      <TabsContent value="general">
         <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('settings.storage')} title={t('settings.dataPaths')} description={runtimeQuery.data?.data_dir ?? t('settings.backendUnavailable')} />
-          <div className="grid gap-3 p-5">
-            <PathRow label={t('settings.modelsPath')} value={runtimeQuery.data?.models_dir} />
-            <PathRow label={t('settings.freeDisk')} value={formatBytes(runtimeQuery.data?.free_disk_bytes)} />
-            <PathRow label={t('settings.storageUsed')} value={formatBytes(storageQuery.data?.used_bytes)} />
-            <Button asChild variant="secondary">
-              <a href={apiClient.runtimeDiagnosticBundleUrl()}>
-                <Download className="size-4" />
-                {t('settings.diagnosticBundle')}
-              </a>
-            </Button>
+          <PanelHeader title={t('settings.tabGeneral')} description={t('settings.generalDescription')} />
+          <div className="grid gap-5 p-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label={t('settings.interfaceLanguage')}>
+                <Select
+                  value={locale}
+                  onValueChange={(value) => setLocale(value as Locale)}
+                  options={[
+                    { value: 'zh', label: '中文' },
+                    { value: 'en', label: 'English' },
+                  ]}
+                />
+              </Field>
+              <Field label={t('settings.serverUrl')}>
+                <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} />
+              </Field>
+            </div>
           </div>
         </Panel>
-      </div>
-    </section>
+      </TabsContent>
+
+      <TabsContent value="transcription">
+        <Panel className="overflow-hidden">
+          <PanelHeader
+            title={t('settings.tabTranscription')}
+            description={t('settings.transcriptionDescription')}
+            action={
+              <Button onClick={() => save.mutate()} disabled={save.isPending}>
+                <Save className="size-4" />
+                {t('common.save')}
+              </Button>
+            }
+          />
+          <div className="grid gap-5 p-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label={t('settings.defaultBackend')}>
+                <Select
+                  value={backend}
+                  onValueChange={setBackend}
+                  options={[
+                    { value: 'local', label: t('settings.local') },
+                    { value: 'provider', label: t('settings.provider') },
+                  ]}
+                />
+              </Field>
+              <Field label={t('settings.defaultLanguage')}>
+                <Select value={language} onValueChange={(value) => setLanguage(normalizeLanguageValue(value))} options={languageOptions(locale)} />
+              </Field>
+              <Field label={t('settings.localConcurrency')}>
+                <Input type="number" min={1} max={4} value={localConcurrency} onChange={(event) => setLocalConcurrency(Number(event.target.value))} />
+              </Field>
+              <Field label={t('settings.providerConcurrency')}>
+                <Input type="number" min={1} max={8} value={providerConcurrency} onChange={(event) => setProviderConcurrency(Number(event.target.value))} />
+              </Field>
+            </div>
+
+            <div className="grid gap-2">
+              <ToggleRow label={t('settings.timestamps')} checked={timestamps} onCheckedChange={setTimestamps} />
+              <ToggleRow label={t('settings.wordTimestamps')} checked={wordTimestamps} onCheckedChange={setWordTimestamps} />
+              <ToggleRow label={t('settings.diarization')} checked={diarization} onCheckedChange={setDiarization} />
+              <ToggleRow label={t('settings.vad')} checked={vad} onCheckedChange={setVad} />
+            </div>
+
+            {save.error && <ErrorState title={t('common.unableToLoad')} error={save.error} />}
+            {settingsQuery.error && <ErrorState title={t('settings.unavailable')} error={settingsQuery.error} />}
+          </div>
+        </Panel>
+      </TabsContent>
+
+      <TabsContent value="providers">
+        <ProvidersPage />
+      </TabsContent>
+
+      <TabsContent value="storage">
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
+          <RuntimeHealthCard runtime={runtimeQuery.data} />
+          <Panel className="overflow-hidden">
+            <PanelHeader eyebrow={t('settings.storage')} title={t('settings.dataPaths')} description={runtimeQuery.data?.data_dir ?? t('settings.backendUnavailable')} />
+            <div className="grid gap-3 p-5">
+              <PathRow label={t('settings.modelsPath')} value={runtimeQuery.data?.models_dir} />
+              <PathRow label={t('settings.freeDisk')} value={formatBytes(runtimeQuery.data?.free_disk_bytes)} />
+              <PathRow label={t('settings.storageUsed')} value={formatBytes(storageQuery.data?.used_bytes)} />
+              <Button asChild variant="secondary">
+                <a href={apiClient.runtimeDiagnosticBundleUrl()}>
+                  <Download className="size-4" />
+                  {t('settings.diagnosticBundle')}
+                </a>
+              </Button>
+            </div>
+          </Panel>
+        </section>
+      </TabsContent>
+    </Tabs>
   );
 }
 
