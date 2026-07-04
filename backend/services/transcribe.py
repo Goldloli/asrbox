@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.backends.local_asr import transcribe_local
 from backend.backends.registry import get_model_config
 from backend.models import TranscriptSegment, TranscriptionResult
+from backend.services.errors import ASRboxError
 
 
 def transcribe_placeholder(
@@ -35,5 +36,10 @@ def transcribe_with_local_model(model_name: str, audio_path: str, options: dict)
     from backend.services import models as model_service
 
     if not model_service.is_model_downloaded(model_name):
-        raise RuntimeError(f"Model {model_name} is not downloaded")
-    return transcribe_local(audio_path, model_config, options)
+        raise ASRboxError("MODEL_NOT_DOWNLOADED", f"Model {model_name} is not downloaded", stage="waiting_model")
+    try:
+        return transcribe_local(audio_path, model_config, options)
+    except ASRboxError:
+        raise
+    except RuntimeError as exc:
+        raise ASRboxError("MODEL_LOAD_FAILED", str(exc), stage="transcribing") from exc

@@ -13,7 +13,18 @@
     "setup:dev": "node scripts/setup-dev-sidecar.js",
     "build:web": "cd web && vite build",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
-    "test:backend": ".venv/bin/python -m pytest backend/tests -q"
+    "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",
+    "test:backend:real-models": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",
+    "test:backend:real-models:full": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",
+    "test:backend:model-benchmark-full": ".venv/bin/python -m pytest backend/tests -q -k benchmark",
+    "test:backend:long-audio": ".venv/bin/python -m pytest backend/tests -q -k long_audio",
+    "test:backend:providers": ".venv/bin/python -m pytest backend/tests -q -k provider",
+    "test:backend:storage-security": ".venv/bin/python -m pytest backend/tests -q -k 'storage or restore or backup'",
+    "test:backend:server": ".venv/bin/python -m pytest backend/tests -q -k 'server or runtime'",
+    "test:backend:contract": ".venv/bin/python -m pytest backend/tests/test_contract.py -q",
+    "test:backend:binary-smoke": "ASRBOX_BINARY_SMOKE=1 .venv/bin/python -m pytest backend/tests/test_binary_smoke.py -q",
+    "test:backend:95": ".venv/bin/python -m compileall backend && npm run test:backend && npm run typecheck && npm run build:web && npm run test:backend:providers && npm run test:backend:storage-security && npm run test:backend:server && npm run test:backend:long-audio && npm run test:backend:contract && npm run test:backend:binary-smoke && npm run test:backend:real-models:full",
+    "test:backend:all": "npm run test:backend && npm run test:backend:real-models && npm run test:backend:model-benchmark-full && npm run test:backend:long-audio && npm run test:backend:providers && npm run test:backend:storage-security && npm run test:backend:server"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

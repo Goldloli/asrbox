@@ -1,4 +1,3 @@
-from backend.backends.registry import ASRModelConfig, get_all_model_configs, get_model_config
+from backend.backends.registry import ASRModelConfig, ModelSourceCandidate, get_all_model_configs, get_model_config
 
-__all__ = ["ASRModelConfig", "get_all_model_configs", "get_model_config"]
-
+__all__ = ["ASRModelConfig", "ModelSourceCandidate", "get_all_model_configs", "get_model_config"]

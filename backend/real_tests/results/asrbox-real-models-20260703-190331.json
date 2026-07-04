@@ -1,0 +1,274 @@
+{
+  "created_at": "2026-07-03T19:03:31.384851+00:00",
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "items": [
+    {
+      "model_name": "whisper-base",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "openai/whisper-base",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "e2336db3-361b-4e33-860c-a5ba1d8e20ac",
+      "text_length": 5162,
+      "segments_count": 384
+    },
+    {
+      "model_name": "whisper-small",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "openai/whisper-small",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "42f4250c-0e0d-42af-8c4a-7128facad11e",
+      "text_length": 5309,
+      "segments_count": 351
+    },
+    {
+      "model_name": "whisper-medium",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "openai/whisper-medium",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "38da4e31-41bc-4b4f-a244-c7e7ef022d54",
+      "text_length": 5320,
+      "segments_count": 362
+    },
+    {
+      "model_name": "whisper-large-v3",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "openai/whisper-large-v3",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "57e63beb-c321-4732-b62e-916632c12c00",
+      "text_length": 5227,
+      "segments_count": 508
+    },
+    {
+      "model_name": "whisper-large-v3-turbo",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "openai/whisper-large-v3-turbo",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "a1f3d41b-7171-4518-a096-4776a4f26def",
+      "text_length": 5264,
+      "segments_count": 494
+    },
+    {
+      "model_name": "faster-whisper-base",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "Systran/faster-whisper-base",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "389f0c2c-5a09-40a4-84e1-ff38d365367d",
+      "text_length": 5120,
+      "segments_count": 518
+    },
+    {
+      "model_name": "faster-whisper-small",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "Systran/faster-whisper-small",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "4f7e61a0-8c57-4322-8659-472ea50ee912",
+      "text_length": 5254,
+      "segments_count": 572
+    },
+    {
+      "model_name": "faster-whisper-medium",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "Systran/faster-whisper-medium",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "89a12571-0a5e-469b-b954-3ebf69ee6abd",
+      "text_length": 5230,
+      "segments_count": 415
+    },
+    {
+      "model_name": "faster-whisper-large-v3",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "Systran/faster-whisper-large-v3",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "fc865d77-0fef-4069-812e-0dca39cf77e9",
+      "text_length": 5248,
+      "segments_count": 504
+    },
+    {
+      "model_name": "faster-whisper-large-v3-turbo",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "28726bca-6b04-4867-9fa6-db8d527a1d1b",
+      "text_length": 5297,
+      "segments_count": 461
+    },
+    {
+      "model_name": "qwen3-asr-0.6b",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "Qwen/Qwen3-ASR-0.6B-hf",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "5d021450-4abc-45dc-bcc0-717bfccd22e5",
+      "text_length": 960,
+      "segments_count": 12
+    },
+    {
+      "model_name": "qwen3-asr-1.7b",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "Qwen/Qwen3-ASR-1.7B-hf",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "7b7ff8a1-d10e-433a-adc1-199c574ba6bf",
+      "text_length": 969,
+      "segments_count": 12
+    },
+    {
+      "model_name": "mlx-whisper-turbo",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "mlx-community/whisper-large-v3-turbo",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "a16f93e7-0b7a-4877-99d4-4e26db6c5d6b",
+      "text_length": 5273,
+      "segments_count": 433
+    },
+    {
+      "model_name": "sensevoice-small",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "iic/SenseVoiceSmall",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "37d8fc95-3901-4683-a938-fc28b1f18167",
+      "text_length": 1801,
+      "segments_count": 22
+    }
+  ]
+}

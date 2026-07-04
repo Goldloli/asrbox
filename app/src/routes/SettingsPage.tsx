@@ -11,6 +11,7 @@ export function SettingsPage() {
   const { locale, setLocale, t } = useI18n();
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: () => apiClient.getSettings() });
+  const runtimeQuery = useQuery({ queryKey: ['runtime-status'], queryFn: () => apiClient.getRuntimeStatus() });
   const [language, setLanguage] = useState('zh');
   const [backend, setBackend] = useState('local');
   const [timestamps, setTimestamps] = useState(true);
@@ -88,6 +89,17 @@ export function SettingsPage() {
         <SettingRow label={t('settings.providerConcurrency')}>
           <input type="number" min={1} max={8} value={providerConcurrency} onChange={(event) => setProviderConcurrency(Number(event.target.value))} />
         </SettingRow>
+        {runtimeQuery.data && (
+          <SettingRow label="Runtime">
+            <div className="runtime-summary">
+              <span>Python {runtimeQuery.data.python_version}</span>
+              <span>ffmpeg {runtimeQuery.data.ffmpeg_available ? 'ok' : 'missing'}</span>
+              <span>CUDA {runtimeQuery.data.torch_cuda_available ? 'ok' : 'off'}</span>
+              <span>MLX {runtimeQuery.data.mlx_whisper_available ? 'ok' : 'off'}</span>
+              <a href={apiClient.runtimeDiagnosticBundleUrl()}>diagnostic bundle</a>
+            </div>
+          </SettingRow>
+        )}
       </div>
       {save.error && <p className="error">{save.error.message}</p>}
     </section>

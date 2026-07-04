@@ -4,27 +4,34 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend import config
+from backend.database.migrations import run_migrations
 from backend.database.models import ASRProvider, Base
 
 engine = None
 SessionLocal = None
+_current_db_path = None
 
 
 def init_db() -> None:
-    global engine, SessionLocal
+    global engine, SessionLocal, _current_db_path
     db_path = config.get_db_path()
+    if engine is not None and _current_db_path == db_path:
+        return
+    if engine is not None:
+        engine.dispose()
     engine = create_engine(
         f"sqlite:///{db_path}",
         connect_args={"check_same_thread": False},
     )
+    _current_db_path = db_path
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine, SessionLocal)
     seed_builtin_providers()
 
 
 def get_db():
-    if SessionLocal is None:
-        init_db()
+    init_db()
     db = SessionLocal()
     try:
         yield db
@@ -58,7 +65,31 @@ def seed_builtin_providers() -> None:
                     options_json="{}",
                 )
             )
+        if "openai_compatible" not in existing:
+            db.add(
+                ASRProvider(
+                    id="openai-compatible",
+                    name="OpenAI-compatible ASR",
+                    provider_type="openai_compatible",
+                    enabled=False,
+                    default_model="whisper-1",
+                    options_json="{}",
+                )
+            )
+        if "generic_http" not in existing:
+            db.add(
+                ASRProvider(
+                    id="generic-http",
+                    name="Generic HTTP ASR",
+                    provider_type="generic_http",
+                    enabled=False,
+                    options_json="{}",
+                )
+            )
         db.commit()
     finally:
         db.close()
 
+
+def run_lightweight_migrations() -> None:
+    run_migrations(engine, SessionLocal)

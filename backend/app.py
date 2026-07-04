@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -12,13 +13,19 @@ from backend.routes import register_routers
 from backend.services.tasks import mark_interrupted_tasks
 
 
-def create_app() -> FastAPI:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     init_db()
     _mark_interrupted_tasks()
+    yield
+
+
+def create_app() -> FastAPI:
     app = FastAPI(
         title="ASRbox API",
         description="Web-first ASR model and provider workspace",
         version=__version__,
+        lifespan=lifespan,
     )
     app.add_middleware(
         CORSMiddleware,

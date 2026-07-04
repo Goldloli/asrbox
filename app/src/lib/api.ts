@@ -11,6 +11,7 @@ export type TaskStatus =
   | 'exporting'
   | 'completed'
   | 'failed'
+  | 'failed_resumable'
   | 'cancelled'
   | 'interrupted';
 
@@ -37,11 +38,13 @@ export interface TranscriptionTask {
   duration_ms?: number | null;
   text?: string | null;
   error?: string | null;
+  error_code?: string | null;
   options: Record<string, unknown>;
   segments: TranscriptSegment[];
   created_at: string;
   updated_at: string;
   completed_at?: string | null;
+  batch_id?: string | null;
 }
 
 export interface TaskListResponse {
@@ -67,6 +70,18 @@ export interface ModelStatus {
   downloading: boolean;
   loaded: boolean;
   error?: string | null;
+  compatible?: boolean | null;
+  compatibility_error?: string | null;
+  download_error?: string | null;
+  size_on_disk_mb?: number | null;
+  cache_detected?: boolean;
+  cache_size_mb?: number | null;
+  cache_path?: string | null;
+  preferred_source?: string | null;
+  source_candidates?: Array<{ source: string; repo_id: string; priority: number; verified: boolean }>;
+  installed_source?: string | null;
+  installed_repo_id?: string | null;
+  last_verified_at?: string | null;
 }
 
 export interface ModelProgress {
@@ -77,6 +92,9 @@ export interface ModelProgress {
   filename?: string | null;
   status: 'downloading' | 'extracting' | 'complete' | 'error';
   error?: string | null;
+  source?: string | null;
+  repo_id?: string | null;
+  fallback_from?: string | null;
   timestamp: string;
 }
 
@@ -106,6 +124,58 @@ export interface ASRSettings {
   output_formats: string[];
   max_concurrent_local_tasks: number;
   max_concurrent_provider_tasks: number;
+}
+
+export interface RuntimeStatus {
+  python_version: string;
+  platform: string;
+  ffmpeg_available: boolean;
+  ffprobe_available: boolean;
+  torch_available: boolean;
+  torch_cuda_available: boolean;
+  torch_mps_available: boolean;
+  ctranslate2_available: boolean;
+  faster_whisper_available: boolean;
+  funasr_available: boolean;
+  torchaudio_available: boolean;
+  modelscope_available: boolean;
+  huggingface_hub_available: boolean;
+  pyannote_available: boolean;
+  diarization_ready: boolean;
+  mlx_available: boolean;
+  mlx_whisper_available: boolean;
+  qwen3_asr_available: boolean;
+  transformers_qwen3_asr_available: boolean;
+  data_dir: string;
+  models_dir: string;
+  free_disk_bytes?: number | null;
+  warnings: string[];
+}
+
+export interface TaskDiagnostic {
+  id: number;
+  task_id: string;
+  stage: string;
+  error_code?: string | null;
+  message: string;
+  created_at: string;
+}
+
+export interface TaskQuality {
+  task_id: string;
+  warnings: string[];
+  metrics: Record<string, unknown>;
+}
+
+export interface TranscriptionPreflight {
+  filename: string;
+  supported_format: boolean;
+  has_audio_stream: boolean;
+  duration_ms?: number | null;
+  will_chunk: boolean;
+  chunk_count: number;
+  warnings: string[];
+  readiness: Record<string, unknown>;
 }
 
 async function parseError(response: Response): Promise<Error> {
@@ -172,6 +242,17 @@ class ApiClient {
     return response.json() as Promise<TranscriptionTask>;
   }
 
+  async preflightTranscription(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch(`${this.baseUrl()}/transcriptions/preflight`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) throw await parseError(response);
+    return response.json() as Promise<TranscriptionPreflight>;
+  }
+
   retryTask(id: string) {
     return this.request<TranscriptionTask>(`/tasks/${id}/retry`, { method: 'POST' });
   }
@@ -182,6 +263,22 @@ class ApiClient {
 
   deleteTask(id: string) {
     return this.request<{ message: string }>(`/tasks/${id}`, { method: 'DELETE' });
+  }
+
+  getTaskDiagnostics(id: string) {
+    return this.request<TaskDiagnostic[]>(`/tasks/${id}/diagnostics`);
+  }
+
+  getTaskQuality(id: string) {
+    return this.request<TaskQuality>(`/tasks/${id}/quality`);
+  }
+
+  retryFailedChunks(id: string) {
+    return this.request<TranscriptionTask>(`/tasks/${id}/chunks/retry-failed`, { method: 'POST' });
+  }
+
+  cleanupTaskArtifacts(id: string) {
+    return this.request<{ removed: string[]; errors: string[] }>(`/tasks/${id}/cleanup-artifacts`, { method: 'POST' });
   }
 
   taskEventsUrl(id: string) {
@@ -215,6 +312,10 @@ class ApiClient {
     return this.request<{ message: string }>(`/models/${modelName}`, { method: 'DELETE' });
   }
 
+  redownloadModel(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/redownload`, { method: 'POST' });
+  }
+
   listProviders() {
     return this.request<{ items: Provider[] }>('/providers');
   }
@@ -246,6 +347,14 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  getRuntimeStatus() {
+    return this.request<RuntimeStatus>('/runtime/status');
+  }
+
+  runtimeDiagnosticBundleUrl() {
+    return `${this.baseUrl()}/runtime/diagnostic-bundle.zip`;
   }
 }
 

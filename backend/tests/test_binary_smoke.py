@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import pytest
+import requests
+
+
+def test_frozen_binary_health_runtime_and_shutdown() -> None:
+    if os.environ.get("ASRBOX_BINARY_SMOKE") != "1":
+        pytest.skip("Set ASRBOX_BINARY_SMOKE=1 to run the frozen binary smoke gate")
+
+    root = Path(__file__).resolve().parents[2]
+    binary = Path(os.environ.get("ASRBOX_BINARY_PATH") or root / "dist" / "asrbox-server")
+    if not binary.exists():
+        subprocess.run([sys.executable, str(root / "backend" / "build_binary.py")], check=True, cwd=root)
+    assert binary.exists()
+
+    port = int(os.environ.get("ASRBOX_BINARY_SMOKE_PORT", "17594"))
+    data_dir = tempfile.mkdtemp(prefix="asrbox-binary-smoke-")
+    resolved_data_dir = str(Path(data_dir).resolve())
+    proc = subprocess.Popen(
+        [str(binary), "--host", "127.0.0.1", "--port", str(port), "--data-dir", data_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=root,
+    )
+    try:
+        _wait_for_health(port, proc)
+        start = time.time()
+        runtime = requests.get(f"http://127.0.0.1:{port}/runtime/status", timeout=180)
+        assert runtime.status_code == 200
+        assert runtime.json()["data_dir"] == resolved_data_dir
+        assert time.time() - start < 180
+
+        shutdown = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=30)
+        assert shutdown.status_code == 200
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            proc.wait(timeout=30)
+        assert _port_released(port)
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=10)
+
+
+def _wait_for_health(port: int, proc: subprocess.Popen) -> None:
+    deadline = time.time() + 120
+    last_error = ""
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            output = proc.stdout.read() if proc.stdout else ""
+            raise AssertionError(f"binary exited early with {proc.returncode}\n{last_error}\n{output}")
+        try:
+            response = requests.get(f"http://127.0.0.1:{port}/health", timeout=2)
+            if response.status_code == 200 and response.json()["status"] == "healthy":
+                return
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(1)
+    raise AssertionError(f"Timed out waiting for binary /health: {last_error}")
+
+
+def _port_released(port: int) -> bool:
+    sock = socket.socket()
+    try:
+        return sock.connect_ex(("127.0.0.1", port)) != 0
+    finally:
+        sock.close()

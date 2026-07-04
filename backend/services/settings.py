@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -55,8 +55,7 @@ def update_settings(db: Session, patch: dict[str, Any]) -> ASRSettingsResponse:
             row.output_formats_json = json.dumps(value, ensure_ascii=False)
         elif hasattr(row, key) and value is not None:
             setattr(row, key, value)
-    row.updated_at = datetime.utcnow()
+    row.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(row)
     return to_response(row)
-

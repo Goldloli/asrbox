@@ -468,6 +468,12 @@ th {
   color: #176b55;
 }
 
+.chip.danger {
+  border-color: #efc0c0;
+  background: #fff0f0;
+  color: #9b1c1c;
+}
+
 .model-progress {
   min-width: 180px;
 }
@@ -498,6 +504,15 @@ th {
 .settings-list {
   display: grid;
   max-width: 820px;
+}
+
+.runtime-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  color: #58656d;
+  font-size: 13px;
 }
 
 .setting-row {
