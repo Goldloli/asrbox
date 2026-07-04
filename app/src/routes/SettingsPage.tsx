@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, Save } from 'lucide-react';
+import { Download, RefreshCw, Save } from 'lucide-react';
+import { useSearch } from '@tanstack/react-router';
 import { apiClient } from '../lib/api';
 import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
@@ -12,6 +13,12 @@ import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
 import { ProvidersPage } from './ProvidersPage';
+
+type SettingsTab = 'general' | 'transcription' | 'providers' | 'storage';
+
+function normalizeSettingsTab(value: unknown): SettingsTab {
+  return value === 'transcription' || value === 'providers' || value === 'storage' ? value : 'general';
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -25,6 +32,8 @@ export function SettingsPage() {
   const settingsQuery = useSettingsQuery();
   const runtimeQuery = useRuntimeQuery();
   const storageQuery = useModelStorageQuery();
+  const search = useSearch({ strict: false }) as { tab?: string };
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => normalizeSettingsTab(search.tab));
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
   const [backend, setBackend] = useState('local');
   const [timestamps, setTimestamps] = useState(true);
@@ -46,6 +55,10 @@ export function SettingsPage() {
     setProviderConcurrency(settingsQuery.data.max_concurrent_provider_tasks);
   }, [settingsQuery.data]);
 
+  useEffect(() => {
+    setActiveTab(normalizeSettingsTab(search.tab));
+  }, [search.tab]);
+
   const save = useMutation({
     mutationFn: () =>
       apiClient.updateSettings({
@@ -66,7 +79,7 @@ export function SettingsPage() {
   });
 
   return (
-    <Tabs defaultValue="general" className="grid gap-4">
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(normalizeSettingsTab(value))} className="grid gap-4">
       <Panel className="overflow-hidden">
         <PanelHeader eyebrow={t('settings.eyebrow')} title={t('settings.title')} description={t('settings.description')} />
         <div className="border-b border-white/10 px-5 py-4">
@@ -169,7 +182,24 @@ export function SettingsPage() {
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
           <RuntimeHealthCard runtime={runtimeQuery.data} />
           <Panel className="overflow-hidden">
-            <PanelHeader eyebrow={t('settings.storage')} title={t('settings.dataPaths')} description={runtimeQuery.data?.data_dir ?? t('settings.backendUnavailable')} />
+            <PanelHeader
+              eyebrow={t('settings.storage')}
+              title={t('settings.dataPaths')}
+              description={runtimeQuery.data?.data_dir ?? t('settings.backendUnavailable')}
+              action={
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    runtimeQuery.refetch();
+                    storageQuery.refetch();
+                  }}
+                >
+                  <RefreshCw className="size-4" />
+                  {t('common.refresh')}
+                </Button>
+              }
+            />
             <div className="grid gap-3 p-5">
               <PathRow label={t('settings.modelsPath')} value={runtimeQuery.data?.models_dir} />
               <PathRow label={t('settings.freeDisk')} value={formatBytes(runtimeQuery.data?.free_disk_bytes)} />

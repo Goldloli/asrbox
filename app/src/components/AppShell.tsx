@@ -1,5 +1,6 @@
 import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, Radio } from 'lucide-react';
 import { type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
 import { Badge, Progress } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
@@ -42,10 +43,19 @@ function TopStatusBar() {
       </div>
 
       <div className="hidden items-center gap-2 md:flex">
-        <Badge tone={connected ? 'success' : 'danger'}>
-          {connected ? <CheckCircle2 className="mr-1 size-3" /> : <CloudOff className="mr-1 size-3" />}
-          {connected ? t('status.backendOnline') : t('status.backendOffline')}
-        </Badge>
+        {connected ? (
+          <Badge tone="success">
+            <CheckCircle2 className="mr-1 size-3" />
+            {t('status.backendOnline')}
+          </Badge>
+        ) : (
+          <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+            <Badge tone="danger">
+              <CloudOff className="mr-1 size-3" />
+              {t('status.backendOffline')}
+            </Badge>
+          </Link>
+        )}
         {runtime && (
           <>
             <Badge tone={runtime.ffmpeg_available ? 'success' : 'warning'}>
@@ -114,10 +124,15 @@ function BottomTaskBar() {
         )}
       </div>
       {hasError && (
-        <div className="flex items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
+        <Link
+          to="/settings"
+          search={{ tab: 'storage' }}
+          aria-label={t('status.openDiagnostics')}
+          className="flex items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)] transition hover:brightness-95"
+        >
           <AlertTriangle className="size-4" />
           {t('status.liveUnavailable')}
-        </div>
+        </Link>
       )}
     </footer>
   );

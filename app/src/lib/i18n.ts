@@ -14,6 +14,7 @@ const dictionaries = {
     'status.modelDownload': 'Model download',
     'status.noModelDownload': 'No active model download',
     'status.liveUnavailable': 'Live status unavailable',
+    'status.openDiagnostics': 'Open diagnostics',
 
     'nav.transcribe': 'Transcribe',
     'nav.home': 'Go home',
@@ -262,6 +263,7 @@ const dictionaries = {
     'status.modelDownload': '模型下载',
     'status.noModelDownload': '暂无模型下载',
     'status.liveUnavailable': '实时状态不可用',
+    'status.openDiagnostics': '打开诊断',
 
     'nav.transcribe': '转写',
     'nav.home': '返回首页',
