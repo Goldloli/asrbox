@@ -1,5 +1,5 @@
 import { Link, useMatchRoute, useNavigate } from '@tanstack/react-router';
-import { DownloadCloud, ListChecks, Mic2, ServerCog, Settings } from 'lucide-react';
+import { DownloadCloud, ListChecks, Mic2, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
@@ -10,7 +10,6 @@ const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['
   { to: '/', labelKey: 'nav.transcribe', icon: Mic2 },
   { to: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
-  { to: '/providers', labelKey: 'nav.providers', icon: ServerCog },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
 
