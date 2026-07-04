@@ -4,6 +4,7 @@ import { Activity, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiClient, type Provider } from '../lib/api';
 import { queryKeys, useProvidersQuery, useSettingsQuery } from '../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
+import { toastErrorMessage, useToast } from '../components/Toast';
 import { useI18n } from '../lib/i18n';
 
 type ProviderFormState = {
@@ -27,6 +28,7 @@ const emptyForm: ProviderFormState = {
 export function ProvidersPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
+  const toast = useToast();
   const providersQuery = useProvidersQuery();
   const settingsQuery = useSettingsQuery();
   const [testMessage, setTestMessage] = useState('');
@@ -37,15 +39,32 @@ export function ProvidersPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.settings });
   };
 
-  const remove = useMutation({ mutationFn: apiClient.deleteProvider.bind(apiClient), onSuccess: refresh });
+  const remove = useMutation({
+    mutationFn: apiClient.deleteProvider.bind(apiClient),
+    onSuccess: () => {
+      refresh();
+      toast.success(t('toast.providerDeleted'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
   const test = useMutation({
     mutationFn: (providerId: string) => apiClient.testProvider(providerId),
-    onSuccess: (result) => setTestMessage(result.message),
-    onError: (error) => setTestMessage(error.message),
+    onSuccess: (result) => {
+      setTestMessage(result.message);
+      toast.success(t('toast.providerTestComplete'), result.message);
+    },
+    onError: (error) => {
+      setTestMessage(toastErrorMessage(error));
+      toast.error(t('toast.providerTestFailed'), toastErrorMessage(error));
+    },
   });
   const setDefault = useMutation({
     mutationFn: (providerId: string) => apiClient.updateSettings({ default_backend: 'provider', default_provider_id: providerId }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      toast.success(t('toast.defaultProviderSaved'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
   return (
@@ -156,6 +175,7 @@ function ProviderDialog({
 
 function ProviderForm({ provider, onSaved }: { provider?: Provider; onSaved: () => void }) {
   const { t } = useI18n();
+  const toast = useToast();
   const [form, setForm] = useState<ProviderFormState>(emptyForm);
 
   useEffect(() => {
@@ -185,7 +205,9 @@ function ProviderForm({ provider, onSaved }: { provider?: Provider; onSaved: () 
     onSuccess: () => {
       if (!provider) setForm(emptyForm);
       onSaved();
+      toast.success(provider ? t('toast.providerSaved') : t('toast.providerCreated'));
     },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
   const submit = (event: FormEvent) => {

@@ -7,6 +7,7 @@ import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type Locale, type ThemeMode } from '../stores/uiStore';
 import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { toastErrorMessage, useToast } from '../components/Toast';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
@@ -15,6 +16,7 @@ import { ProvidersPage } from './ProvidersPage';
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
+  const toast = useToast();
   const locale = useUiStore((state) => state.locale);
   const theme = useUiStore((state) => state.theme);
   const setLocale = useUiStore((state) => state.setLocale);
@@ -56,7 +58,11 @@ export function SettingsPage() {
         max_concurrent_local_tasks: localConcurrency,
         max_concurrent_provider_tasks: providerConcurrency,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      toast.success(t('toast.settingsSaved'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
   return (

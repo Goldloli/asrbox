@@ -5,6 +5,7 @@ import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
 import { Badge, Button, EmptyState, ErrorState, Field, Panel, PanelHeader, Progress, Select } from '../components/weiui';
+import { toastErrorMessage, useToast } from '../components/Toast';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { StatusPill } from '../components/StatusPill';
 import { cn } from '../lib/cn';
@@ -22,6 +23,7 @@ const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 export function TranscribePage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
+  const toast = useToast();
   const [files, setFiles] = useState<File[]>([]);
   const [backend, setBackend] = useState('local');
   const [modelName, setModelName] = useState('whisper-base');
@@ -68,7 +70,11 @@ export function TranscribePage() {
       if (!files[0]) throw new Error(t('transcribe.chooseFirst'));
       return apiClient.preflightTranscription(files[0]);
     },
-    onSuccess: setPreflight,
+    onSuccess: (result) => {
+      setPreflight(result);
+      toast.success(t('toast.preflightComplete'), result.filename);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
   const createMutation = useMutation({
@@ -94,7 +100,9 @@ export function TranscribePage() {
       const task = 'id' in result ? result : result.items?.[0] ?? result.tasks?.[0];
       if (task) setSelectedTaskId(task.id);
       refreshTasks();
+      toast.success(t('toast.transcriptionStarted'), files.length > 1 ? `${files.length} ${t('transcribe.filesSelected')}` : files[0]?.name);
     },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
   const toggleFormat = (format: string) => {
