@@ -3,6 +3,7 @@ import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
+import { TaskCenterDrawer } from './TaskCenterDrawer';
 import { Badge } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
@@ -109,6 +110,7 @@ function BottomTaskBar() {
           <span>{t('status.noModelDownload')}</span>
         )}
       </Link>
+      <TaskCenterDrawer />
       {hasError && (
         <Link
           to="/settings"
