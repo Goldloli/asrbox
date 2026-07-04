@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, Ra
 import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
+import { MobileNav } from './MobileNav';
 import { Badge, Progress } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
@@ -17,6 +18,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-h-0 flex-1 overflow-auto">
           <div className="mx-auto w-full max-w-[1680px] p-4 xl:p-5">{children}</div>
         </main>
+        <MobileNav />
         <BottomTaskBar />
       </div>
     </div>
