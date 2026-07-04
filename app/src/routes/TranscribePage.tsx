@@ -1,58 +1,99 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, FileAudio, Play, RefreshCw } from 'lucide-react';
-import { apiClient, type TranscriptionPreflight, type TranscriptionTask } from '../lib/api';
-import { formatDate, formatDuration } from '../lib/format';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileAudio, Files, Play, RefreshCw, ShieldAlert } from 'lucide-react';
+import { apiClient, type TranscriptionPreflight } from '../lib/api';
+import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
+import { formatDuration, formatPercent } from '../lib/format';
+import { Badge, Button, EmptyState, ErrorState, Field, Panel, PanelHeader, Progress, Select } from '../components/weiui';
+import { TranscriptViewer } from '../components/TranscriptViewer';
+import { StatusPill } from '../components/StatusPill';
+import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
+import {
+  backendLanguage,
+  languageOptions,
+  normalizeLanguageValue,
+  postprocessOptions,
+  type TranscriptionLanguage,
+} from '../lib/transcriptionOptions';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 
 export function TranscribePage() {
   const queryClient = useQueryClient();
-  const { t, statusLabel: localizedStatus } = useI18n();
-  const [file, setFile] = useState<File | null>(null);
+  const { locale, t } = useI18n();
+  const [files, setFiles] = useState<File[]>([]);
   const [backend, setBackend] = useState('local');
   const [modelName, setModelName] = useState('whisper-base');
-  const [providerId, setProviderId] = useState('bcut');
-  const [language, setLanguage] = useState('zh');
+  const [providerId, setProviderId] = useState('');
+  const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
   const [outputFormats, setOutputFormats] = useState<string[]>(['txt', 'srt', 'json']);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<TranscriptionPreflight | null>(null);
 
-  const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => apiClient.listTasks(), refetchInterval: 3500 });
-  const modelsQuery = useQuery({ queryKey: ['models'], queryFn: () => apiClient.listModels() });
-  const providersQuery = useQuery({ queryKey: ['providers'], queryFn: () => apiClient.listProviders() });
-
+  const readinessQuery = useReadinessQuery();
+  const tasksQuery = useTasksQuery();
+  const modelsQuery = useModelsQuery();
+  const providersQuery = useProvidersQuery();
   const tasks = tasksQuery.data?.items ?? [];
-  const selectedTask = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0],
-    [selectedTaskId, tasks],
-  );
+  const models = modelsQuery.data?.models ?? [];
+  const providers = providersQuery.data?.items ?? [];
 
   useEffect(() => {
     if (!selectedTaskId && tasks[0]) setSelectedTaskId(tasks[0].id);
   }, [selectedTaskId, tasks]);
 
+  useEffect(() => {
+    const firstDownloaded = models.find((model) => model.downloaded)?.model_name ?? models[0]?.model_name;
+    if (firstDownloaded && !models.some((model) => model.model_name === modelName)) setModelName(firstDownloaded);
+  }, [modelName, models]);
+
+  useEffect(() => {
+    const firstProvider = providers.find((provider) => provider.enabled)?.id ?? providers[0]?.id ?? '';
+    if (!providerId && firstProvider) setProviderId(firstProvider);
+  }, [providerId, providers]);
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0],
+    [selectedTaskId, tasks],
+  );
+
+  const refreshTasks = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+    queryClient.invalidateQueries({ queryKey: queryKeys.activeTasks });
+  };
+
+  const preflightMutation = useMutation({
+    mutationFn: async () => {
+      if (!files[0]) throw new Error(t('transcribe.chooseFirst'));
+      return apiClient.preflightTranscription(files[0]);
+    },
+    onSuccess: setPreflight,
+  });
+
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error('Please choose an audio or video file.');
-      const check = await apiClient.preflightTranscription(file);
-      setPreflight(check);
-      if (!check.supported_format || !check.has_audio_stream) {
-        throw new Error(check.warnings[0] || 'This file cannot be transcribed.');
+      if (files.length === 0) throw new Error(t('transcribe.chooseAtLeastOne'));
+      const firstCheck = await apiClient.preflightTranscription(files[0]);
+      setPreflight(firstCheck);
+      if (!firstCheck.supported_format || !firstCheck.has_audio_stream) {
+        throw new Error(firstCheck.warnings[0] || t('transcribe.unsupported'));
       }
-      return apiClient.createTranscription({
-        file,
+      const payload = {
         backend,
         modelName: backend === 'local' ? modelName : undefined,
         providerId: backend === 'provider' ? providerId : undefined,
-        language,
+        language: backendLanguage(language),
         outputFormats,
-      });
+        ...postprocessOptions(language),
+      };
+      if (files.length === 1) return apiClient.createTranscription({ file: files[0], ...payload });
+      return apiClient.createBatchTranscription({ files, ...payload });
     },
-    onSuccess: (task) => {
-      setSelectedTaskId(task.id);
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    onSuccess: (result) => {
+      const task = 'id' in result ? result : result.items?.[0] ?? result.tasks?.[0];
+      if (task) setSelectedTaskId(task.id);
+      refreshTasks();
     },
   });
 
@@ -62,173 +103,184 @@ export function TranscribePage() {
     );
   };
 
+  const readinessIssues = [
+    ...(readinessQuery.data?.issues ?? []),
+    ...(readinessQuery.data?.warnings ?? []),
+    ...(readinessQuery.data?.missing_models ?? []).map((model) => `Missing model: ${model}`),
+  ];
+
   return (
-    <section className="workspace-grid">
-      <aside className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{t('transcribe.input')}</p>
-            <h1>{t('transcribe.title')}</h1>
-          </div>
-          <button className="icon-button" onClick={() => tasksQuery.refetch()} title={t('common.refresh')}>
-            <RefreshCw size={17} />
-          </button>
-        </div>
-
-        <label className="dropzone">
-          <FileAudio size={24} />
-          <span>{file ? file.name : t('transcribe.chooseFile')}</span>
-          <input type="file" accept="audio/*,video/*" onChange={(event) => {
-            setFile(event.target.files?.[0] ?? null);
-            setPreflight(null);
-          }} />
-        </label>
-        {preflight && (
-          <p className="muted">
-            {formatDuration(preflight.duration_ms)} · {preflight.will_chunk ? `${preflight.chunk_count} chunks` : 'single pass'}
-          </p>
-        )}
-
-        <div className="task-stack">
-          {tasks.map((task) => (
-            <button
-              key={task.id}
-              className={`task-row ${selectedTask?.id === task.id ? 'selected' : ''}`}
-              onClick={() => setSelectedTaskId(task.id)}
-            >
-              <span>{task.filename}</span>
-              <small>{localizedStatus(task.status)} · {Math.round(task.progress)}%</small>
-            </button>
-          ))}
-          {tasks.length === 0 && <p className="muted">{t('transcribe.noTasks')}</p>}
-        </div>
-      </aside>
-
-      <main className="panel transcript-panel">
-        {selectedTask ? <Transcript task={selectedTask} /> : <EmptyTranscript />}
-      </main>
-
-      <aside className="panel control-panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">{t('transcribe.engine')}</p>
-            <h2>{t('transcribe.runOptions')}</h2>
-          </div>
-        </div>
-
-        <label className="field">
-          <span>{t('transcribe.backend')}</span>
-          <select value={backend} onChange={(event) => setBackend(event.target.value)}>
-            <option value="local">{t('settings.local')}</option>
-            <option value="provider">{t('settings.provider')}</option>
-          </select>
-        </label>
-
-        {backend === 'local' ? (
-          <label className="field">
-            <span>{t('transcribe.model')}</span>
-            <select value={modelName} onChange={(event) => setModelName(event.target.value)}>
-              {(modelsQuery.data?.models ?? []).map((model) => (
-                <option key={model.model_name} value={model.model_name}>
-                  {model.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <label className="field">
-            <span>{t('transcribe.provider')}</span>
-            <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
-              {(providersQuery.data?.items ?? []).map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        <label className="field">
-          <span>{t('transcribe.language')}</span>
-          <input value={language} onChange={(event) => setLanguage(event.target.value)} placeholder="zh, en, auto" />
-        </label>
-
-        <div className="field">
-          <span>{t('transcribe.exports')}</span>
-          <div className="segmented wrap">
-            {formats.map((format) => (
-              <button
-                key={format}
-                className={outputFormats.includes(format) ? 'active' : ''}
-                onClick={() => toggleFormat(format)}
-                type="button"
-              >
-                {format.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {createMutation.error && <p className="error">{createMutation.error.message}</p>}
-        <button className="primary-button" onClick={() => createMutation.mutate()} disabled={!file || createMutation.isPending}>
-          <Play size={17} />
-          {createMutation.isPending ? t('transcribe.starting') : t('transcribe.start')}
-        </button>
-      </aside>
-    </section>
-  );
-}
-
-function Transcript({ task }: { task: TranscriptionTask }) {
-  const { t, statusLabel: localizedStatus } = useI18n();
-  return (
-    <>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">{localizedStatus(task.status)} · {Math.round(task.progress)}%</p>
-          <h2>{task.filename}</h2>
-          <p className="muted">{formatDate(task.created_at)} · {formatDuration(task.duration_ms)}</p>
-        </div>
-      </div>
-
-      <div className="meter"><span style={{ width: `${Math.min(task.progress, 100)}%` }} /></div>
-      {task.error_code && <p className="error">{task.error_code}</p>}
-      {task.options?.quality_report && <p className="muted">{JSON.stringify(task.options.quality_report)}</p>}
-
-      <section className="transcript-text">
-        <h3>{t('transcribe.text')}</h3>
-        <textarea value={task.text ?? ''} readOnly placeholder={t('transcribe.placeholder')} />
-      </section>
-
-      <section>
-        <div className="section-title">
-          <h3>{t('transcribe.segments')}</h3>
-          {task.status === 'completed' && (
-            <a className="secondary-button" href={apiClient.exportTaskUrl(task.id, 'srt')}>
-              <Download size={16} /> SRT
-            </a>
-          )}
-        </div>
-        <div className="segment-list">
-          {task.segments.map((segment) => (
-            <div className="segment-row" key={segment.id}>
-              <time>{segment.start.toFixed(2)} - {segment.end.toFixed(2)}</time>
-              <span>{segment.text}</span>
+    <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_340px]">
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          eyebrow="Input"
+          title={t('transcribe.title')}
+          description={t('transcribe.description')}
+          action={
+            <Button variant="ghost" size="icon" onClick={() => tasksQuery.refetch()} title={t('common.refresh')}>
+              <RefreshCw className="size-4" />
+            </Button>
+          }
+        />
+        <div className="grid gap-4 p-5">
+          <label className="grid min-h-36 cursor-pointer place-items-center rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-6 text-center transition hover:border-amber-300/40 hover:bg-amber-300/5">
+            <div className="grid justify-items-center gap-3">
+              <div className="grid size-12 place-items-center rounded-xl border border-white/10 bg-zinc-950 text-amber-200">
+                {files.length > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-100">
+                  {files.length ? `${files.length} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">{files[0]?.name ?? t('transcribe.fileHint')}</p>
+              </div>
             </div>
-          ))}
-          {task.segments.length === 0 && <p className="muted">{t('transcribe.noSegments')}</p>}
-        </div>
-      </section>
-    </>
-  );
-}
+            <input
+              className="sr-only"
+              type="file"
+              accept="audio/*,video/*"
+              multiple
+              onChange={(event) => {
+                setFiles(Array.from(event.target.files ?? []));
+                setPreflight(null);
+              }}
+            />
+          </label>
 
-function EmptyTranscript() {
-  const { t } = useI18n();
-  return (
-    <div className="empty-state">
-      <FileAudio size={32} />
-      <p>{t('transcribe.empty')}</p>
-    </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => preflightMutation.mutate()} disabled={!files[0] || preflightMutation.isPending}>
+              <ShieldAlert className="size-4" />
+              {t('transcribe.preflight')}
+            </Button>
+            <Button onClick={() => createMutation.mutate()} disabled={files.length === 0 || createMutation.isPending}>
+              <Play className="size-4" />
+              {createMutation.isPending ? t('transcribe.starting') : files.length > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
+            </Button>
+          </div>
+
+          {preflight && (
+            <div className="grid gap-3 rounded-xl border border-white/10 bg-zinc-950/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-zinc-100">{preflight.filename}</span>
+                <Badge tone={preflight.supported_format && preflight.has_audio_stream ? 'success' : 'danger'}>
+                  {preflight.supported_format && preflight.has_audio_stream ? t('common.ready') : t('common.blocked')}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge>{formatDuration(preflight.duration_ms)}</Badge>
+                <Badge tone={preflight.will_chunk ? 'warning' : 'neutral'}>
+                  {preflight.will_chunk ? `${preflight.chunk_count} ${t('transcribe.chunks')}` : t('transcribe.singlePass')}
+                </Badge>
+              </div>
+              {preflight.warnings.length > 0 && (
+                <div className="grid gap-1">
+                  {preflight.warnings.map((warning) => (
+                    <p key={warning} className="text-xs text-amber-200">{warning}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {readinessIssues.length > 0 && (
+            <div className="grid gap-1 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+              {readinessIssues.slice(0, 4).map((issue) => <p key={issue} className="text-xs text-amber-100">{issue}</p>)}
+            </div>
+          )}
+
+          {(preflightMutation.error || createMutation.error) && (
+            <ErrorState error={preflightMutation.error ?? createMutation.error} />
+          )}
+
+          <div className="grid gap-2">
+            <h2 className="text-sm font-semibold text-zinc-100">{t('transcribe.recentTasks')}</h2>
+            <div className="grid max-h-[36vh] gap-2 overflow-auto pr-1">
+              {tasks.map((task) => (
+                <button
+                  key={task.id}
+                  className={cn(
+                    'grid gap-2 rounded-xl border px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/[0.04]',
+                    selectedTask?.id === task.id ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/10 bg-white/[0.03]',
+                  )}
+                  onClick={() => setSelectedTaskId(task.id)}
+                >
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <span className="truncate text-sm font-medium text-zinc-100">{task.filename}</span>
+                    <StatusPill status={task.status} />
+                  </div>
+                  <Progress value={task.progress} />
+                  <span className="text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
+                </button>
+              ))}
+              {tasks.length === 0 && <EmptyState title={t('transcribe.noTasks')} body={t('transcribe.noTasksBody')} />}
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <TranscriptViewer task={selectedTask} />
+
+      <Panel className="overflow-hidden">
+        <PanelHeader eyebrow={t('transcribe.engine')} title={t('transcribe.runOptions')} description={t('transcribe.runDescription')} />
+        <div className="grid gap-4 p-5">
+          <Field label={t('transcribe.backend')}>
+            <Select
+              value={backend}
+              onValueChange={setBackend}
+              options={[
+                { value: 'local', label: t('transcribe.localModel') },
+                { value: 'provider', label: t('transcribe.providerBackend') },
+              ]}
+            />
+          </Field>
+          {backend === 'local' ? (
+            <Field label={t('transcribe.model')}>
+              <Select
+                value={modelName}
+                onValueChange={setModelName}
+                options={(models.length ? models : [{ model_name: modelName, display_name: modelName }]).map((model) => ({
+                  value: model.model_name,
+                  label: `${model.display_name}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}`,
+                }))}
+              />
+            </Field>
+          ) : (
+            <Field label={t('transcribe.provider')}>
+              <Select
+                value={providerId || 'none'}
+                onValueChange={(value) => setProviderId(value === 'none' ? '' : value)}
+                options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
+                  value: provider.id,
+                  label: provider.name,
+                  disabled: provider.id === 'none',
+                }))}
+              />
+            </Field>
+          )}
+          <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
+            <Select
+              value={language}
+              onValueChange={(value) => setLanguage(normalizeLanguageValue(value))}
+              options={languageOptions(locale)}
+            />
+          </Field>
+          <Field label={t('transcribe.exports')}>
+            <div className="flex flex-wrap gap-2">
+              {formats.map((format) => (
+                <Button
+                  key={format}
+                  type="button"
+                  size="sm"
+                  variant={outputFormats.includes(format) ? 'primary' : 'secondary'}
+                  onClick={() => toggleFormat(format)}
+                >
+                  {format.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          </Field>
+        </div>
+      </Panel>
+    </section>
   );
 }

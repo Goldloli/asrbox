@@ -1,14 +1,10 @@
 import { Outlet } from '@tanstack/react-router';
-import { Sidebar } from './Sidebar';
+import { AppShell } from './AppShell';
 
 export function Layout() {
   return (
-    <div className="shell">
-      <Sidebar />
-      <main className="main">
-        <Outlet />
-      </main>
-    </div>
+    <AppShell>
+      <Outlet />
+    </AppShell>
   );
 }
-

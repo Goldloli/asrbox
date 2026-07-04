@@ -625,10 +625,10 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             max_lines=int(options.get("max_lines", 2)),
             min_duration_ms=int(options.get("min_duration_ms", 800)),
             merge_short_segments=bool(options.get("merge_short_segments", mode == "aggressive")),
-            traditional_to_simplified=bool(options.get("traditional_to_simplified", False) and mode == "aggressive"),
+            traditional_to_simplified=bool(options.get("traditional_to_simplified", False)),
         )
         _write_options(row, options)
-        row.text = result.text or "\n".join(segment.text for segment in segments)
+        row.text = "\n".join(segment.text for segment in segments) or result.text
         if row.duration_ms is None:
             row.duration_ms = int((result.duration or 0) * 1000)
         _store_segments(db, row, segments)
