@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, RefreshCw } from 'lucide-react';
+import { Database, DownloadCloud, RefreshCw } from 'lucide-react';
 import { apiClient, getActiveDownloadItems } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
@@ -70,6 +70,7 @@ export function ModelsPage() {
     if (category === 'recommended') return isRecommendedModel(model);
     return modelCategory(model) === category;
   });
+  const recommendedDownloadModel = models.find((model) => isRecommendedModel(model) && !model.downloaded) ?? models.find((model) => !model.downloaded);
   const categoryItems: Array<{ value: ModelCategory | 'all'; label: string }> = [
     { value: 'recommended', label: t('models.categoryRecommended') },
     { value: 'all', label: t('models.categoryAll') },
@@ -116,7 +117,25 @@ export function ModelsPage() {
               />
             ))}
           </div>
-          {visibleModels.length === 0 && <EmptyState title={t('models.noModels')} body={t('models.noModelsBody')} />}
+          {visibleModels.length === 0 && (
+            <EmptyState
+              title={t('models.noModels')}
+              body={t('models.noModelsBody')}
+              action={
+                recommendedDownloadModel ? (
+                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)}>
+                    <DownloadCloud className="size-4" />
+                    {t('models.downloadRecommended')}
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={refresh}>
+                    <RefreshCw className="size-4" />
+                    {t('common.refresh')}
+                  </Button>
+                )
+              }
+            />
+          )}
         </div>
       </Panel>
 
@@ -157,7 +176,18 @@ export function ModelsPage() {
                 <p className="truncate text-xs text-zinc-500">{download.filename ?? download.source ?? t('status.modelDownload')}</p>
               </div>
             ))}
-            {downloads.length === 0 && <EmptyState title={t('models.noActiveDownloads')} body={t('models.downloadProgress')} />}
+            {downloads.length === 0 && (
+              <EmptyState
+                title={t('models.noActiveDownloads')}
+                body={t('models.downloadProgress')}
+                action={recommendedDownloadModel && (
+                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)}>
+                    <DownloadCloud className="size-4" />
+                    {t('models.downloadRecommended')}
+                  </Button>
+                )}
+              />
+            )}
           </div>
         </Panel>
 

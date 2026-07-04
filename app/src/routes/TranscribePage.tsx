@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileAudio, Files, Play, RefreshCw, ShieldAlert } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
@@ -24,6 +24,7 @@ export function TranscribePage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [backend, setBackend] = useState('local');
   const [modelName, setModelName] = useState('whisper-base');
@@ -144,6 +145,7 @@ export function TranscribePage() {
               </div>
             </div>
             <input
+              ref={fileInputRef}
               className="sr-only"
               type="file"
               accept="audio/*,video/*"
@@ -220,7 +222,13 @@ export function TranscribePage() {
                   <span className="text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
                 </button>
               ))}
-              {tasks.length === 0 && <EmptyState title={t('transcribe.noTasks')} body={t('transcribe.noTasksBody')} />}
+              {tasks.length === 0 && (
+                <EmptyState
+                  title={t('transcribe.noTasks')}
+                  body={t('transcribe.noTasksBody')}
+                  action={<Button onClick={() => fileInputRef.current?.click()}>{t('transcribe.chooseFile')}</Button>}
+                />
+              )}
             </div>
           </div>
         </div>

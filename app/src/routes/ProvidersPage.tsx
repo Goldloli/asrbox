@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Activity, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { apiClient, type Provider } from '../lib/api';
 import { queryKeys, useProvidersQuery, useSettingsQuery } from '../lib/queries';
-import { Badge, Button, Dialog, DialogContent, DialogTrigger, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
+import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { useI18n } from '../lib/i18n';
@@ -132,9 +132,17 @@ export function ProvidersPage() {
             </article>
           ))}
           {(providersQuery.data?.items ?? []).length === 0 && (
-            <div className="rounded-xl border border-white/10 px-4 py-10 text-center text-sm text-zinc-500">
-              {t('providers.noProviders')}
-            </div>
+            <EmptyState
+              title={t('providers.noProviders')}
+              action={
+                <ProviderDialog onSaved={refresh}>
+                  <Button>
+                    <Plus className="size-4" />
+                    {t('providers.addProvider')}
+                  </Button>
+                </ProviderDialog>
+              }
+            />
           )}
         </div>
       </Panel>

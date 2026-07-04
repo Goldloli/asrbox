@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { ArchiveX, FileAudio, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
@@ -82,7 +83,18 @@ export function TasksPage() {
             {filteredTasks.map((task) => (
               <TaskRow key={task.id} task={task} selected={selectedTask?.id === task.id} onSelect={() => setSelectedTaskId(task.id)} />
             ))}
-            {filteredTasks.length === 0 && <EmptyState title={t('tasks.noMatching')} body={t('tasks.noMatchingBody')} icon={<FileAudio className="size-5" />} />}
+            {filteredTasks.length === 0 && (
+              <EmptyState
+                title={t('tasks.noMatching')}
+                body={t('tasks.noMatchingBody')}
+                icon={<FileAudio className="size-5" />}
+                action={
+                  <Button asChild>
+                    <Link to="/">{t('transcribe.start')}</Link>
+                  </Button>
+                }
+              />
+            )}
           </div>
         </div>
       </Panel>
@@ -160,7 +172,14 @@ export function TasksPage() {
               </div>
             </div>
           ) : (
-            <EmptyState title={t('tasks.noSelected')} />
+            <EmptyState
+              title={t('tasks.noSelected')}
+              action={
+                <Button asChild>
+                  <Link to="/">{t('transcribe.start')}</Link>
+                </Button>
+              }
+            />
           )}
         </Panel>
 

@@ -1,4 +1,5 @@
 import { Download, FileText } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
 import { Button, EmptyState, Panel, PanelHeader, Progress, Textarea } from './weiui';
@@ -15,6 +16,11 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           title={t('transcript.emptyTitle')}
           body={t('transcript.emptyBody')}
           icon={<FileText className="size-5" />}
+          action={
+            <Button asChild>
+              <Link to="/">{t('transcribe.start')}</Link>
+            </Button>
+          }
         />
       </Panel>
     );

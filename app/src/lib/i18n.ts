@@ -176,6 +176,7 @@ const dictionaries = {
     'models.bestFor': 'Best for',
     'models.size': 'Size',
     'models.runtime': 'Runtime',
+    'models.downloadRecommended': 'Download recommended model',
 
     'providers.eyebrow': 'Online ASR',
     'providers.title': 'Providers',
@@ -423,6 +424,7 @@ const dictionaries = {
     'models.bestFor': '适合',
     'models.size': '大小',
     'models.runtime': '运行时',
+    'models.downloadRecommended': '下载推荐模型',
 
     'providers.eyebrow': '线上 ASR',
     'providers.title': '平台',
