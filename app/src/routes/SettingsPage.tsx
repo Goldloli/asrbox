@@ -5,7 +5,7 @@ import { apiClient } from '../lib/api';
 import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
-import { useUiStore, type Locale } from '../stores/uiStore';
+import { useUiStore, type Locale, type ThemeMode } from '../stores/uiStore';
 import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
@@ -16,7 +16,9 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const locale = useUiStore((state) => state.locale);
+  const theme = useUiStore((state) => state.theme);
   const setLocale = useUiStore((state) => state.setLocale);
+  const setTheme = useUiStore((state) => state.setTheme);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -88,6 +90,17 @@ export function SettingsPage() {
               </Field>
               <Field label={t('settings.serverUrl')}>
                 <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} />
+              </Field>
+              <Field label={t('settings.theme')}>
+                <Select
+                  value={theme}
+                  onValueChange={(value) => setTheme(value as ThemeMode)}
+                  options={[
+                    { value: 'system', label: t('settings.themeSystem') },
+                    { value: 'dark', label: t('settings.themeDark') },
+                    { value: 'light', label: t('settings.themeLight') },
+                  ]}
+                />
               </Field>
             </div>
           </div>
