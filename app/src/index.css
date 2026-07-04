@@ -4,7 +4,6 @@
 @source "../../web/src/**/*.{ts,tsx}";
 
 :root {
-  color-scheme: dark;
   font-family:
     ui-sans-serif,
     system-ui,
@@ -12,12 +11,59 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: #09090b;
-  color: #f4f4f5;
+  --app-bg: #f3f4f6;
+  --app-bg-soft: #e5e7eb;
+  --app-shell: #f8fafc;
+  --app-panel: rgba(255, 255, 255, 0.86);
+  --app-panel-solid: #ffffff;
+  --app-control: rgba(15, 23, 42, 0.04);
+  --app-control-strong: rgba(15, 23, 42, 0.08);
+  --app-border: rgba(15, 23, 42, 0.12);
+  --app-border-strong: rgba(15, 23, 42, 0.2);
+  --app-text: #111827;
+  --app-text-soft: #374151;
+  --app-text-muted: #374151;
+  --app-text-faint: #4b5563;
+  --app-accent: #facc15;
+  --app-accent-soft: rgba(250, 204, 21, 0.14);
+  --app-accent-text: #713f12;
+  --app-shadow: rgba(15, 23, 42, 0.1);
+  --app-danger: #dc2626;
+  --app-danger-soft: rgba(220, 38, 38, 0.1);
+  --app-success: #047857;
+  --app-success-soft: rgba(4, 120, 87, 0.1);
+  color-scheme: light;
+  background: var(--app-bg);
+  color: var(--app-text);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme="dark"] {
+  --app-bg: #09090b;
+  --app-bg-soft: #050506;
+  --app-shell: #09090b;
+  --app-panel: rgba(24, 24, 27, 0.72);
+  --app-panel-solid: #09090b;
+  --app-control: rgba(255, 255, 255, 0.06);
+  --app-control-strong: rgba(255, 255, 255, 0.1);
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-border-strong: rgba(255, 255, 255, 0.18);
+  --app-text: #f4f4f5;
+  --app-text-soft: #d4d4d8;
+  --app-text-muted: #a1a1aa;
+  --app-text-faint: #52525b;
+  --app-accent: #fcd34d;
+  --app-accent-soft: rgba(252, 211, 77, 0.14);
+  --app-accent-text: #fef3c7;
+  --app-shadow: rgba(0, 0, 0, 0.28);
+  --app-danger: #fca5a5;
+  --app-danger-soft: rgba(239, 68, 68, 0.12);
+  --app-success: #6ee7b7;
+  --app-success-soft: rgba(52, 211, 153, 0.12);
+  color-scheme: dark;
 }
 
 * {
@@ -31,8 +77,109 @@ body,
   min-height: 100%;
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(251, 191, 36, 0.08), transparent 34rem),
-    linear-gradient(180deg, #0c0c0f 0%, #09090b 55%, #050506 100%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--app-accent) 12%, transparent), transparent 34rem),
+    linear-gradient(180deg, var(--app-shell) 0%, var(--app-bg) 55%, var(--app-bg-soft) 100%);
+}
+
+.app-bg {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.app-shell-surface {
+  background: color-mix(in srgb, var(--app-shell) 95%, transparent);
+}
+
+.app-panel {
+  border-color: var(--app-border);
+  background: var(--app-panel);
+  box-shadow: 0 24px 80px var(--app-shadow);
+}
+
+.app-border {
+  border-color: var(--app-border);
+}
+
+.app-control {
+  border-color: var(--app-border);
+  background: var(--app-control);
+  color: var(--app-text);
+}
+
+.app-control:hover {
+  background: var(--app-control-strong);
+}
+
+.text-app {
+  color: var(--app-text);
+}
+
+.text-app-soft {
+  color: var(--app-text-soft);
+}
+
+.text-app-muted {
+  color: var(--app-text-muted);
+}
+
+.text-app-faint {
+  color: var(--app-text-faint);
+}
+
+.text-app-accent {
+  color: var(--app-accent-text);
+}
+
+[data-theme="light"] .text-zinc-50,
+[data-theme="light"] .text-zinc-100,
+[data-theme="light"] .text-zinc-200 {
+  color: var(--app-text) !important;
+}
+
+[data-theme="light"] .text-zinc-300,
+[data-theme="light"] .text-zinc-400 {
+  color: var(--app-text-soft) !important;
+}
+
+[data-theme="light"] .text-zinc-500,
+[data-theme="light"] .text-zinc-600,
+[data-theme="light"] .text-zinc-700 {
+  color: var(--app-text-muted) !important;
+}
+
+[data-theme="light"] .text-amber-100,
+[data-theme="light"] .text-amber-200 {
+  color: var(--app-accent-text) !important;
+}
+
+[data-theme="light"] .text-red-100,
+[data-theme="light"] .text-red-200 {
+  color: var(--app-danger) !important;
+}
+
+[data-theme="light"] .text-emerald-300 {
+  color: var(--app-success) !important;
+}
+
+[data-theme="light"] [class*="border-white/"] {
+  border-color: var(--app-border) !important;
+}
+
+[data-theme="light"] [class*="hover:border-white/"]:hover {
+  border-color: var(--app-border-strong) !important;
+}
+
+[data-theme="light"] [class*="bg-white/["] {
+  background-color: var(--app-control) !important;
+}
+
+[data-theme="light"] [class*="hover:bg-white/"]:hover {
+  background-color: var(--app-control-strong) !important;
+}
+
+[data-theme="light"] [class~="bg-zinc-950"],
+[data-theme="light"] [class*="bg-zinc-950/"] {
+  background-color: var(--app-panel-solid) !important;
 }
 
 button,

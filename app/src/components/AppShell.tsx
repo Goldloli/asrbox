@@ -9,7 +9,7 @@ import { getActiveDownloadItems, getActiveTaskItems } from '../lib/api';
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-dvh min-w-[320px] overflow-hidden bg-zinc-950 text-zinc-100">
+    <div className="app-bg flex h-dvh min-w-[320px] overflow-hidden">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopStatusBar />
@@ -30,14 +30,14 @@ function TopStatusBar() {
   const runtime = runtimeQuery.data;
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-zinc-950/95 px-4 backdrop-blur">
+    <header className="app-shell-surface flex h-14 shrink-0 items-center justify-between border-b app-border px-4 backdrop-blur">
       <div className="flex items-center gap-3">
-        <div className="grid size-8 place-items-center rounded-lg border border-white/10 bg-white/[0.04]">
-          <Radio className="size-4 text-amber-200" />
+        <div className="grid size-8 place-items-center rounded-lg border app-control">
+          <Radio className="size-4 text-app-accent" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-zinc-100">ASRbox</p>
-          <p className="text-xs text-zinc-500">{t('app.subtitle')}</p>
+          <p className="text-sm font-semibold text-app">ASRbox</p>
+          <p className="text-xs text-app-muted">{t('app.subtitle')}</p>
         </div>
       </div>
 
@@ -74,47 +74,47 @@ function BottomTaskBar() {
   const hasError = activeTasksQuery.isError || downloadsQuery.isError;
 
   return (
-    <footer className="grid min-h-14 shrink-0 grid-cols-1 gap-2 border-t border-white/10 bg-zinc-950 px-4 py-2 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
+    <footer className="app-shell-surface grid min-h-14 shrink-0 grid-cols-1 gap-2 border-t app-border px-4 py-2 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
       <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+        <div className="mb-1 flex items-center gap-2 text-xs text-app-muted">
           <Activity className="size-3.5" />
           {t('status.activeTask')}
         </div>
         {topTask ? (
           <div className="grid gap-1">
             <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-              <span className="truncate text-zinc-200">{topTask.filename}</span>
-              <span className="shrink-0 text-zinc-500">
+              <span className="truncate text-app-soft">{topTask.filename}</span>
+              <span className="shrink-0 text-app-muted">
                 {statusLabel(topTask.status)} · {formatPercent(topTask.progress)}
               </span>
             </div>
             <Progress value={topTask.progress} />
           </div>
         ) : (
-          <p className="text-xs text-zinc-600">{t('status.noActiveTask')}</p>
+          <p className="text-xs text-app-faint">{t('status.noActiveTask')}</p>
         )}
       </div>
       <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
+        <div className="mb-1 flex items-center gap-2 text-xs text-app-muted">
           <DownloadCloud className="size-3.5" />
           {t('status.modelDownload')}
         </div>
         {topDownload ? (
           <div className="grid gap-1">
             <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-              <span className="truncate text-zinc-200">{topDownload.model_name}</span>
-              <span className="shrink-0 text-zinc-500">
+              <span className="truncate text-app-soft">{topDownload.model_name}</span>
+              <span className="shrink-0 text-app-muted">
                 {topDownload.status} · {formatPercent(topDownload.progress)}
               </span>
             </div>
             <Progress value={topDownload.progress} />
           </div>
         ) : (
-          <p className="text-xs text-zinc-600">{t('status.noModelDownload')}</p>
+          <p className="text-xs text-app-faint">{t('status.noModelDownload')}</p>
         )}
       </div>
       {hasError && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+        <div className="flex items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
           <AlertTriangle className="size-4" />
           {t('status.liveUnavailable')}
         </div>

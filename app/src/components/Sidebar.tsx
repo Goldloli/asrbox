@@ -19,13 +19,13 @@ export function Sidebar() {
   const { t } = useI18n();
 
   return (
-    <aside className="flex h-dvh w-20 shrink-0 flex-col items-center border-r border-white/10 bg-zinc-950 px-3 py-4">
+    <aside className="app-shell-surface flex h-dvh w-20 shrink-0 flex-col items-center border-r app-border px-3 py-4">
       <Tooltip>
         <TooltipTrigger asChild>
           <Link
             to="/"
             aria-label={t('nav.home')}
-            className="grid size-12 place-items-center overflow-hidden rounded-[14px] shadow-lg shadow-amber-950/30 ring-1 ring-white/10 transition hover:scale-[1.02] hover:ring-amber-300/50 focus:outline-none focus:ring-2 focus:ring-amber-300/70"
+            className="grid size-12 place-items-center overflow-hidden rounded-[14px] shadow-lg shadow-[var(--app-shadow)] ring-1 ring-[var(--app-border)] transition hover:scale-[1.02] hover:ring-[var(--app-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
             onKeyDown={(event) => {
               if (event.key !== 'Enter' && event.key !== ' ') return;
               event.preventDefault();
@@ -50,9 +50,9 @@ export function Sidebar() {
                 <Link
                   to={item.to}
                   className={cn(
-                    'grid size-11 place-items-center rounded-xl border text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-100',
+                    'grid size-11 place-items-center rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app',
                     active
-                      ? 'border-amber-300/40 bg-white/[0.08] text-amber-100 shadow-inner shadow-amber-950/30'
+                      ? 'border-[var(--app-accent)] bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] shadow-inner shadow-[var(--app-shadow)]'
                       : 'border-transparent',
                   )}
                 >
@@ -64,7 +64,7 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="mb-1 rotate-[-90deg] whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-700">
+      <div className="mb-1 rotate-[-90deg] whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-app-faint">
         ASRbox
       </div>
     </aside>
