@@ -1,4 +1,4 @@
-import { Link, useMatchRoute } from '@tanstack/react-router';
+import { Link, useMatchRoute, useNavigate } from '@tanstack/react-router';
 import { DownloadCloud, FileOutput, ListChecks, Mic2, ServerCog, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
@@ -17,13 +17,28 @@ const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['
 
 export function Sidebar() {
   const matchRoute = useMatchRoute();
+  const navigate = useNavigate();
   const { t } = useI18n();
 
   return (
     <aside className="flex h-dvh w-20 shrink-0 flex-col items-center border-r border-white/10 bg-zinc-950 px-3 py-4">
-      <div className="grid size-12 place-items-center overflow-hidden rounded-[14px] shadow-lg shadow-amber-950/30 ring-1 ring-white/10">
-        <img src={asrboxIcon} alt="ASRbox" className="size-full object-cover" />
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link
+            to="/"
+            aria-label={t('nav.home')}
+            className="grid size-12 place-items-center overflow-hidden rounded-[14px] shadow-lg shadow-amber-950/30 ring-1 ring-white/10 transition hover:scale-[1.02] hover:ring-amber-300/50 focus:outline-none focus:ring-2 focus:ring-amber-300/70"
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              navigate({ to: '/' });
+            }}
+          >
+            <img src={asrboxIcon} alt="" className="size-full object-cover" />
+          </Link>
+        </TooltipTrigger>
+        <TooltipContent>{t('nav.home')}</TooltipContent>
+      </Tooltip>
       <nav className="mt-8 flex flex-1 flex-col items-center gap-2">
         {nav.map((item) => {
           const Icon = item.icon;

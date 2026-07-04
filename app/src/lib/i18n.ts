@@ -16,6 +16,7 @@ const dictionaries = {
     'status.liveUnavailable': 'Live status unavailable',
 
     'nav.transcribe': 'Transcribe',
+    'nav.home': 'Go home',
     'nav.tasks': 'Tasks',
     'nav.models': 'Models',
     'nav.providers': 'Providers',
@@ -220,6 +221,7 @@ const dictionaries = {
     'status.liveUnavailable': '实时状态不可用',
 
     'nav.transcribe': '转写',
+    'nav.home': '返回首页',
     'nav.tasks': '任务',
     'nav.models': '模型',
     'nav.providers': '平台',
