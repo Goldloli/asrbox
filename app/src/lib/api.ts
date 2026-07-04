@@ -52,6 +52,50 @@ export interface TaskListResponse {
   total: number;
 }
 
+export interface ActiveTasksResponse {
+  items?: TranscriptionTask[];
+  queued_tasks?: TranscriptionTask[];
+  running_tasks?: TranscriptionTask[];
+  downloads?: ModelProgress[];
+  local_queue_length?: number;
+  provider_queue_length?: number;
+  local_worker_count?: number;
+  provider_worker_count?: number;
+  max_concurrent_local_tasks?: number;
+  max_concurrent_provider_tasks?: number;
+  recent_error?: string | null;
+}
+
+export interface TranscriptionReadiness {
+  ready: boolean;
+  can_transcribe?: boolean;
+  issues?: string[];
+  warnings?: string[];
+  missing_models?: string[];
+  default_backend?: string;
+  default_model_name?: string | null;
+  default_provider_id?: string | null;
+  runtime?: Record<string, unknown>;
+}
+
+export interface TranscriptionPreflight {
+  filename: string;
+  supported_format: boolean;
+  has_audio_stream: boolean;
+  duration_ms?: number | null;
+  will_chunk: boolean;
+  chunk_count: number;
+  warnings: string[];
+  readiness: Record<string, unknown>;
+}
+
+export interface BatchTranscriptionResponse {
+  batch_id?: string;
+  items?: TranscriptionTask[];
+  tasks?: TranscriptionTask[];
+  total?: number;
+}
+
 export interface ModelStatus {
   model_name: string;
   display_name: string;
@@ -90,12 +134,27 @@ export interface ModelProgress {
   total: number;
   progress: number;
   filename?: string | null;
-  status: 'downloading' | 'extracting' | 'complete' | 'error';
+  status: 'queued' | 'downloading' | 'extracting' | 'complete' | 'cancelled' | 'error';
   error?: string | null;
   source?: string | null;
   repo_id?: string | null;
   fallback_from?: string | null;
   timestamp: string;
+}
+
+export type ActiveDownloadsResponse = ModelProgress[] | { items?: ModelProgress[]; downloads?: ModelProgress[] };
+
+export interface ModelStorage {
+  models_dir?: string;
+  total_bytes?: number;
+  used_bytes?: number;
+  free_bytes?: number;
+  models?: Array<{
+    model_name: string;
+    size_bytes?: number;
+    path?: string;
+    last_modified?: string;
+  }>;
 }
 
 export interface Provider {
@@ -109,6 +168,12 @@ export interface Provider {
   options: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProviderTestResult {
+  ok: boolean;
+  message: string;
+  models?: string[];
 }
 
 export interface ASRSettings {
@@ -161,28 +226,42 @@ export interface TaskDiagnostic {
   created_at: string;
 }
 
+export interface TaskLogEntry {
+  id?: number;
+  task_id?: string;
+  level?: string;
+  stage?: string;
+  message: string;
+  created_at?: string;
+  timestamp?: string;
+}
+
+export interface TaskVersion {
+  id: string | number;
+  task_id?: string;
+  label?: string | null;
+  text?: string | null;
+  created_at: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface TaskQuality {
   task_id: string;
   warnings: string[];
   metrics: Record<string, unknown>;
 }
 
-export interface TranscriptionPreflight {
-  filename: string;
-  supported_format: boolean;
-  has_audio_stream: boolean;
-  duration_ms?: number | null;
-  will_chunk: boolean;
-  chunk_count: number;
-  warnings: string[];
-  readiness: Record<string, unknown>;
-}
+export type AppEvent =
+  | { type: 'task.updated' | 'task.failed' | 'task.completed'; task?: TranscriptionTask; task_id?: string; [key: string]: unknown }
+  | { type: 'chunk.updated'; task_id?: string; chunk_id?: string | number; [key: string]: unknown }
+  | { type: 'model.download.updated'; model?: ModelProgress; model_name?: string; [key: string]: unknown }
+  | { type: 'runtime.warning' | 'storage.warning'; message?: string; [key: string]: unknown };
 
 async function parseError(response: Response): Promise<Error> {
   const fallback = `HTTP ${response.status}`;
   try {
     const body = await response.json();
-    const detail = body.detail ?? body.message ?? fallback;
+    const detail = body.detail ?? body.message ?? body.error ?? fallback;
     return new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
   } catch {
     return new Error(fallback);
@@ -190,8 +269,8 @@ async function parseError(response: Response): Promise<Error> {
 }
 
 class ApiClient {
-  private baseUrl(): string {
-    return useServerStore.getState().serverUrl;
+  baseUrl(): string {
+    return useServerStore.getState().serverUrl.replace(/\/$/, '');
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -203,19 +282,31 @@ class ApiClient {
       },
     });
     if (!response.ok) throw await parseError(response);
+    if (response.status === 204) return undefined as T;
     return response.json();
   }
 
+  private async formRequest<T>(path: string, form: FormData): Promise<T> {
+    const response = await fetch(`${this.baseUrl()}${path}`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) throw await parseError(response);
+    return response.json() as Promise<T>;
+  }
+
   getHealth() {
-    return this.request<{ status: string; version: string; port: number }>('/health');
+    return this.request<{ status: string; version?: string; port?: number }>('/health');
   }
 
-  listTasks() {
-    return this.request<TaskListResponse>('/tasks');
+  getReadiness() {
+    return this.request<TranscriptionReadiness>('/transcriptions/readiness');
   }
 
-  getTask(id: string) {
-    return this.request<TranscriptionTask>(`/tasks/${id}`);
+  async preflightTranscription(file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.formRequest<TranscriptionPreflight>('/transcriptions/preflight', form);
   }
 
   async createTranscription(input: {
@@ -225,6 +316,8 @@ class ApiClient {
     providerId?: string;
     language?: string;
     outputFormats: string[];
+    postprocessMode?: string;
+    traditionalToSimplified?: boolean;
   }) {
     const form = new FormData();
     form.append('file', input.file);
@@ -233,24 +326,59 @@ class ApiClient {
     if (input.providerId) form.append('provider_id', input.providerId);
     if (input.language) form.append('language', input.language);
     form.append('output_formats', JSON.stringify(input.outputFormats));
-
-    const response = await fetch(`${this.baseUrl()}/transcriptions`, {
-      method: 'POST',
-      body: form,
-    });
-    if (!response.ok) throw await parseError(response);
-    return response.json() as Promise<TranscriptionTask>;
+    if (input.postprocessMode) form.append('postprocess_mode', input.postprocessMode);
+    if (input.traditionalToSimplified != null) form.append('traditional_to_simplified', String(input.traditionalToSimplified));
+    return this.formRequest<TranscriptionTask>('/transcriptions', form);
   }
 
-  async preflightTranscription(file: File) {
+  async createBatchTranscription(input: {
+    files: File[];
+    backend: string;
+    modelName?: string;
+    providerId?: string;
+    language?: string;
+    outputFormats: string[];
+    postprocessMode?: string;
+    traditionalToSimplified?: boolean;
+  }) {
     const form = new FormData();
-    form.append('file', file);
-    const response = await fetch(`${this.baseUrl()}/transcriptions/preflight`, {
-      method: 'POST',
-      body: form,
-    });
-    if (!response.ok) throw await parseError(response);
-    return response.json() as Promise<TranscriptionPreflight>;
+    input.files.forEach((file) => form.append('files', file));
+    form.append('backend', input.backend);
+    if (input.modelName) form.append('model_name', input.modelName);
+    if (input.providerId) form.append('provider_id', input.providerId);
+    if (input.language) form.append('language', input.language);
+    form.append('output_formats', JSON.stringify(input.outputFormats));
+    if (input.postprocessMode) form.append('postprocess_mode', input.postprocessMode);
+    if (input.traditionalToSimplified != null) form.append('traditional_to_simplified', String(input.traditionalToSimplified));
+    return this.formRequest<BatchTranscriptionResponse>('/transcriptions/batch', form);
+  }
+
+  listTasks() {
+    return this.request<TaskListResponse>('/tasks');
+  }
+
+  listActiveTasks() {
+    return this.request<ActiveTasksResponse>('/tasks/active');
+  }
+
+  getTask(id: string) {
+    return this.request<TranscriptionTask>(`/tasks/${id}`);
+  }
+
+  getTaskDiagnostics(id: string) {
+    return this.request<TaskDiagnostic[]>(`/tasks/${id}/diagnostics`);
+  }
+
+  getTaskLogs(id: string) {
+    return this.request<TaskLogEntry[]>(`/tasks/${id}/logs`);
+  }
+
+  getTaskVersions(id: string) {
+    return this.request<TaskVersion[]>(`/tasks/${id}/versions`);
+  }
+
+  getTaskQuality(id: string) {
+    return this.request<TaskQuality>(`/tasks/${id}/quality`);
   }
 
   retryTask(id: string) {
@@ -261,16 +389,12 @@ class ApiClient {
     return this.request<TranscriptionTask>(`/tasks/${id}/cancel`, { method: 'POST' });
   }
 
-  deleteTask(id: string) {
-    return this.request<{ message: string }>(`/tasks/${id}`, { method: 'DELETE' });
+  retranscribeTask(id: string) {
+    return this.request<TranscriptionTask>(`/tasks/${id}/retranscribe`, { method: 'POST' });
   }
 
-  getTaskDiagnostics(id: string) {
-    return this.request<TaskDiagnostic[]>(`/tasks/${id}/diagnostics`);
-  }
-
-  getTaskQuality(id: string) {
-    return this.request<TaskQuality>(`/tasks/${id}/quality`);
+  postprocessTask(id: string) {
+    return this.request<TranscriptionTask>(`/tasks/${id}/postprocess`, { method: 'POST' });
   }
 
   retryFailedChunks(id: string) {
@@ -278,19 +402,33 @@ class ApiClient {
   }
 
   cleanupTaskArtifacts(id: string) {
-    return this.request<{ removed: string[]; errors: string[] }>(`/tasks/${id}/cleanup-artifacts`, { method: 'POST' });
+    return this.request<{ removed?: string[]; errors?: string[]; message?: string }>(`/tasks/${id}/cleanup-artifacts`, {
+      method: 'POST',
+    });
   }
 
-  taskEventsUrl(id: string) {
-    return `${this.baseUrl()}/tasks/${id}/events`;
+  deleteTask(id: string) {
+    return this.request<{ message: string }>(`/tasks/${id}`, { method: 'DELETE' });
   }
 
   exportTaskUrl(id: string, format: string) {
     return `${this.baseUrl()}/tasks/${id}/export/${format}`;
   }
 
+  eventsUrl() {
+    return `${this.baseUrl()}/events`;
+  }
+
   listModels() {
     return this.request<{ models: ModelStatus[] }>('/models/status');
+  }
+
+  listActiveDownloads() {
+    return this.request<ActiveDownloadsResponse>('/models/active-downloads');
+  }
+
+  getModelStorage() {
+    return this.request<ModelStorage>('/models/storage');
   }
 
   downloadModel(modelName: string) {
@@ -300,8 +438,8 @@ class ApiClient {
     });
   }
 
-  modelProgressUrl(modelName: string) {
-    return `${this.baseUrl()}/models/progress/${modelName}`;
+  cancelModelDownload(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/cancel-download`, { method: 'POST' });
   }
 
   unloadModel(modelName: string) {
@@ -333,9 +471,7 @@ class ApiClient {
   }
 
   testProvider(id: string) {
-    return this.request<{ ok: boolean; message: string; models: string[] }>(`/providers/${id}/test`, {
-      method: 'POST',
-    });
+    return this.request<ProviderTestResult>(`/providers/${id}/test`, { method: 'POST' });
   }
 
   getSettings() {
@@ -359,3 +495,16 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+export function getActiveTaskItems(response?: ActiveTasksResponse): TranscriptionTask[] {
+  if (!response) return [];
+  if (response.items) return response.items;
+  return [...(response.running_tasks ?? []), ...(response.queued_tasks ?? [])];
+}
+
+export function getActiveDownloadItems(response?: ActiveDownloadsResponse | ActiveTasksResponse): ModelProgress[] {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (response.downloads) return response.downloads;
+  return (response.items as ModelProgress[] | undefined) ?? [];
+}

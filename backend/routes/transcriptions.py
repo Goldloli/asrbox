@@ -35,6 +35,25 @@ def _parse_output_formats(output_formats: str | None) -> list[str]:
     return parsed_formats
 
 
+def _postprocess_options(
+    *,
+    vad: bool | None,
+    word_timestamps: bool | None,
+    postprocess_mode: str | None,
+    traditional_to_simplified: bool | None,
+) -> dict:
+    options = {}
+    if vad is not None:
+        options["vad"] = vad
+    if word_timestamps is not None:
+        options["word_timestamps"] = word_timestamps
+    if postprocess_mode:
+        options["postprocess_mode"] = postprocess_mode
+    if traditional_to_simplified is not None:
+        options["traditional_to_simplified"] = traditional_to_simplified
+    return options
+
+
 def _check(key: str, ok: bool, message: str, action: str | None = None, warning: bool = False) -> dict:
     return {
         "key": key,
@@ -186,13 +205,16 @@ def create_transcription(
     output_formats: str | None = Form(None),
     vad: bool | None = Form(None),
     word_timestamps: bool | None = Form(None),
+    postprocess_mode: str | None = Form(None),
+    traditional_to_simplified: bool | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    options = {}
-    if vad is not None:
-        options["vad"] = vad
-    if word_timestamps is not None:
-        options["word_timestamps"] = word_timestamps
+    options = _postprocess_options(
+        vad=vad,
+        word_timestamps=word_timestamps,
+        postprocess_mode=postprocess_mode,
+        traditional_to_simplified=traditional_to_simplified,
+    )
     return task_service.create_task_from_file(
         db,
         filename=file.filename or "audio",
@@ -216,13 +238,16 @@ def create_batch_transcriptions(
     output_formats: str | None = Form(None),
     vad: bool | None = Form(None),
     word_timestamps: bool | None = Form(None),
+    postprocess_mode: str | None = Form(None),
+    traditional_to_simplified: bool | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    options = {}
-    if vad is not None:
-        options["vad"] = vad
-    if word_timestamps is not None:
-        options["word_timestamps"] = word_timestamps
+    options = _postprocess_options(
+        vad=vad,
+        word_timestamps=word_timestamps,
+        postprocess_mode=postprocess_mode,
+        traditional_to_simplified=traditional_to_simplified,
+    )
     batch_id, items, failures = task_service.create_batch_tasks(
         db,
         files=[(file.filename or "audio", file.file) for file in files],

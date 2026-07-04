@@ -1,127 +1,175 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DownloadCloud, HardDrive, Loader2, Trash2, XCircle } from 'lucide-react';
-import { apiClient, type ModelProgress } from '../lib/api';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Database, RefreshCw } from 'lucide-react';
+import { apiClient, getActiveDownloadItems } from '../lib/api';
+import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
+import { formatBytes } from '../lib/format';
+import { ModelDownloadCard } from '../components/ModelDownloadCard';
+import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
+import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type ModelCategory } from '../lib/modelCatalog';
 import { useI18n } from '../lib/i18n';
 
 export function ModelsPage() {
   const queryClient = useQueryClient();
-  const { t } = useI18n();
-  const [trackingModel, setTrackingModel] = useState<string | null>(null);
-  const [progressByModel, setProgressByModel] = useState<Record<string, ModelProgress>>({});
-  const modelsQuery = useQuery({ queryKey: ['models'], queryFn: () => apiClient.listModels(), refetchInterval: 5000 });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['models'] });
-  const download = useMutation({
-    mutationFn: (modelName: string) => apiClient.downloadModel(modelName),
-    onSuccess: (_result, modelName) => {
-      setTrackingModel(modelName);
-      refresh();
-    },
-  });
-  const unload = useMutation({ mutationFn: apiClient.unloadModel.bind(apiClient), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: apiClient.deleteModel.bind(apiClient), onSuccess: refresh });
-  const activeModel = useMemo(
-    () => trackingModel ?? (modelsQuery.data?.models ?? []).find((model) => model.downloading)?.model_name ?? null,
-    [modelsQuery.data?.models, trackingModel],
+  const { locale, t } = useI18n();
+  const [category, setCategory] = useState<ModelCategory | 'all'>('recommended');
+  const modelsQuery = useModelsQuery();
+  const downloadsQuery = useActiveDownloadsQuery();
+  const storageQuery = useModelStorageQuery();
+  const models = modelsQuery.data?.models ?? [];
+  const downloads = getActiveDownloadItems(downloadsQuery.data);
+  const progressByModel = useMemo(
+    () => Object.fromEntries(downloads.map((download) => [download.model_name, download])),
+    [downloads],
   );
 
-  useEffect(() => {
-    if (!activeModel) return;
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.models });
+    queryClient.invalidateQueries({ queryKey: queryKeys.activeDownloads });
+    queryClient.invalidateQueries({ queryKey: queryKeys.modelStorage });
+  };
+  const download = useMutation({ mutationFn: apiClient.downloadModel.bind(apiClient), onSuccess: refresh });
+  const cancel = useMutation({ mutationFn: apiClient.cancelModelDownload.bind(apiClient), onSuccess: refresh });
+  const unload = useMutation({ mutationFn: apiClient.unloadModel.bind(apiClient), onSuccess: refresh });
+  const remove = useMutation({ mutationFn: apiClient.deleteModel.bind(apiClient), onSuccess: refresh });
 
-    const eventSource = new EventSource(apiClient.modelProgressUrl(activeModel));
-    eventSource.onmessage = (event) => {
-      const progress = JSON.parse(event.data) as ModelProgress;
-      setProgressByModel((current) => ({ ...current, [activeModel]: progress }));
-      if (progress.status === 'complete' || progress.status === 'error') {
-        eventSource.close();
-        setTrackingModel(null);
-        refresh();
-      }
-    };
-    eventSource.onerror = () => {
-      eventSource.close();
-      setTrackingModel(null);
-      refresh();
-    };
-    return () => eventSource.close();
-  }, [activeModel]);
+  const downloadedCount = models.filter((model) => model.downloaded).length;
+  const loadedCount = models.filter((model) => model.loaded).length;
+  const visibleModels = models.filter((model) => {
+    if (category === 'all') return true;
+    if (category === 'recommended') return isRecommendedModel(model);
+    return modelCategory(model) === category;
+  });
+  const categoryItems: Array<{ value: ModelCategory | 'all'; label: string }> = [
+    { value: 'recommended', label: t('models.categoryRecommended') },
+    { value: 'all', label: t('models.categoryAll') },
+    { value: 'apple', label: t('models.categoryApple') },
+    { value: 'faster', label: t('models.categoryFaster') },
+    { value: 'chinese', label: t('models.categoryChinese') },
+    { value: 'whisper', label: t('models.categoryWhisper') },
+  ];
 
   return (
-    <section className="page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">{t('models.eyebrow')}</p>
-          <h1>{t('models.title')}</h1>
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          eyebrow={t('models.eyebrow')}
+          title={t('models.title')}
+          description={`${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}
+          action={
+            <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')}>
+              <RefreshCw className="size-4" />
+            </Button>
+          }
+        />
+        <div className="grid gap-4 p-4">
+          <div className="flex flex-wrap gap-2">
+            {categoryItems.map((item) => (
+              <Button key={item.value} size="sm" variant={category === item.value ? 'primary' : 'secondary'} onClick={() => setCategory(item.value)}>
+                {item.label}
+              </Button>
+            ))}
+          </div>
+          {modelsQuery.error && <ErrorState title={t('common.unableToLoad')} error={modelsQuery.error} />}
+          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            {visibleModels.map((model) => (
+              <ModelDownloadCard
+                key={model.model_name}
+                model={model}
+                progress={progressByModel[model.model_name]}
+                description={modelDescription(model, locale)}
+                bestFor={modelBestFor(model, locale)}
+                onDownload={() => download.mutate(model.model_name)}
+                onCancel={() => cancel.mutate(model.model_name)}
+                onUnload={() => unload.mutate(model.model_name)}
+                onDelete={() => remove.mutate(model.model_name)}
+              />
+            ))}
+          </div>
+          {visibleModels.length === 0 && <EmptyState title={t('models.noModels')} body={t('models.noModelsBody')} />}
         </div>
-      </header>
+      </Panel>
 
-      <div className="list-panel">
-        {(modelsQuery.data?.models ?? []).map((model) => (
-          <article className="list-row" key={model.model_name}>
-            <div className="row-leading">
-              <HardDrive size={20} />
-              <div>
-                <h2>{model.display_name}</h2>
-                <p>{model.engine} · {model.runtime} · {model.model_size} · {model.size_mb} MB</p>
+      <div className="grid content-start gap-4">
+        <Panel className="overflow-hidden">
+          <PanelHeader eyebrow={t('models.recommended')} title={t('models.guideTitle')} description={t('models.guideBody')} />
+          <div className="grid gap-3 p-5">
+            {models.filter(isRecommendedModel).map((model) => (
+              <button
+                key={model.model_name}
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition hover:border-amber-300/40 hover:bg-amber-300/10"
+                onClick={() => setCategory(modelCategory(model))}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-zinc-100">{model.display_name}</span>
+                  <Badge tone={model.downloaded ? 'success' : 'neutral'}>
+                    {model.downloaded ? t('common.downloaded') : t('common.notDownloaded')}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{modelDescription(model, locale)}</p>
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel className="overflow-hidden">
+          <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={`${downloads.length} ${locale === 'zh' ? '进行中' : 'running'}`} />
+          <div className="grid gap-3 p-5">
+            {downloads.map((download) => (
+              <div key={download.model_name} className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate font-medium text-zinc-100">{download.model_name}</span>
+                  <Badge tone={download.status === 'error' ? 'danger' : download.status === 'complete' ? 'success' : 'warning'}>
+                    {download.status}
+                  </Badge>
+                </div>
+                <Progress value={download.progress} />
+                <p className="truncate text-xs text-zinc-500">{download.filename ?? download.source ?? t('status.modelDownload')}</p>
               </div>
+            ))}
+            {downloads.length === 0 && <EmptyState title={t('models.noActiveDownloads')} body={t('models.downloadProgress')} />}
+          </div>
+        </Panel>
+
+        <Panel className="overflow-hidden">
+          <PanelHeader eyebrow={t('settings.storage')} title={t('models.storage')} description={storageQuery.data?.models_dir ?? t('models.storageUnavailable')} />
+          <div className="grid gap-4 p-5">
+            {storageQuery.error && <ErrorState title={t('common.unableToLoad')} error={storageQuery.error} />}
+            <div className="grid grid-cols-2 gap-2">
+              <StorageMetric label={t('models.used')} value={formatBytes(storageQuery.data?.used_bytes)} />
+              <StorageMetric label={t('models.free')} value={formatBytes(storageQuery.data?.free_bytes)} />
+              <StorageMetric label={t('models.total')} value={formatBytes(storageQuery.data?.total_bytes)} />
+              <StorageMetric label={t('models.items')} value={String(storageQuery.data?.models?.length ?? 0)} />
             </div>
-            <div className="chip-line">
-              {model.languages.map((language) => <span className="chip" key={language}>{language}</span>)}
-              <span className={`chip ${model.downloaded ? 'ok' : ''}`}>
-                {model.downloaded ? t('common.downloaded') : t('common.notDownloaded')}
-              </span>
-              {model.loaded && <span className="chip ok">{t('common.loaded')}</span>}
-              {model.compatible === false && <span className="chip danger">incompatible</span>}
+            <div className="grid max-h-80 gap-2 overflow-auto pr-1">
+              {(storageQuery.data?.models ?? []).map((item) => (
+                <div key={item.model_name} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-zinc-200">{item.model_name}</p>
+                    <p className="truncate text-xs text-zinc-600">{item.path}</p>
+                  </div>
+                  <Badge>{formatBytes(item.size_bytes)}</Badge>
+                </div>
+              ))}
+              {(storageQuery.data?.models ?? []).length === 0 && (
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-3 text-sm text-zinc-500">
+                  <Database className="size-4" />
+                  {t('models.noStoredEntries')}
+                </div>
+              )}
             </div>
-            {model.size_on_disk_mb != null && <p className="muted">{model.size_on_disk_mb} MB on disk</p>}
-            {model.compatibility_error && <p className="error">{model.compatibility_error}</p>}
-            {model.download_error && <p className="error">{model.download_error}</p>}
-            <ModelDownloadProgress progress={progressByModel[model.model_name]} error={model.error} />
-            <div className="row-actions">
-              <button className="secondary-button" onClick={() => download.mutate(model.model_name)} disabled={download.isPending || model.downloading}>
-                {model.downloading ? <Loader2 size={16} className="spin" /> : <DownloadCloud size={16} />}
-                {model.downloading ? t('models.downloading') : t('common.download')}
-              </button>
-              <button className="icon-button" title={t('common.unload')} onClick={() => unload.mutate(model.model_name)}>
-                <XCircle size={16} />
-              </button>
-              <button className="icon-button danger" title={t('common.delete')} onClick={() => remove.mutate(model.model_name)}>
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </article>
-        ))}
-        {(modelsQuery.data?.models ?? []).length === 0 && <p className="muted table-empty">{t('models.noModels')}</p>}
+          </div>
+        </Panel>
       </div>
     </section>
   );
 }
 
-function ModelDownloadProgress({ progress, error }: { progress?: ModelProgress; error?: string | null }) {
-  const { t } = useI18n();
-  const visibleError = progress?.status === 'error' ? progress.error : error;
-  if (!progress && !visibleError) return null;
-
-  const label =
-    progress?.status === 'complete'
-      ? t('models.downloadComplete')
-      : progress?.status === 'error'
-        ? t('models.downloadFailed')
-        : progress?.filename || t('models.connecting');
-
+function StorageMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="model-progress">
-      {visibleError ? (
-        <p className="error">{visibleError}</p>
-      ) : (
-        <>
-          <div className="model-progress-meta">
-            <span>{label}</span>
-            <span>{Math.round(progress?.progress ?? 0)}%</span>
-          </div>
-          <div className="meter compact"><span style={{ width: `${Math.min(progress?.progress ?? 0, 100)}%` }} /></div>
-        </>
-      )}
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
+      <p className="text-xs text-zinc-600">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-zinc-100">{value}</p>
     </div>
   );
 }
