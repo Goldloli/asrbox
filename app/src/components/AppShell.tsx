@@ -3,7 +3,7 @@ import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
-import { Badge, Progress } from './weiui';
+import { Badge } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -86,51 +86,35 @@ function BottomTaskBar() {
   const hasError = activeTasksQuery.isError || downloadsQuery.isError;
 
   return (
-    <footer className="app-shell-surface grid min-h-14 shrink-0 grid-cols-1 gap-2 border-t app-border px-4 py-2 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
-      <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2 text-xs text-app-muted">
-          <Activity className="size-3.5" />
-          {t('status.activeTask')}
-        </div>
+    <footer className="app-shell-surface flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-t app-border px-3">
+      <Link to="/tasks" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
+        <Activity className="size-3.5" />
         {topTask ? (
-          <div className="grid gap-1">
-            <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-              <span className="truncate text-app-soft">{topTask.filename}</span>
-              <span className="shrink-0 text-app-muted">
-                {statusLabel(topTask.status)} · {formatPercent(topTask.progress)}
-              </span>
-            </div>
-            <Progress value={topTask.progress} />
-          </div>
+          <>
+            <span className="max-w-36 truncate text-app-soft">{topTask.filename}</span>
+            <span className="shrink-0">{statusLabel(topTask.status)} · {formatPercent(topTask.progress)}</span>
+          </>
         ) : (
-          <p className="text-xs text-app-faint">{t('status.noActiveTask')}</p>
+          <span>{t('status.noActiveTask')}</span>
         )}
-      </div>
-      <div className="min-w-0">
-        <div className="mb-1 flex items-center gap-2 text-xs text-app-muted">
-          <DownloadCloud className="size-3.5" />
-          {t('status.modelDownload')}
-        </div>
+      </Link>
+      <Link to="/models" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
+        <DownloadCloud className="size-3.5" />
         {topDownload ? (
-          <div className="grid gap-1">
-            <div className="flex min-w-0 items-center justify-between gap-3 text-xs">
-              <span className="truncate text-app-soft">{topDownload.model_name}</span>
-              <span className="shrink-0 text-app-muted">
-                {topDownload.status} · {formatPercent(topDownload.progress)}
-              </span>
-            </div>
-            <Progress value={topDownload.progress} />
-          </div>
+          <>
+            <span className="max-w-36 truncate text-app-soft">{topDownload.model_name}</span>
+            <span className="shrink-0">{topDownload.status} · {formatPercent(topDownload.progress)}</span>
+          </>
         ) : (
-          <p className="text-xs text-app-faint">{t('status.noModelDownload')}</p>
+          <span>{t('status.noModelDownload')}</span>
         )}
-      </div>
+      </Link>
       {hasError && (
         <Link
           to="/settings"
           search={{ tab: 'storage' }}
           aria-label={t('status.openDiagnostics')}
-          className="flex items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)] transition hover:brightness-95"
+          className="ml-auto flex shrink-0 items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-1.5 text-xs text-[var(--app-danger)] transition hover:brightness-95"
         >
           <AlertTriangle className="size-4" />
           {t('status.liveUnavailable')}
