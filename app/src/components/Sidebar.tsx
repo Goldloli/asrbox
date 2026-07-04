@@ -19,7 +19,7 @@ export function Sidebar() {
   const { t } = useI18n();
 
   return (
-    <aside className="app-shell-surface flex h-dvh w-20 shrink-0 flex-col items-center border-r app-border px-3 py-4">
+    <aside className="app-shell-surface hidden h-dvh w-20 shrink-0 flex-col items-center border-r app-border px-3 py-4 md:flex">
       <Tooltip>
         <TooltipTrigger asChild>
           <Link
