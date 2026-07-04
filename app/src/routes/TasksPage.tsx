@@ -6,6 +6,7 @@ import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
 import { Button, EmptyState, ErrorState, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
+import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
 import { TaskTimeline } from '../components/TaskTimeline';
 import { TranscriptViewer } from '../components/TranscriptViewer';
@@ -105,10 +106,18 @@ export function TasksPage() {
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={() => cancel.mutate(selectedTask.id)}>
-                  <Square className="size-4" />
-                  {t('common.cancel')}
-                </Button>
+                <ConfirmAction
+                  title={t('confirm.cancelTitle')}
+                  description={t('confirm.cancelTaskDescription')}
+                  confirmLabel={t('common.cancel')}
+                  tone="secondary"
+                  onConfirm={() => cancel.mutate(selectedTask.id)}
+                >
+                  <Button size="sm" variant="secondary">
+                    <Square className="size-4" />
+                    {t('common.cancel')}
+                  </Button>
+                </ConfirmAction>
                 <Button size="sm" variant="secondary" onClick={() => retry.mutate(selectedTask.id)}>
                   <RotateCcw className="size-4" />
                   {t('tasks.retry')}
@@ -125,14 +134,29 @@ export function TasksPage() {
                   <RotateCcw className="size-4" />
                   {t('tasks.retryChunks')}
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => cleanupArtifacts.mutate(selectedTask.id)}>
-                  <ArchiveX className="size-4" />
-                  {t('tasks.cleanup')}
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => remove.mutate(selectedTask.id)}>
-                  <Trash2 className="size-4" />
-                  {t('common.delete')}
-                </Button>
+                <ConfirmAction
+                  title={t('confirm.cleanupTitle')}
+                  description={t('confirm.cleanupTaskDescription')}
+                  confirmLabel={t('tasks.cleanup')}
+                  tone="secondary"
+                  onConfirm={() => cleanupArtifacts.mutate(selectedTask.id)}
+                >
+                  <Button size="sm" variant="secondary">
+                    <ArchiveX className="size-4" />
+                    {t('tasks.cleanup')}
+                  </Button>
+                </ConfirmAction>
+                <ConfirmAction
+                  title={t('confirm.deleteTitle')}
+                  description={t('confirm.deleteTaskDescription')}
+                  confirmLabel={t('common.delete')}
+                  onConfirm={() => remove.mutate(selectedTask.id)}
+                >
+                  <Button size="sm" variant="danger">
+                    <Trash2 className="size-4" />
+                    {t('common.delete')}
+                  </Button>
+                </ConfirmAction>
               </div>
             </div>
           ) : (

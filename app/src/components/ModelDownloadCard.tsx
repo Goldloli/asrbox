@@ -3,6 +3,7 @@ import type { ModelProgress, ModelStatus } from '../lib/api';
 import { formatPercent } from '../lib/format';
 import { Badge, Button, Panel, Progress } from './weiui';
 import { useI18n } from '../lib/i18n';
+import { ConfirmAction } from './ConfirmAction';
 
 export function ModelDownloadCard({
   model,
@@ -77,21 +78,44 @@ export function ModelDownloadCard({
         )}
         <div className="flex flex-wrap justify-end gap-2">
           {model.downloading ? (
-            <Button variant="secondary" size="sm" onClick={onCancel}>
-              <XCircle className="size-4" />
-              {t('common.cancel')}
-            </Button>
+            <ConfirmAction
+              title={t('confirm.cancelTitle')}
+              description={t('confirm.cancelModelDescription')}
+              confirmLabel={t('common.cancel')}
+              tone="secondary"
+              onConfirm={onCancel}
+            >
+              <Button variant="secondary" size="sm">
+                <XCircle className="size-4" />
+                {t('common.cancel')}
+              </Button>
+            </ConfirmAction>
           ) : (
             <Button variant="secondary" size="sm" onClick={onDownload}>
               <DownloadCloud className="size-4" />
               {t('common.download')}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={onUnload}>{t('common.unload')}</Button>
-          <Button variant="danger" size="sm" onClick={onDelete}>
-            <Trash2 className="size-4" />
-            {t('common.delete')}
-          </Button>
+          <ConfirmAction
+            title={t('confirm.unloadTitle')}
+            description={t('confirm.unloadModelDescription')}
+            confirmLabel={t('common.unload')}
+            tone="secondary"
+            onConfirm={onUnload}
+          >
+            <Button variant="ghost" size="sm">{t('common.unload')}</Button>
+          </ConfirmAction>
+          <ConfirmAction
+            title={t('confirm.deleteTitle')}
+            description={t('confirm.deleteModelDescription')}
+            confirmLabel={t('common.delete')}
+            onConfirm={onDelete}
+          >
+            <Button variant="danger" size="sm">
+              <Trash2 className="size-4" />
+              {t('common.delete')}
+            </Button>
+          </ConfirmAction>
         </div>
       </div>
     </Panel>

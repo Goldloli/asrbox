@@ -5,6 +5,7 @@ import { apiClient, type Provider } from '../lib/api';
 import { queryKeys, useProvidersQuery, useSettingsQuery } from '../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
+import { ConfirmAction } from '../components/ConfirmAction';
 import { useI18n } from '../lib/i18n';
 
 type ProviderFormState = {
@@ -116,10 +117,17 @@ export function ProvidersPage() {
                     {t('common.edit')}
                   </Button>
                 </ProviderDialog>
-                <Button variant="danger" size="sm" onClick={() => remove.mutate(provider.id)}>
-                  <Trash2 className="size-4" />
-                  {t('common.delete')}
-                </Button>
+                <ConfirmAction
+                  title={t('confirm.deleteTitle')}
+                  description={t('confirm.deleteProviderDescription')}
+                  confirmLabel={t('common.delete')}
+                  onConfirm={() => remove.mutate(provider.id)}
+                >
+                  <Button variant="danger" size="sm">
+                    <Trash2 className="size-4" />
+                    {t('common.delete')}
+                  </Button>
+                </ConfirmAction>
               </div>
             </article>
           ))}
