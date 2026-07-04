@@ -146,13 +146,14 @@ export function PanelHeader({
   );
 }
 
-export function EmptyState({ title, body, icon }: { title: string; body?: string; icon?: ReactNode }) {
+export function EmptyState({ title, body, icon, action }: { title: string; body?: string; icon?: ReactNode; action?: ReactNode }) {
   return (
     <div className="grid min-h-56 place-items-center px-6 py-10 text-center">
       <div className="grid max-w-sm justify-items-center gap-3">
         {icon && <div className="grid size-11 place-items-center rounded-xl border app-control text-app-accent">{icon}</div>}
         <h3 className="text-sm font-semibold text-app">{title}</h3>
         {body && <p className="text-sm leading-6 text-app-muted">{body}</p>}
+        {action && <div className="mt-1">{action}</div>}
       </div>
     </div>
   );
