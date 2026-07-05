@@ -18,6 +18,7 @@ function ThemeRuntime() {
   const theme = useUiStore((state) => state.theme);
   const density = useUiStore((state) => state.density);
   const fontScale = useUiStore((state) => state.fontScale);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -39,6 +40,18 @@ function ThemeRuntime() {
   useEffect(() => {
     document.documentElement.setAttribute('data-font-scale', fontScale);
   }, [fontScale]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const applyMotion = () => {
+      const resolved = reducedMotion === 'system' ? (media.matches ? 'reduce' : 'normal') : reducedMotion;
+      document.documentElement.setAttribute('data-reduced-motion', resolved);
+    };
+
+    applyMotion();
+    media.addEventListener('change', applyMotion);
+    return () => media.removeEventListener('change', applyMotion);
+  }, [reducedMotion]);
 
   return null;
 }
