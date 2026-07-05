@@ -17,12 +17,14 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const [draftText, setDraftText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
+  const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
 
   const displayedText = useMemo(() => {
     if (!task) return '';
     return editedTextByTask[task.id] ?? task.text ?? '';
   }, [editedTextByTask, task]);
   const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
+  const subtitlePreview = useMemo(() => (task ? formatSubtitlePreview(task.segments, subtitleFormat) : ''), [subtitleFormat, task]);
 
   useEffect(() => {
     setDraftText(displayedText);
@@ -176,6 +178,27 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           {hasLocalEdit && <p className="text-xs text-app-muted">{t('transcript.localEditHint')}</p>}
         </section>
         <section className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
+            <div className="flex rounded-lg border app-control p-1">
+              {(['srt', 'vtt'] as const).map((format) => (
+                <Button
+                  key={format}
+                  variant={subtitleFormat === format ? 'primary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setSubtitleFormat(format)}
+                  className="h-7"
+                >
+                  {format.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <pre className="max-h-56 overflow-auto rounded-lg border app-control p-3 font-mono text-xs leading-5 text-app-soft">
+            {subtitlePreview || t('transcript.noSegments')}
+          </pre>
+        </section>
+        <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
           <div className="max-h-[36vh] overflow-auto rounded-lg border border-white/10">
             {task.segments.length > 0 ? (
@@ -276,4 +299,34 @@ function replaceTextMatches(text: string, query: string, replacement: string) {
   }
 
   return pieces.join('');
+}
+
+function formatSubtitlePreview(segments: TranscriptionTask['segments'], format: 'srt' | 'vtt') {
+  if (segments.length === 0) return '';
+
+  const body = segments.map((segment, index) => {
+    const start = formatSubtitleTime(segment.start, format);
+    const end = formatSubtitleTime(segment.end, format);
+    const timing = `${start} --> ${end}`;
+    return format === 'srt'
+      ? `${index + 1}\n${timing}\n${segment.text}`
+      : `${timing}\n${segment.text}`;
+  }).join('\n\n');
+
+  return format === 'vtt' ? `WEBVTT\n\n${body}` : body;
+}
+
+function formatSubtitleTime(seconds: number, format: 'srt' | 'vtt') {
+  const totalMilliseconds = Math.max(0, Math.round(seconds * 1000));
+  const hours = Math.floor(totalMilliseconds / 3_600_000);
+  const minutes = Math.floor((totalMilliseconds % 3_600_000) / 60_000);
+  const wholeSeconds = Math.floor((totalMilliseconds % 60_000) / 1000);
+  const milliseconds = totalMilliseconds % 1000;
+  const separator = format === 'srt' ? ',' : '.';
+
+  return `${padTime(hours)}:${padTime(minutes)}:${padTime(wholeSeconds)}${separator}${milliseconds.toString().padStart(3, '0')}`;
+}
+
+function padTime(value: number) {
+  return value.toString().padStart(2, '0');
 }
