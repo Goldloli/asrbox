@@ -5,6 +5,7 @@ import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
 import { Tooltip, TooltipContent, TooltipTrigger } from './weiui';
 import asrboxIcon from '../assets/asrbox-icon.png';
+import { useUiStore } from '../stores/uiStore';
 
 const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: LucideIcon }> = [
   { to: '/', labelKey: 'nav.transcribe', icon: Mic2 },
@@ -17,9 +18,14 @@ export function Sidebar() {
   const matchRoute = useMatchRoute();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const sidebarMode = useUiStore((state) => state.sidebarMode);
+  const expanded = sidebarMode === 'expanded';
 
   return (
-    <aside className="app-shell-surface hidden h-dvh w-20 shrink-0 flex-col items-center border-r app-border px-3 py-4 md:flex">
+    <aside className={cn(
+      'app-shell-surface hidden h-dvh shrink-0 flex-col border-r app-border px-3 py-4 md:flex',
+      expanded ? 'w-52 items-stretch' : 'w-20 items-center',
+    )}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Link
@@ -37,7 +43,8 @@ export function Sidebar() {
         </TooltipTrigger>
         <TooltipContent>{t('nav.home')}</TooltipContent>
       </Tooltip>
-      <nav className="mt-8 flex flex-1 flex-col items-center gap-2">
+      {expanded && <p className="mt-3 px-1 text-sm font-semibold text-app">ASRbox</p>}
+      <nav className={cn('mt-8 flex flex-1 flex-col gap-2', expanded ? 'items-stretch' : 'items-center')}>
         {nav.map((item) => {
           const Icon = item.icon;
           const active =
@@ -50,13 +57,15 @@ export function Sidebar() {
                 <Link
                   to={item.to}
                   className={cn(
-                    'grid size-11 place-items-center rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app',
+                    'rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app',
+                    expanded ? 'flex h-11 items-center gap-3 px-3' : 'grid size-11 place-items-center',
                     active
                       ? 'border-[var(--app-accent)] bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] shadow-inner shadow-[var(--app-shadow)]'
                       : 'border-transparent',
                   )}
                 >
                   <Icon size={20} strokeWidth={1.8} />
+                  {expanded && <span className="text-sm font-medium">{t(item.labelKey)}</span>}
                 </Link>
               </TooltipTrigger>
               <TooltipContent>{t(item.labelKey)}</TooltipContent>
@@ -64,7 +73,10 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="mb-1 rotate-[-90deg] whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-app-faint">
+      <div className={cn(
+        'mb-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-app-faint',
+        !expanded && 'rotate-[-90deg]',
+      )}>
         ASRbox
       </div>
     </aside>
