@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Clipboard, Download, FileAudio, Folder, FolderOpen, History, RotateCcw, Scissors, Square, Star, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Clipboard, Download, FileAudio, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -37,6 +37,7 @@ export function TasksPage() {
   const queryClient = useQueryClient();
   const { t, statusLabel } = useI18n();
   const toast = useToast();
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [statusFilters, setStatusFilters] = useState<TaskStatus[]>([]);
   const [modelFilters, setModelFilters] = useState<string[]>([]);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
@@ -72,7 +73,24 @@ export function TasksPage() {
   );
   const filteredTasks = useMemo(() => {
     const now = Date.now();
+    const searchNeedle = taskSearchQuery.trim().toLowerCase();
     return tasks.filter((task) => {
+      if (searchNeedle) {
+        const haystack = [
+          task.filename,
+          task.text,
+          task.id,
+          task.model_name,
+          task.provider_id,
+          task.source,
+          task.error,
+          task.error_code,
+          taskCollectionsById[task.id],
+          taskNotesById[task.id],
+          ...(taskTagsById[task.id] ?? []),
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(searchNeedle)) return false;
+      }
       if (statusFilters.length > 0 && !statusFilters.includes(task.status)) return false;
       if (collectionFilter === 'none' && taskCollectionsById[task.id]) return false;
       if (collectionFilter !== 'all' && collectionFilter !== 'none' && taskCollectionsById[task.id] !== collectionFilter) return false;
@@ -91,7 +109,7 @@ export function TasksPage() {
       }
       return true;
     });
-  }, [collectionFilter, dateFilter, errorFilter, modelFilters, providerFilters, statusFilters, taskCollectionsById, tasks]);
+  }, [collectionFilter, dateFilter, errorFilter, modelFilters, providerFilters, statusFilters, taskCollectionsById, taskNotesById, taskSearchQuery, taskTagsById, tasks]);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
   const selectedTasks = useMemo(
     () => tasks.filter((task) => selectedTaskIds.includes(task.id)),
@@ -277,14 +295,14 @@ export function TasksPage() {
   };
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <section className="grid gap-4 pb-28 xl:grid-cols-[380px_minmax(0,1fr)] xl:pb-0">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('tasks.eyebrow')}
           title={t('tasks.title')}
           description={`${tasks.length} ${t('tasks.description')} · ${getActiveTaskItems(activeTasksQuery.data).length} ${t('tasks.active')}`}
           action={
-            <div className="hidden gap-2 lg:flex">
+            <div className="hidden gap-2 xl:hidden 2xl:flex">
               {statuses.map((item) => (
                 <Button
                   key={item}
@@ -300,8 +318,29 @@ export function TasksPage() {
         />
         <div className="grid gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
+            <Input
+              value={taskSearchQuery}
+              onChange={(event) => setTaskSearchQuery(event.target.value)}
+              placeholder={t('search.placeholder')}
+              className="pl-9"
+            />
+          </div>
           <div className="grid gap-3 rounded-xl border app-control p-3">
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="flex flex-wrap gap-2 2xl:hidden">
+              {statuses.map((item) => (
+                <Button
+                  key={item}
+                  size="sm"
+                  variant={(item === 'all' ? statusFilters.length === 0 : statusFilters.includes(item)) ? 'primary' : 'secondary'}
+                  onClick={() => toggleStatusFilter(item)}
+                >
+                  {statusLabel(item)}
+                </Button>
+              ))}
+            </div>
+            <div className="grid gap-2">
               <label className="grid gap-2 text-xs font-medium text-app-muted">
                 {t('tasks.collectionFilter')}
                 <Select
@@ -416,7 +455,7 @@ export function TasksPage() {
               </div>
             </div>
           )}
-          <div className="grid gap-2">
+          <div className="grid max-h-[calc(100dvh-420px)] min-h-64 gap-2 overflow-auto pr-1">
             {filteredTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -430,22 +469,26 @@ export function TasksPage() {
               />
             ))}
             {filteredTasks.length === 0 && (
-              <EmptyState
-                title={t('tasks.noMatching')}
-                body={t('tasks.noMatchingBody')}
-                icon={<FileAudio className="size-5" />}
-                action={
-                  <Button asChild>
+              <div className="flex items-start gap-3 rounded-lg border app-control px-3 py-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-xl border app-control text-app-accent">
+                  <FileAudio className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-app">{t('tasks.noMatching')}</h3>
+                  <p className="mt-1 text-sm leading-6 text-app-muted">{t('tasks.noMatchingBody')}</p>
+                </div>
+                <div className="shrink-0">
+                  <Button asChild size="sm">
                     <Link to="/">{t('transcribe.start')}</Link>
                   </Button>
-                }
-              />
+                </div>
+              </div>
             )}
           </div>
         </div>
       </Panel>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel className="overflow-hidden">
           <PanelHeader
             eyebrow={t('tasks.inspector')}
@@ -725,7 +768,7 @@ function TaskRow({
   return (
     <article
       className={cn(
-        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border px-4 py-3 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
+        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg border px-3 py-2.5 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
         selected ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
       )}
     >
@@ -736,14 +779,14 @@ function TaskRow({
         aria-label={task.filename}
         className="mt-1 size-4 rounded border app-control accent-[var(--app-accent)]"
       />
-      <button type="button" className="grid min-w-0 gap-3 text-left" onClick={onSelect}>
+      <button type="button" className="grid min-w-0 gap-2 text-left" onClick={onSelect}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
             <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-app">
               {favorited && <Star className="size-3.5 shrink-0 fill-[var(--app-accent)] text-[var(--app-accent)]" />}
               <span className="truncate">{task.filename}</span>
             </h2>
-            <p className="mt-1 text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
+            <p className="mt-0.5 text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
           </div>
           <StatusPill status={task.status} />
         </div>
