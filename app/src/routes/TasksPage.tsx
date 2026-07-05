@@ -486,6 +486,15 @@ export function TasksPage() {
                 </div>
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
+              {(selectedTask.error || selectedTask.status === 'failed' || selectedTask.status === 'failed_resumable') && (
+                <ErrorDiagnosticsPanel
+                  task={selectedTask}
+                  diagnostics={diagnosticsQuery.data ?? []}
+                  logs={logsQuery.data ?? []}
+                  onRetry={() => retry.mutate(selectedTask.id)}
+                  onRetryChunks={() => retryChunks.mutate(selectedTask.id)}
+                />
+              )}
               {selectedTask.status === 'completed' && (
                 <div className="grid gap-3 rounded-xl border app-control p-3">
                   <div className="flex items-center justify-between gap-3">
@@ -708,6 +717,80 @@ function Metric({ label, value }: { label: string; value?: string | null }) {
     <div className="rounded-lg border app-control px-3 py-2">
       <p className="text-app-muted">{label}</p>
       <p className="mt-1 truncate text-app">{value || '-'}</p>
+    </div>
+  );
+}
+
+function ErrorDiagnosticsPanel({
+  task,
+  diagnostics,
+  logs,
+  onRetry,
+  onRetryChunks,
+}: {
+  task: TranscriptionTask;
+  diagnostics: Array<{ stage: string; error_code?: string | null; message: string; created_at: string }>;
+  logs: Array<{ level?: string; stage?: string; message: string; created_at?: string; timestamp?: string }>;
+  onRetry: () => void;
+  onRetryChunks: () => void;
+}) {
+  const { t } = useI18n();
+  const importantLogs = logs.filter((item) => ['error', 'warning'].includes((item.level ?? '').toLowerCase())).slice(0, 3);
+  const suspiciousSegments = (task.segments ?? [])
+    .filter((segment) => segment.end < segment.start || (typeof segment.confidence === 'number' && segment.confidence < 0))
+    .slice(0, 3);
+
+  return (
+    <div className="grid gap-3 rounded-xl border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--app-danger)]">{t('tasks.errorDiagnostics')}</h3>
+          <p className="mt-1 text-xs text-[var(--app-danger)]/80">{task.error_code ?? t('tasks.errorUnknown')}</p>
+        </div>
+        <Button asChild size="sm" variant="secondary">
+          <Link to="/settings" search={{ tab: 'storage' }}>{t('settings.diagnosticBundle')}</Link>
+        </Button>
+      </div>
+
+      <div className="grid gap-2">
+        <h4 className="text-xs font-semibold text-[var(--app-danger)]">{t('tasks.errorSignals')}</h4>
+        {(diagnostics.length > 0 ? diagnostics.slice(0, 3) : [{ stage: task.error_code ?? 'error', message: task.error ?? t('tasks.errorUnknown'), created_at: task.updated_at }]).map((item, index) => (
+          <div key={`${item.stage}-${index}`} className="rounded-lg border border-[color:var(--app-danger)]/30 bg-[var(--app-panel)] px-3 py-2 text-xs">
+            <p className="font-medium text-app">{item.stage}</p>
+            <p className="mt-1 text-app-muted">{item.message}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-2">
+        <h4 className="text-xs font-semibold text-[var(--app-danger)]">{t('tasks.failedFragments')}</h4>
+        {suspiciousSegments.length > 0 ? (
+          suspiciousSegments.map((segment) => (
+            <div key={segment.id} className="rounded-lg border border-[color:var(--app-danger)]/30 bg-[var(--app-panel)] px-3 py-2 text-xs text-app-muted">
+              {segment.start.toFixed(2)}s - {segment.end.toFixed(2)}s · {segment.text || '-'}
+            </div>
+          ))
+        ) : importantLogs.length > 0 ? (
+          importantLogs.map((item, index) => (
+            <div key={`${item.stage ?? item.level}-${index}`} className="rounded-lg border border-[color:var(--app-danger)]/30 bg-[var(--app-panel)] px-3 py-2 text-xs text-app-muted">
+              {item.stage ?? item.level}: {item.message}
+            </div>
+          ))
+        ) : (
+          <p className="rounded-lg border border-[color:var(--app-danger)]/30 bg-[var(--app-panel)] px-3 py-2 text-xs text-app-muted">{t('tasks.noFailedFragments')}</p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={onRetry}>
+          <RotateCcw className="size-4" />
+          {t('tasks.retry')}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onRetryChunks}>
+          <RotateCcw className="size-4" />
+          {t('tasks.retryChunks')}
+        </Button>
+      </div>
     </div>
   );
 }
