@@ -110,6 +110,12 @@ export function TasksPage() {
     enabled: Boolean(selectedTask),
     retry: 1,
   });
+  const qualityQuery = useQuery({
+    queryKey: selectedTask ? queryKeys.taskQuality(selectedTask.id) : ['tasks', 'empty', 'quality'],
+    queryFn: () => apiClient.getTaskQuality(selectedTask!.id),
+    enabled: Boolean(selectedTask),
+    retry: 1,
+  });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
@@ -621,6 +627,7 @@ export function TasksPage() {
                     diagnostics={diagnosticsQuery.data}
                     logs={logsQuery.data}
                     versions={versionsQuery.data}
+                    quality={qualityQuery.data}
                     currentText={selectedTask.text}
                     value={timelineTab}
                     onValueChange={setTimelineTab}
