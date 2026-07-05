@@ -6,7 +6,7 @@ import { apiClient } from '../lib/api';
 import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
-import { useUiStore, type DensityMode, type FontScale, type Locale, type SidebarMode, type ThemeMode } from '../stores/uiStore';
+import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
 import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
@@ -29,11 +29,13 @@ export function SettingsPage() {
   const density = useUiStore((state) => state.density);
   const sidebarMode = useUiStore((state) => state.sidebarMode);
   const fontScale = useUiStore((state) => state.fontScale);
+  const reducedMotion = useUiStore((state) => state.reducedMotion);
   const setLocale = useUiStore((state) => state.setLocale);
   const setTheme = useUiStore((state) => state.setTheme);
   const setDensity = useUiStore((state) => state.setDensity);
   const setSidebarMode = useUiStore((state) => state.setSidebarMode);
   const setFontScale = useUiStore((state) => state.setFontScale);
+  const setReducedMotion = useUiStore((state) => state.setReducedMotion);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -154,6 +156,17 @@ export function SettingsPage() {
                   options={[
                     { value: 'standard', label: t('settings.fontScaleStandard') },
                     { value: 'large', label: t('settings.fontScaleLarge') },
+                  ]}
+                />
+              </Field>
+              <Field label={t('settings.reducedMotion')}>
+                <Select
+                  value={reducedMotion}
+                  onValueChange={(value) => setReducedMotion(value as ReducedMotionMode)}
+                  options={[
+                    { value: 'system', label: t('settings.reducedMotionSystem') },
+                    { value: 'reduce', label: t('settings.reducedMotionReduce') },
+                    { value: 'normal', label: t('settings.reducedMotionNormal') },
                   ]}
                 />
               </Field>

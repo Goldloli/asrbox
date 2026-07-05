@@ -206,6 +206,15 @@ body,
   font-size: 17px;
 }
 
+[data-reduced-motion="reduce"] *,
+[data-reduced-motion="reduce"] *::before,
+[data-reduced-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.001ms !important;
+}
+
 button,
 input,
 select,
