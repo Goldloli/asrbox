@@ -5,7 +5,7 @@ import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, RefreshCw,
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Field, Panel, PanelHeader, Progress, Select } from '../components/weiui';
+import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { StatusPill } from '../components/StatusPill';
@@ -296,11 +296,18 @@ export function TranscribePage() {
                 </button>
               ))}
               {tasks.length === 0 && (
-                <EmptyState
-                  title={t('transcribe.noTasks')}
-                  body={t('transcribe.noTasksBody')}
-                  action={<Button onClick={() => fileInputRef.current?.click()}>{t('transcribe.chooseFile')}</Button>}
-                />
+                <div className="flex items-start gap-3 rounded-lg border app-control px-3 py-3">
+                  <div className="grid size-10 shrink-0 place-items-center rounded-xl border app-control text-app-accent">
+                    <FileAudio className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold text-app">{t('transcribe.noTasks')}</h3>
+                    <p className="mt-1 text-sm leading-6 text-app-muted">{t('transcribe.noTasksBody')}</p>
+                  </div>
+                  <div className="shrink-0">
+                    <Button size="sm" onClick={() => fileInputRef.current?.click()}>{t('transcribe.chooseFile')}</Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
