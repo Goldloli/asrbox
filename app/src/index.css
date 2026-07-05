@@ -202,6 +202,10 @@ body,
   height: 2.25rem !important;
 }
 
+[data-font-scale="large"] {
+  font-size: 17px;
+}
+
 button,
 input,
 select,
