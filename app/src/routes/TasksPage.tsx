@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, FileAudio, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Download, FileAudio, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -13,20 +13,31 @@ import { TaskTimeline } from '../components/TaskTimeline';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
+import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 
 export function TasksPage() {
   const queryClient = useQueryClient();
   const { t, statusLabel } = useI18n();
+  const toast = useToast();
   const [status, setStatus] = useState<'all' | TaskStatus>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
   const tasks = tasksQuery.data?.items ?? [];
 
   const filteredTasks = useMemo(() => (status === 'all' ? tasks : tasks.filter((task) => task.status === status)), [status, tasks]);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
+  const selectedTasks = useMemo(
+    () => tasks.filter((task) => selectedTaskIds.includes(task.id)),
+    [selectedTaskIds, tasks],
+  );
+  const selectedCompletedTasks = selectedTasks.filter((task) => task.status === 'completed');
+  const selectedExportFormats = Array.from(new Set(selectedCompletedTasks.flatMap((task) => getTaskOutputFormats(task)))).slice(0, 6);
+  const allFilteredSelected = filteredTasks.length > 0 && filteredTasks.every((task) => selectedTaskIds.includes(task.id));
 
   const diagnosticsQuery = useQuery({
     queryKey: selectedTask ? queryKeys.taskDiagnostics(selectedTask.id) : ['tasks', 'empty', 'diagnostics'],
@@ -60,6 +71,47 @@ export function TasksPage() {
   const cleanupArtifacts = useTaskMutation(apiClient.cleanupTaskArtifacts.bind(apiClient), refresh, t('toast.taskArtifactsCleaned'));
   const remove = useTaskMutation(apiClient.deleteTask.bind(apiClient), refresh, t('toast.taskDeleted'));
 
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds((current) => (
+      current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]
+    ));
+  };
+
+  const toggleFilteredSelection = () => {
+    const filteredIds = filteredTasks.map((task) => task.id);
+    setSelectedTaskIds((current) => (
+      allFilteredSelected
+        ? current.filter((id) => !filteredIds.includes(id))
+        : Array.from(new Set([...current, ...filteredIds]))
+    ));
+  };
+
+  const runBatchTaskAction = async (mutationFn: (id: string) => Promise<unknown>, successMessage: string) => {
+    if (selectedTaskIds.length === 0) return;
+    setBatchBusy(true);
+    try {
+      await Promise.all(selectedTaskIds.map((id) => mutationFn(id)));
+      toast.success(successMessage, `${selectedTaskIds.length} ${t('tasks.batchItems')}`);
+      setSelectedTaskIds([]);
+      refresh();
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
+  const exportSelectedTasks = (format: string) => {
+    selectedCompletedTasks.forEach((task) => {
+      const link = document.createElement('a');
+      link.href = apiClient.exportTaskUrl(task.id, format);
+      link.rel = 'noopener noreferrer';
+      link.download = '';
+      link.click();
+    });
+    toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+  };
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel className="overflow-hidden">
@@ -79,9 +131,75 @@ export function TasksPage() {
         />
         <div className="grid gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
+          {filteredTasks.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border app-control px-3 py-2">
+              <label className="flex items-center gap-2 text-xs text-app-muted">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={toggleFilteredSelection}
+                  className="size-4 rounded border app-control accent-[var(--app-accent)]"
+                />
+                {selectedTaskIds.length > 0 ? `${selectedTaskIds.length} ${t('tasks.batchSelected')}` : t('tasks.batchSelectAll')}
+              </label>
+              <div className="flex flex-1 flex-wrap justify-end gap-2">
+                <ConfirmAction
+                  title={t('confirm.cancelTitle')}
+                  description={t('confirm.batchCancelTaskDescription')}
+                  confirmLabel={t('common.cancel')}
+                  tone="secondary"
+                  onConfirm={() => runBatchTaskAction(apiClient.cancelTask.bind(apiClient), t('toast.taskCancelled'))}
+                >
+                  <Button size="sm" variant="secondary" disabled={selectedTaskIds.length === 0 || batchBusy}>
+                    <Square className="size-4" />
+                    {t('common.cancel')}
+                  </Button>
+                </ConfirmAction>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={selectedTaskIds.length === 0 || batchBusy}
+                  onClick={() => runBatchTaskAction(apiClient.retryTask.bind(apiClient), t('toast.taskRetried'))}
+                >
+                  <RotateCcw className="size-4" />
+                  {t('tasks.retry')}
+                </Button>
+                {selectedExportFormats.map((format) => (
+                  <Button
+                    key={format}
+                    size="sm"
+                    variant="secondary"
+                    disabled={selectedCompletedTasks.length === 0}
+                    onClick={() => exportSelectedTasks(format)}
+                  >
+                    <Download className="size-4" />
+                    {format.toUpperCase()}
+                  </Button>
+                ))}
+                <ConfirmAction
+                  title={t('confirm.deleteTitle')}
+                  description={t('confirm.batchDeleteTaskDescription')}
+                  confirmLabel={t('common.delete')}
+                  onConfirm={() => runBatchTaskAction(apiClient.deleteTask.bind(apiClient), t('toast.taskDeleted'))}
+                >
+                  <Button size="sm" variant="danger" disabled={selectedTaskIds.length === 0 || batchBusy}>
+                    <Trash2 className="size-4" />
+                    {t('common.delete')}
+                  </Button>
+                </ConfirmAction>
+              </div>
+            </div>
+          )}
           <div className="grid gap-2">
             {filteredTasks.map((task) => (
-              <TaskRow key={task.id} task={task} selected={selectedTask?.id === task.id} onSelect={() => setSelectedTaskId(task.id)} />
+              <TaskRow
+                key={task.id}
+                task={task}
+                selected={selectedTask?.id === task.id}
+                checked={selectedTaskIds.includes(task.id)}
+                onToggle={() => toggleTaskSelection(task.id)}
+                onSelect={() => setSelectedTaskId(task.id)}
+              />
             ))}
             {filteredTasks.length === 0 && (
               <EmptyState
@@ -206,28 +324,48 @@ export function TasksPage() {
   );
 }
 
-function TaskRow({ task, selected, onSelect }: { task: TranscriptionTask; selected: boolean; onSelect: () => void }) {
+function TaskRow({
+  task,
+  selected,
+  checked,
+  onToggle,
+  onSelect,
+}: {
+  task: TranscriptionTask;
+  selected: boolean;
+  checked: boolean;
+  onToggle: () => void;
+  onSelect: () => void;
+}) {
   return (
-    <button
+    <article
       className={cn(
-        'grid gap-3 rounded-xl border px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/[0.04]',
+        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border px-4 py-3 transition hover:border-white/20 hover:bg-white/[0.04]',
         selected ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/10 bg-white/[0.03]',
       )}
-      onClick={onSelect}
     >
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-zinc-100">{task.filename}</h2>
-          <p className="mt-1 text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        aria-label={task.filename}
+        className="mt-1 size-4 rounded border app-control accent-[var(--app-accent)]"
+      />
+      <button type="button" className="grid min-w-0 gap-3 text-left" onClick={onSelect}>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-zinc-100">{task.filename}</h2>
+            <p className="mt-1 text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
+          </div>
+          <StatusPill status={task.status} />
         </div>
-        <StatusPill status={task.status} />
-      </div>
-      <Progress value={task.progress} />
-      <div className="flex justify-between gap-3 text-xs text-zinc-500">
-        <span>{formatDate(task.updated_at)}</span>
-        <span>{formatPercent(task.progress)}</span>
-      </div>
-    </button>
+        <Progress value={task.progress} />
+        <div className="flex justify-between gap-3 text-xs text-zinc-500">
+          <span>{formatDate(task.updated_at)}</span>
+          <span>{formatPercent(task.progress)}</span>
+        </div>
+      </button>
+    </article>
   );
 }
 
