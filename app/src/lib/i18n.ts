@@ -168,6 +168,7 @@ const dictionaries = {
     'transcript.replaceAll': 'Replace all',
     'transcript.replaceSaved': 'Replacement saved locally',
     'transcript.noMatches': 'No matches',
+    'transcript.subtitlePreview': 'Subtitle preview',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -500,6 +501,7 @@ const dictionaries = {
     'transcript.replaceAll': '全部替换',
     'transcript.replaceSaved': '替换已保存到本地编辑',
     'transcript.noMatches': '没有匹配项',
+    'transcript.subtitlePreview': '字幕预览',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
