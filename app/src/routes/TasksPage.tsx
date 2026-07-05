@@ -5,7 +5,7 @@ import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCc
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -34,6 +34,7 @@ export function TasksPage() {
   const [timelineTab, setTimelineTab] = useState<TaskTimelineTab>('diagnostics');
   const [taskTagsById, setTaskTagsById] = useState<Record<string, string[]>>({});
   const [favoriteTaskIds, setFavoriteTaskIds] = useState<string[]>([]);
+  const [taskNotesById, setTaskNotesById] = useState<Record<string, string>>({});
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
@@ -306,6 +307,15 @@ export function TasksPage() {
                     <span className="text-xs text-app-muted">{t('tasks.noTags')}</span>
                   )}
                 </div>
+              </div>
+              <div className="grid gap-2 rounded-xl border app-control p-3">
+                <h3 className="text-sm font-semibold text-app">{t('tasks.notes')}</h3>
+                <Textarea
+                  value={taskNotesById[selectedTask.id] ?? ''}
+                  onChange={(event) => setTaskNotesById((current) => ({ ...current, [selectedTask.id]: event.target.value }))}
+                  placeholder={t('tasks.notesPlaceholder')}
+                  className="min-h-24"
+                />
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               {selectedTask.status === 'completed' && (
