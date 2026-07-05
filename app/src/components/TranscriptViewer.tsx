@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
@@ -12,6 +12,7 @@ import { toastErrorMessage, useToast } from './Toast';
 export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
   const toast = useToast();
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
@@ -80,6 +81,16 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const cancelLocalEdit = () => {
     setDraftText(displayedText);
     setIsEditing(false);
+  };
+  const seekToSegment = (seconds: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      audio.currentTime = Math.max(0, seconds);
+      void audio.play().catch(() => undefined);
+    } catch {
+      // The media element may reject seeking before metadata is available.
+    }
   };
 
   return (
@@ -179,7 +190,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         </section>
         <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
-          <audio controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
+          <audio ref={audioRef} controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
             {t('transcript.audioUnsupported')}
           </audio>
         </section>
@@ -210,9 +221,15 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
             {task.segments.length > 0 ? (
               task.segments.map((segment) => (
                 <div key={segment.id} className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-3 last:border-b-0">
-                  <time className="font-mono text-xs text-app-muted">
+                  <button
+                    type="button"
+                    className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+                    onClick={() => seekToSegment(segment.start)}
+                    aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
+                    title={t('transcript.jumpToSegment')}
+                  >
                     {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
-                  </time>
+                  </button>
                   <div className="flex items-start gap-2">
                     <p className="min-w-0 flex-1 text-sm leading-6 text-app-soft">{renderHighlightedText(segment.text, searchQuery)}</p>
                     <Button
