@@ -17,6 +17,11 @@ import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
+const exportPresets = [
+  { key: 'subtitles', labelKey: 'tasks.exportPresetSubtitles', formats: ['srt', 'vtt', 'ass'] },
+  { key: 'text', labelKey: 'tasks.exportPresetText', formats: ['txt', 'md'] },
+  { key: 'debug', labelKey: 'tasks.exportPresetDebug', formats: ['json', 'txt'] },
+] as const;
 
 export function TasksPage() {
   const queryClient = useQueryClient();
@@ -113,6 +118,30 @@ export function TasksPage() {
       link.click();
     });
     toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+  };
+
+  const downloadTaskFormat = async (task: TranscriptionTask, format: string) => {
+    const response = await fetch(apiClient.exportTaskUrl(task.id, format));
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blobUrl = URL.createObjectURL(await response.blob());
+    try {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.rel = 'noopener noreferrer';
+      link.download = `${task.filename}.${format}`;
+      link.click();
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    }
+  };
+
+  const exportTaskFormats = async (task: TranscriptionTask, formats: readonly string[], label: string) => {
+    try {
+      await Promise.all(formats.map((format) => downloadTaskFormat(task, format)));
+      toast.info(t('tasks.exportPresetStarted'), label);
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
   };
 
   const copyTaskText = async (task: TranscriptionTask) => {
@@ -274,6 +303,19 @@ export function TasksPage() {
                       <FolderOpen className="size-4" />
                       {t('tasks.openFileLocation')}
                     </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 border-t app-border pt-3">
+                    {exportPresets.map((preset) => (
+                      <Button
+                        key={preset.key}
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => exportTaskFormats(selectedTask, preset.formats, t(preset.labelKey))}
+                      >
+                        <Download className="size-4" />
+                        {t(preset.labelKey)}
+                      </Button>
+                    ))}
                   </div>
                 </div>
               )}
