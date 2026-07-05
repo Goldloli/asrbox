@@ -2,6 +2,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { DownloadCloud, FileDown, FilePlus2, ListTodo, Plus, Settings, TerminalSquare } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../lib/i18n';
+import { matchesShortcut } from '../lib/shortcuts';
+import { useUiStore } from '../stores/uiStore';
 import { Button, Dialog, DialogContent, EmptyState, Input } from './weiui';
 
 type CommandItem = {
@@ -15,6 +17,7 @@ type CommandItem = {
 export function CommandPalette() {
   const navigate = useNavigate();
   const { t } = useI18n();
+  const commandPaletteShortcut = useUiStore((state) => state.shortcuts.commandPalette);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -74,13 +77,13 @@ export function CommandPalette() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'k' || (!event.metaKey && !event.ctrlKey)) return;
+      if (!matchesShortcut(event, commandPaletteShortcut)) return;
       event.preventDefault();
       setOpen((current) => !current);
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [commandPaletteShortcut]);
 
   const runCommand = (command: CommandItem) => {
     command.action();
