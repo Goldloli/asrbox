@@ -27,9 +27,9 @@ export function RuntimeHealthCard({ runtime }: { runtime?: RuntimeStatus }) {
           <>
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
               {checks.map(([label, ok]) => (
-                <div key={String(label)} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                  <span className="text-xs text-zinc-400">{label}</span>
-                  {ok ? <CheckCircle2 className="size-4 text-emerald-300" /> : <XCircle className="size-4 text-zinc-600" />}
+                <div key={String(label)} className="flex items-center justify-between gap-2 rounded-lg border app-control px-3 py-2">
+                  <span className="text-xs text-app-muted">{label}</span>
+                  {ok ? <CheckCircle2 className="size-4 text-[var(--app-success)]" /> : <XCircle className="size-4 text-app-faint" />}
                 </div>
               ))}
             </div>
@@ -41,7 +41,7 @@ export function RuntimeHealthCard({ runtime }: { runtime?: RuntimeStatus }) {
             {runtime.warnings.length > 0 && (
               <div className="grid gap-2">
                 {runtime.warnings.map((warning) => (
-                  <p key={warning} className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+                  <p key={warning} className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-sm text-app-accent">
                     {warning}
                   </p>
                 ))}
@@ -49,7 +49,7 @@ export function RuntimeHealthCard({ runtime }: { runtime?: RuntimeStatus }) {
             )}
           </>
         ) : (
-          <p className="text-sm text-zinc-500">{t('settings.runtimeHint')}</p>
+          <p className="text-sm text-app-muted">{t('settings.runtimeHint')}</p>
         )}
       </div>
     </Panel>

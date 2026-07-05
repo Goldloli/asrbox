@@ -320,10 +320,10 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         </section>
         <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
-          <div className="max-h-[36vh] overflow-auto rounded-lg border border-white/10">
+          <div className="max-h-[36vh] overflow-auto rounded-lg border app-border">
             {displaySegments.length > 0 ? (
               displaySegments.map((segment) => (
-                <div key={segment.id} className="grid grid-cols-[132px_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-3 last:border-b-0">
+                <div key={segment.id} className="grid grid-cols-[132px_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
                   <div className="grid gap-2">
                     <button
                       type="button"

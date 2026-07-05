@@ -234,15 +234,15 @@ export function ModelsPage() {
           <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={`${downloads.length} ${locale === 'zh' ? '进行中' : 'running'}`} />
           <div className="grid gap-3 p-5">
             {downloads.map((download) => (
-              <div key={download.model_name} className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <div key={download.model_name} className="grid gap-2 rounded-xl border app-control p-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate font-medium text-zinc-100">{download.model_name}</span>
+                  <span className="truncate font-medium text-app">{download.model_name}</span>
                   <Badge tone={download.status === 'error' ? 'danger' : download.status === 'complete' ? 'success' : 'warning'}>
                     {download.status}
                   </Badge>
                 </div>
                 <Progress value={download.progress} />
-                <p className="truncate text-xs text-zinc-500">{download.filename ?? download.source ?? t('status.modelDownload')}</p>
+                <p className="truncate text-xs text-app-muted">{download.filename ?? download.source ?? t('status.modelDownload')}</p>
               </div>
             ))}
             {downloads.length === 0 && (
@@ -272,16 +272,16 @@ export function ModelsPage() {
             </div>
             <div className="grid max-h-80 gap-2 overflow-auto pr-1">
               {(storageQuery.data?.models ?? []).map((item) => (
-                <div key={item.model_name} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                <div key={item.model_name} className="flex items-center justify-between gap-3 rounded-lg border app-control px-3 py-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm text-zinc-200">{item.model_name}</p>
-                    <p className="truncate text-xs text-zinc-600">{item.path}</p>
+                    <p className="truncate text-sm text-app">{item.model_name}</p>
+                    <p className="truncate text-xs text-app-muted">{item.path}</p>
                   </div>
                   <Badge>{formatBytes(item.size_bytes)}</Badge>
                 </div>
               ))}
               {(storageQuery.data?.models ?? []).length === 0 && (
-                <div className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-3 text-sm text-zinc-500">
+                <div className="flex items-center gap-2 rounded-lg border app-control px-3 py-3 text-sm text-app-muted">
                   <Database className="size-4" />
                   {t('models.noStoredEntries')}
                 </div>
@@ -296,9 +296,9 @@ export function ModelsPage() {
 
 function StorageMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
-      <p className="text-xs text-zinc-600">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-zinc-100">{value}</p>
+    <div className="rounded-lg border app-control px-3 py-3">
+      <p className="text-xs text-app-muted">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-app">{value}</p>
     </div>
   );
 }

@@ -87,15 +87,15 @@ export function ProvidersPage() {
         <div className="grid gap-3 p-4">
           {providersQuery.error && <ErrorState title={t('common.unableToLoad')} error={providersQuery.error} />}
           {(providersQuery.data?.items ?? []).map((provider) => (
-            <article key={provider.id} className="grid gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <article key={provider.id} className="grid gap-4 rounded-xl border app-control p-4">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                 <div className="flex min-w-0 gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-amber-200">
+                  <div className="grid size-10 shrink-0 place-items-center rounded-lg border app-control text-app-accent">
                     <Activity className="size-5" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold text-zinc-100">{provider.name}</h2>
-                    <p className="mt-1 truncate text-xs text-zinc-500">
+                    <h2 className="truncate text-sm font-semibold text-app">{provider.name}</h2>
+                    <p className="mt-1 truncate text-xs text-app-muted">
                       {provider.provider_type} · {provider.base_url ?? t('providers.builtIn')} · {t('providers.apiKey')} {provider.api_key_masked ?? t('providers.notSet')}
                     </p>
                   </div>
@@ -151,9 +151,9 @@ export function ProvidersPage() {
         <PanelHeader eyebrow={t('common.test')} title={t('providers.testResult')} description={t('providers.testDescription')} />
         <div className="grid gap-4 p-5">
           {testMessage ? (
-            <p className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">{testMessage}</p>
+            <p className="rounded-xl border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-4 py-3 text-sm leading-6 text-app-accent">{testMessage}</p>
           ) : (
-            <p className="text-sm leading-6 text-zinc-500">{t('providers.testEmpty')}</p>
+            <p className="text-sm leading-6 text-app-muted">{t('providers.testEmpty')}</p>
           )}
           {(test.error || setDefault.error || remove.error) && (
             <ErrorState title={t('common.unableToLoad')} error={test.error ?? setDefault.error ?? remove.error} />
@@ -256,8 +256,8 @@ function ProviderForm({ provider, onSaved }: { provider?: Provider; onSaved: () 
       <Field label={t('providers.defaultModel')}>
         <Input value={form.default_model} onChange={(event) => setForm({ ...form, default_model: event.target.value })} />
       </Field>
-      <div className="flex items-center justify-between rounded-lg border border-white/10 px-3 py-2">
-        <span className="text-sm text-zinc-300">{t('providers.enabled')}</span>
+      <div className="flex items-center justify-between rounded-lg border app-control px-3 py-2">
+        <span className="text-sm text-app-soft">{t('providers.enabled')}</span>
         <Switch checked={form.enabled} onCheckedChange={(enabled) => setForm({ ...form, enabled })} />
       </div>
       {mutation.error && <ErrorState title={t('common.unableToLoad')} error={mutation.error} />}

@@ -160,7 +160,7 @@ export function SettingsPage() {
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(normalizeSettingsTab(value))} className="grid gap-4">
       <Panel className="overflow-hidden">
         <PanelHeader eyebrow={t('settings.eyebrow')} title={t('settings.title')} description={t('settings.description')} />
-        <div className="border-b border-white/10 px-5 py-4">
+        <div className="border-b app-border px-5 py-4">
           <TabsList className="flex w-full flex-wrap gap-1 md:w-fit">
             <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
             <TabsTrigger value="transcription">{t('settings.tabTranscription')}</TabsTrigger>
@@ -437,8 +437,8 @@ export function SettingsPage() {
 
 function ToggleRow({ label, checked, onCheckedChange }: { label: string; checked: boolean; onCheckedChange: (checked: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className="text-sm text-zinc-300">{label}</span>
+    <div className="flex items-center justify-between gap-4 rounded-xl border app-control px-4 py-3">
+      <span className="text-sm text-app-soft">{label}</span>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
@@ -446,9 +446,9 @@ function ToggleRow({ label, checked, onCheckedChange }: { label: string; checked
 
 function PathRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p className="text-xs text-zinc-600">{label}</p>
-      <p className="mt-1 break-all text-sm text-zinc-200">{value || '-'}</p>
+    <div className="rounded-lg border app-control px-3 py-2">
+      <p className="text-xs text-app-muted">{label}</p>
+      <p className="mt-1 break-all text-sm text-app">{value || '-'}</p>
     </div>
   );
 }
