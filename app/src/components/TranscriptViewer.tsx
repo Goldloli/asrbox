@@ -22,6 +22,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
+  const [outputTemplate, setOutputTemplate] = useState<'minutes' | 'transcript' | 'subtitles' | 'markdown'>('transcript');
   const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const displayedText = useMemo(() => {
@@ -39,6 +40,9 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   }, [segmentTimes, task]);
   const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
   const subtitlePreview = useMemo(() => formatSubtitlePreview(displaySegments, subtitleFormat), [displaySegments, subtitleFormat]);
+  const outputTemplatePreview = useMemo(() => (
+    task ? formatOutputTemplate(outputTemplate, task.filename, displayedText, displaySegments, subtitleFormat) : ''
+  ), [displaySegments, displayedText, outputTemplate, subtitleFormat, task]);
 
   useEffect(() => {
     setDraftText(displayedText);
@@ -291,6 +295,30 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           </pre>
         </section>
         <section className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.outputTemplate')}</h2>
+            <Button variant="secondary" size="sm" onClick={() => copyText(outputTemplatePreview)} disabled={!outputTemplatePreview}>
+              <Clipboard className="size-4" />
+              {t('common.copy')}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(['minutes', 'transcript', 'subtitles', 'markdown'] as const).map((template) => (
+              <Button
+                key={template}
+                variant={outputTemplate === template ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setOutputTemplate(template)}
+              >
+                {t(`transcript.template.${template}`)}
+              </Button>
+            ))}
+          </div>
+          <pre className="max-h-72 overflow-auto rounded-lg border app-control p-3 whitespace-pre-wrap font-mono text-xs leading-5 text-app-soft">
+            {outputTemplatePreview}
+          </pre>
+        </section>
+        <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
           <div className="max-h-[36vh] overflow-auto rounded-lg border border-white/10">
             {displaySegments.length > 0 ? (
@@ -458,6 +486,23 @@ function formatSubtitleTime(seconds: number, format: 'srt' | 'vtt') {
 
 function padTime(value: number) {
   return value.toString().padStart(2, '0');
+}
+
+function formatOutputTemplate(
+  template: 'minutes' | 'transcript' | 'subtitles' | 'markdown',
+  filename: string,
+  text: string,
+  segments: TranscriptionTask['segments'],
+  subtitleFormat: 'srt' | 'vtt',
+) {
+  if (template === 'minutes') {
+    return `# ${filename} 会议纪要\n\n## 结论\n- \n\n## 待办\n- \n\n## 原文记录\n${text || ''}`;
+  }
+  if (template === 'subtitles') return formatSubtitlePreview(segments, subtitleFormat);
+  if (template === 'markdown') {
+    return `# ${filename}\n\n## Notes\n\n## Transcript\n\n${text || ''}`;
+  }
+  return text || '';
 }
 
 function drawAudioWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer) {
