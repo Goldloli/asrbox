@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 import { useModelsQuery, useProvidersQuery, useTasksQuery } from '../lib/queries';
 import { formatDate } from '../lib/format';
-import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, Input } from './weiui';
+import { Button, Dialog, DialogContent, DialogTrigger, EmptyState, Input } from './weiui';
 import { openGlobalSearchEvent } from './GlobalShortcuts';
+import { ResultItemContent, resultItemClassName } from './ResultItem';
 
 type SearchResult = {
   id: string;
@@ -126,16 +127,15 @@ export function GlobalSearch() {
                   to={result.href}
                   search={result.search}
                   onClick={() => setOpen(false)}
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border app-control px-3 py-3 text-left transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+                  className={resultItemClassName}
                 >
-                  <span className="grid size-9 place-items-center rounded-lg bg-[var(--app-control-strong)] text-app-accent">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-app">{result.title}</span>
-                    <span className="mt-0.5 block truncate text-xs text-app-muted">{result.description}</span>
-                  </span>
-                  <Badge tone={result.kind === 'task' ? 'accent' : 'neutral'}>{result.meta}</Badge>
+                  <ResultItemContent
+                    icon={<Icon className="size-4" />}
+                    title={result.title}
+                    description={result.description}
+                    meta={result.meta}
+                    tone={result.kind === 'task' ? 'accent' : 'neutral'}
+                  />
                 </Link>
               );
             })}
