@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
+import { Activity, ChevronDown, Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
+import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
@@ -154,6 +154,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       },
     }));
   };
+  const exportFormats = task.status === 'completed' ? getTaskOutputFormats(task) : [];
 
   return (
     <Panel className="min-h-[calc(100dvh-160px)] overflow-hidden">
@@ -171,45 +172,56 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
             <p>{task.error}</p>
           </div>
         )}
-        <section className="grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-app">{t('transcript.text')}</h2>
-              {hasLocalEdit && <Badge tone="accent">{t('transcript.localEdit')}</Badge>}
-            </div>
-            <div className="flex shrink-0 flex-wrap justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => copyText(displayedText)} disabled={!displayedText}>
-                <Clipboard className="size-4" />
-                {t('tasks.copyFullText')}
-              </Button>
-              {isEditing ? (
-                <>
-                  <Button variant="secondary" size="sm" onClick={cancelLocalEdit}>
-                    <X className="size-4" />
-                    {t('common.cancel')}
-                  </Button>
-                  <Button size="sm" onClick={saveLocalEdit}>
-                    <Save className="size-4" />
-                    {t('transcript.saveLocalEdit')}
-                  </Button>
-                </>
-              ) : (
-                <Button variant="secondary" size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil className="size-4" />
-                  {t('transcript.edit')}
-                </Button>
-              )}
-              {task.status === 'completed' &&
-                getTaskOutputFormats(task).map((format) => (
-                  <Button key={format} asChild variant="secondary" size="sm">
-                    <a href={apiClient.exportTaskUrl(task.id, format)}>
-                      <Download className="size-4" />
-                      {format.toUpperCase()}
-                    </a>
-                  </Button>
-                ))}
-            </div>
+        <div className="sticky top-0 z-10 -mx-5 flex flex-wrap items-center justify-between gap-3 border-y app-border bg-[var(--app-panel-solid)] px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.text')}</h2>
+            {hasLocalEdit && <Badge tone="accent">{t('transcript.localEdit')}</Badge>}
           </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => copyText(displayedText)} disabled={!displayedText}>
+              <Clipboard className="size-4" />
+              {t('tasks.copyFullText')}
+            </Button>
+            {isEditing ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={cancelLocalEdit}>
+                  <X className="size-4" />
+                  {t('common.cancel')}
+                </Button>
+                <Button size="sm" onClick={saveLocalEdit}>
+                  <Save className="size-4" />
+                  {t('transcript.saveLocalEdit')}
+                </Button>
+              </>
+            ) : (
+              <Button variant="secondary" size="sm" onClick={() => setIsEditing(true)}>
+                <Pencil className="size-4" />
+                {t('transcript.edit')}
+              </Button>
+            )}
+            {exportFormats.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm">
+                    <Download className="size-4" />
+                    {t('tasks.outputFiles')}
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {exportFormats.map((format) => (
+                    <DropdownMenuItem key={format} asChild>
+                      <a href={apiClient.exportTaskUrl(task.id, format)}>
+                        {format.toUpperCase()}
+                      </a>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </div>
+        <section className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:min-w-64">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
