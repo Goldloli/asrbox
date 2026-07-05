@@ -6,6 +6,7 @@ import { MobileNav } from './MobileNav';
 import { TaskCenterDrawer } from './TaskCenterDrawer';
 import { GlobalSearch } from './GlobalSearch';
 import { CommandPalette } from './CommandPalette';
+import { GlobalShortcuts } from './GlobalShortcuts';
 import { Badge } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
@@ -17,6 +18,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-bg flex h-dvh min-w-[320px] overflow-hidden">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
+        <GlobalShortcuts />
         <CommandPalette />
         <TopStatusBar />
         <main className="min-h-0 flex-1 overflow-auto">
