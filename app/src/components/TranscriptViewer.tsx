@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileText, Pencil, Save, X } from 'lucide-react';
+import { Clipboard, Download, FileText, Pencil, Save, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -7,7 +7,7 @@ import { Badge, Button, EmptyState, Panel, PanelHeader, Progress, Textarea } fro
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
-import { useToast } from './Toast';
+import { toastErrorMessage, useToast } from './Toast';
 
 export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
@@ -49,6 +49,14 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     setIsEditing(false);
     toast.success(t('transcript.localEditSaved'));
   };
+  const copyFullText = async () => {
+    try {
+      await navigator.clipboard.writeText(displayedText);
+      toast.success(t('toast.copied'));
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
   const cancelLocalEdit = () => {
     setDraftText(displayedText);
     setIsEditing(false);
@@ -77,6 +85,10 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
               {hasLocalEdit && <Badge tone="accent">{t('transcript.localEdit')}</Badge>}
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={copyFullText} disabled={!displayedText}>
+                <Clipboard className="size-4" />
+                {t('tasks.copyFullText')}
+              </Button>
               {isEditing ? (
                 <>
                   <Button variant="secondary" size="sm" onClick={cancelLocalEdit}>
