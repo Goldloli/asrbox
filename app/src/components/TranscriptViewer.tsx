@@ -49,9 +49,9 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     setIsEditing(false);
     toast.success(t('transcript.localEditSaved'));
   };
-  const copyFullText = async () => {
+  const copyText = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(displayedText);
+      await navigator.clipboard.writeText(text);
       toast.success(t('toast.copied'));
     } catch (error) {
       toast.error(t('toast.actionFailed'), toastErrorMessage(error));
@@ -85,7 +85,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
               {hasLocalEdit && <Badge tone="accent">{t('transcript.localEdit')}</Badge>}
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={copyFullText} disabled={!displayedText}>
+              <Button variant="secondary" size="sm" onClick={() => copyText(displayedText)} disabled={!displayedText}>
                 <Clipboard className="size-4" />
                 {t('tasks.copyFullText')}
               </Button>
@@ -135,7 +135,19 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                   <time className="font-mono text-xs text-app-muted">
                     {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
                   </time>
-                  <p className="text-sm leading-6 text-app-soft">{segment.text}</p>
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 text-sm leading-6 text-app-soft">{segment.text}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      onClick={() => copyText(segment.text)}
+                      aria-label={t('transcript.copySegment')}
+                      title={t('transcript.copySegment')}
+                    >
+                      <Clipboard className="size-4" />
+                    </Button>
+                  </div>
                 </div>
               ))
             ) : (
