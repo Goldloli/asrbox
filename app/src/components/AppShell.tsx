@@ -7,6 +7,7 @@ import { TaskCenterDrawer } from './TaskCenterDrawer';
 import { GlobalSearch } from './GlobalSearch';
 import { CommandPalette } from './CommandPalette';
 import { GlobalShortcuts } from './GlobalShortcuts';
+import { PersistentAudioPlayer } from './PersistentAudioPlayer';
 import { Badge } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="min-h-0 flex-1 overflow-auto">
           <div className="mx-auto w-full max-w-[1680px] p-4 xl:p-5">{children}</div>
         </main>
+        <PersistentAudioPlayer />
         <MobileNav />
         <BottomTaskBar />
       </div>

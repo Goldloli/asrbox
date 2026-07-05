@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ChevronDown, Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
+import { Activity, ChevronDown, Clipboard, Download, FileText, Pencil, Play, Replace, Save, Search, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -8,10 +8,12 @@ import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 import { toastErrorMessage, useToast } from './Toast';
+import { useAudioStore } from '../stores/audioStore';
 
 export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
   const toast = useToast();
+  const openAudio = useAudioStore((state) => state.openAudio);
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
@@ -263,7 +265,17 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           {hasLocalEdit && <p className="text-xs text-app-muted">{t('transcript.localEditHint')}</p>}
         </section>
         <section className="grid gap-3">
-          <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => openAudio({ taskId: task.id, url: apiClient.taskAudioUrl(task.id), title: task.filename })}
+            >
+              <Play className="size-4" />
+              {t('audio.openPersistent')}
+            </Button>
+          </div>
           <audio ref={audioRef} controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
             {t('transcript.audioUnsupported')}
           </audio>
