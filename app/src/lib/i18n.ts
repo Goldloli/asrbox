@@ -171,6 +171,7 @@ const dictionaries = {
     'transcript.audioPlayer': 'Audio player',
     'transcript.audioUnsupported': 'Your browser cannot play this audio.',
     'transcript.subtitlePreview': 'Subtitle preview',
+    'transcript.jumpToSegment': 'Jump to segment time',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -506,6 +507,7 @@ const dictionaries = {
     'transcript.audioPlayer': '音频播放器',
     'transcript.audioUnsupported': '当前浏览器无法播放此音频。',
     'transcript.subtitlePreview': '字幕预览',
+    'transcript.jumpToSegment': '跳转到分段时间',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
