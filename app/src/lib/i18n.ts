@@ -179,6 +179,8 @@ const dictionaries = {
     'transcript.jumpToSegment': 'Jump to segment time',
     'transcript.speakerLabel': 'Speaker label',
     'transcript.speakerPlaceholder': 'Speaker',
+    'transcript.timestampStart': 'Start time',
+    'transcript.timestampEnd': 'End time',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -522,6 +524,8 @@ const dictionaries = {
     'transcript.jumpToSegment': '跳转到分段时间',
     'transcript.speakerLabel': '说话人标签',
     'transcript.speakerPlaceholder': '说话人',
+    'transcript.timestampStart': '开始时间',
+    'transcript.timestampEnd': '结束时间',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
