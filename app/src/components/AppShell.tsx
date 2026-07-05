@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { TaskCenterDrawer } from './TaskCenterDrawer';
+import { GlobalSearch } from './GlobalSearch';
 import { Badge } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
@@ -45,32 +46,35 @@ function TopStatusBar() {
         </div>
       </div>
 
-      <div className="hidden items-center gap-2 md:flex">
-        {connected ? (
-          <Badge tone="success">
-            <CheckCircle2 className="mr-1 size-3" />
-            {t('status.backendOnline')}
-          </Badge>
-        ) : (
-          <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
-            <Badge tone="danger">
-              <CloudOff className="mr-1 size-3" />
-              {t('status.backendOffline')}
+      <div className="flex items-center gap-2">
+        <GlobalSearch />
+        <div className="hidden items-center gap-2 md:flex">
+          {connected ? (
+            <Badge tone="success">
+              <CheckCircle2 className="mr-1 size-3" />
+              {t('status.backendOnline')}
             </Badge>
-          </Link>
-        )}
-        {runtime && (
-          <>
-            <Badge tone={runtime.ffmpeg_available ? 'success' : 'warning'}>
-              {runtime.ffmpeg_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
-            </Badge>
-            <Badge tone={runtime.torch_cuda_available || runtime.torch_mps_available ? 'accent' : 'neutral'}>
-              <Cpu className="mr-1 size-3" />
-              {runtime.torch_cuda_available ? 'CUDA' : runtime.torch_mps_available ? 'MPS' : 'CPU'}
-            </Badge>
-            {runtime.free_disk_bytes != null && <Badge tone="neutral">{t('status.freeDisk')} {formatBytes(runtime.free_disk_bytes)}</Badge>}
-          </>
-        )}
+          ) : (
+            <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+              <Badge tone="danger">
+                <CloudOff className="mr-1 size-3" />
+                {t('status.backendOffline')}
+              </Badge>
+            </Link>
+          )}
+          {runtime && (
+            <>
+              <Badge tone={runtime.ffmpeg_available ? 'success' : 'warning'}>
+                {runtime.ffmpeg_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
+              </Badge>
+              <Badge tone={runtime.torch_cuda_available || runtime.torch_mps_available ? 'accent' : 'neutral'}>
+                <Cpu className="mr-1 size-3" />
+                {runtime.torch_cuda_available ? 'CUDA' : runtime.torch_mps_available ? 'MPS' : 'CPU'}
+              </Badge>
+              {runtime.free_disk_bytes != null && <Badge tone="neutral">{t('status.freeDisk')} {formatBytes(runtime.free_disk_bytes)}</Badge>}
+            </>
+          )}
+        </div>
       </div>
     </header>
   );
