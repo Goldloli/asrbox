@@ -157,6 +157,19 @@ export interface ModelStorage {
   }>;
 }
 
+export interface StorageCleanupOptions {
+  delete_normalized: boolean;
+  delete_chunks: boolean;
+  delete_orphans: boolean;
+  delete_old_diagnostics: boolean;
+}
+
+export interface StorageCleanupResult {
+  removed: string[];
+  errors: string[];
+  freed_mb: number;
+}
+
 export interface Provider {
   id: string;
   name: string;
@@ -433,6 +446,13 @@ class ApiClient {
 
   getModelStorage() {
     return this.request<ModelStorage>('/models/storage');
+  }
+
+  cleanupStorage(options: StorageCleanupOptions, dryRun = false) {
+    return this.request<StorageCleanupResult>(dryRun ? '/storage/cleanup/dry-run' : '/storage/cleanup', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    });
   }
 
   downloadModel(modelName: string) {

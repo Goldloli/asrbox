@@ -9,6 +9,7 @@ import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
 import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
+import { ConfirmAction } from '../components/ConfirmAction';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
@@ -50,6 +51,13 @@ export function SettingsPage() {
   const [vad, setVad] = useState(true);
   const [localConcurrency, setLocalConcurrency] = useState(1);
   const [providerConcurrency, setProviderConcurrency] = useState(2);
+  const [cleanupOptions, setCleanupOptions] = useState({
+    delete_normalized: true,
+    delete_chunks: true,
+    delete_orphans: false,
+    delete_old_diagnostics: false,
+  });
+  const [cleanupResult, setCleanupResult] = useState<{ removed: string[]; errors: string[]; freed_mb: number } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,6 +91,24 @@ export function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings });
       toast.success(t('toast.settingsSaved'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const cleanupDryRun = useMutation({
+    mutationFn: () => apiClient.cleanupStorage(cleanupOptions, true),
+    onSuccess: (result) => {
+      setCleanupResult(result);
+      toast.info(t('settings.cleanupEstimated'), `${result.freed_mb} MB`);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const cleanupRun = useMutation({
+    mutationFn: () => apiClient.cleanupStorage(cleanupOptions),
+    onSuccess: (result) => {
+      setCleanupResult(result);
+      storageQuery.refetch();
+      runtimeQuery.refetch();
+      toast.success(t('settings.cleanupComplete'), `${result.freed_mb} MB`);
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
@@ -320,6 +346,56 @@ export function SettingsPage() {
                   {t('settings.diagnosticBundle')}
                 </a>
               </Button>
+            </div>
+          </Panel>
+          <Panel className="overflow-hidden xl:col-span-2">
+            <PanelHeader title={t('settings.cleanupStrategy')} description={t('settings.cleanupStrategyDescription')} />
+            <div className="grid gap-4 p-5">
+              <div className="grid gap-2 md:grid-cols-2">
+                <ToggleRow
+                  label={t('settings.cleanupNormalized')}
+                  checked={cleanupOptions.delete_normalized}
+                  onCheckedChange={(checked) => setCleanupOptions((current) => ({ ...current, delete_normalized: checked }))}
+                />
+                <ToggleRow
+                  label={t('settings.cleanupChunks')}
+                  checked={cleanupOptions.delete_chunks}
+                  onCheckedChange={(checked) => setCleanupOptions((current) => ({ ...current, delete_chunks: checked }))}
+                />
+                <ToggleRow
+                  label={t('settings.cleanupOrphans')}
+                  checked={cleanupOptions.delete_orphans}
+                  onCheckedChange={(checked) => setCleanupOptions((current) => ({ ...current, delete_orphans: checked }))}
+                />
+                <ToggleRow
+                  label={t('settings.cleanupDiagnostics')}
+                  checked={cleanupOptions.delete_old_diagnostics}
+                  onCheckedChange={(checked) => setCleanupOptions((current) => ({ ...current, delete_old_diagnostics: checked }))}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={() => cleanupDryRun.mutate()} disabled={cleanupDryRun.isPending}>
+                  {t('settings.cleanupDryRun')}
+                </Button>
+                <ConfirmAction
+                  title={t('confirm.cleanupTitle')}
+                  description={t('confirm.storageCleanupDescription')}
+                  confirmLabel={t('settings.cleanupRun')}
+                  tone="secondary"
+                  onConfirm={() => cleanupRun.mutate()}
+                >
+                  <Button size="sm" variant="danger" disabled={cleanupRun.isPending}>
+                    {t('settings.cleanupRun')}
+                  </Button>
+                </ConfirmAction>
+              </div>
+              {cleanupResult && (
+                <div className="grid gap-2 rounded-lg border app-control px-3 py-3 text-sm">
+                  <p className="text-app">{t('settings.cleanupFreed')}: {cleanupResult.freed_mb} MB</p>
+                  <p className="text-app-muted">{t('settings.cleanupRemoved')}: {cleanupResult.removed.length}</p>
+                  {cleanupResult.errors.length > 0 && <p className="text-[var(--app-danger)]">{t('settings.cleanupErrors')}: {cleanupResult.errors.length}</p>}
+                </div>
+              )}
             </div>
           </Panel>
         </section>
