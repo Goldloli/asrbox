@@ -367,6 +367,7 @@ export function TasksPage() {
                     diagnostics={diagnosticsQuery.data}
                     logs={logsQuery.data}
                     versions={versionsQuery.data}
+                    currentText={selectedTask.text}
                     value={timelineTab}
                     onValueChange={setTimelineTab}
                   />
