@@ -164,6 +164,10 @@ const dictionaries = {
     'transcript.copySegment': 'Copy segment',
     'transcript.searchPlaceholder': 'Search in current transcript',
     'transcript.matches': 'matches',
+    'transcript.replacePlaceholder': 'Replace with',
+    'transcript.replaceAll': 'Replace all',
+    'transcript.replaceSaved': 'Replacement saved locally',
+    'transcript.noMatches': 'No matches',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -492,6 +496,10 @@ const dictionaries = {
     'transcript.copySegment': '复制分段',
     'transcript.searchPlaceholder': '搜索当前转写',
     'transcript.matches': '处匹配',
+    'transcript.replacePlaceholder': '替换为',
+    'transcript.replaceAll': '全部替换',
+    'transcript.replaceSaved': '替换已保存到本地编辑',
+    'transcript.noMatches': '没有匹配项',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
