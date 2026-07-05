@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCcw, Scissors, Square, Star, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -33,6 +33,7 @@ export function TasksPage() {
   const [detailTab, setDetailTab] = useState<'timeline' | 'transcript'>('timeline');
   const [timelineTab, setTimelineTab] = useState<TaskTimelineTab>('diagnostics');
   const [taskTagsById, setTaskTagsById] = useState<Record<string, string[]>>({});
+  const [favoriteTaskIds, setFavoriteTaskIds] = useState<string[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
@@ -159,6 +160,12 @@ export function TasksPage() {
     setTaskTagsById((current) => ({ ...current, [taskId]: Array.from(new Set(tags)) }));
   };
 
+  const toggleFavorite = (taskId: string) => {
+    setFavoriteTaskIds((current) => (
+      current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]
+    ));
+  };
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel className="overflow-hidden">
@@ -244,6 +251,7 @@ export function TasksPage() {
                 task={task}
                 selected={selectedTask?.id === task.id}
                 checked={selectedTaskIds.includes(task.id)}
+                favorited={favoriteTaskIds.includes(task.id)}
                 onToggle={() => toggleTaskSelection(task.id)}
                 onSelect={() => setSelectedTaskId(task.id)}
               />
@@ -344,6 +352,14 @@ export function TasksPage() {
                 </div>
               )}
               <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={favoriteTaskIds.includes(selectedTask.id) ? 'primary' : 'secondary'}
+                  onClick={() => toggleFavorite(selectedTask.id)}
+                >
+                  <Star className={cn('size-4', favoriteTaskIds.includes(selectedTask.id) && 'fill-current')} />
+                  {favoriteTaskIds.includes(selectedTask.id) ? t('tasks.unfavorite') : t('tasks.favorite')}
+                </Button>
                 <ConfirmAction
                   title={t('confirm.cancelTitle')}
                   description={t('confirm.cancelTaskDescription')}
@@ -454,20 +470,22 @@ function TaskRow({
   task,
   selected,
   checked,
+  favorited,
   onToggle,
   onSelect,
 }: {
   task: TranscriptionTask;
   selected: boolean;
   checked: boolean;
+  favorited: boolean;
   onToggle: () => void;
   onSelect: () => void;
 }) {
   return (
     <article
       className={cn(
-        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border px-4 py-3 transition hover:border-white/20 hover:bg-white/[0.04]',
-        selected ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/10 bg-white/[0.03]',
+        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border px-4 py-3 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
+        selected ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
       )}
     >
       <input
@@ -480,13 +498,16 @@ function TaskRow({
       <button type="button" className="grid min-w-0 gap-3 text-left" onClick={onSelect}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-zinc-100">{task.filename}</h2>
-            <p className="mt-1 text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
+            <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-app">
+              {favorited && <Star className="size-3.5 shrink-0 fill-[var(--app-accent)] text-[var(--app-accent)]" />}
+              <span className="truncate">{task.filename}</span>
+            </h2>
+            <p className="mt-1 text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
           </div>
           <StatusPill status={task.status} />
         </div>
         <Progress value={task.progress} />
-        <div className="flex justify-between gap-3 text-xs text-zinc-500">
+        <div className="flex justify-between gap-3 text-xs text-app-muted">
           <span>{formatDate(task.updated_at)}</span>
           <span>{formatPercent(task.progress)}</span>
         </div>
@@ -497,9 +518,9 @@ function TaskRow({
 
 function Metric({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-      <p className="text-zinc-600">{label}</p>
-      <p className="mt-1 truncate text-zinc-200">{value || '-'}</p>
+    <div className="rounded-lg border app-control px-3 py-2">
+      <p className="text-app-muted">{label}</p>
+      <p className="mt-1 truncate text-app">{value || '-'}</p>
     </div>
   );
 }
