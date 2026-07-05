@@ -6,7 +6,7 @@ import { apiClient } from '../lib/api';
 import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
-import { useUiStore, type Locale, type ThemeMode } from '../stores/uiStore';
+import { useUiStore, type DensityMode, type Locale, type ThemeMode } from '../stores/uiStore';
 import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
@@ -26,8 +26,10 @@ export function SettingsPage() {
   const toast = useToast();
   const locale = useUiStore((state) => state.locale);
   const theme = useUiStore((state) => state.theme);
+  const density = useUiStore((state) => state.density);
   const setLocale = useUiStore((state) => state.setLocale);
   const setTheme = useUiStore((state) => state.setTheme);
+  const setDensity = useUiStore((state) => state.setDensity);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -118,6 +120,16 @@ export function SettingsPage() {
                     { value: 'system', label: t('settings.themeSystem') },
                     { value: 'dark', label: t('settings.themeDark') },
                     { value: 'light', label: t('settings.themeLight') },
+                  ]}
+                />
+              </Field>
+              <Field label={t('settings.density')}>
+                <Select
+                  value={density}
+                  onValueChange={(value) => setDensity(value as DensityMode)}
+                  options={[
+                    { value: 'comfortable', label: t('settings.densityComfortable') },
+                    { value: 'compact', label: t('settings.densityCompact') },
                   ]}
                 />
               </Field>
