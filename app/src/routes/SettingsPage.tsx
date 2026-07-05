@@ -14,8 +14,11 @@ import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
 import { ProvidersPage } from './ProvidersPage';
+import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 
 type SettingsTab = 'general' | 'transcription' | 'providers' | 'storage';
+
+const shortcutActions: ShortcutAction[] = ['newTranscription', 'globalSearch', 'settings', 'commandPalette'];
 
 function normalizeSettingsTab(value: unknown): SettingsTab {
   return value === 'transcription' || value === 'providers' || value === 'storage' ? value : 'general';
@@ -31,12 +34,14 @@ export function SettingsPage() {
   const sidebarMode = useUiStore((state) => state.sidebarMode);
   const fontScale = useUiStore((state) => state.fontScale);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const shortcuts = useUiStore((state) => state.shortcuts);
   const setLocale = useUiStore((state) => state.setLocale);
   const setTheme = useUiStore((state) => state.setTheme);
   const setDensity = useUiStore((state) => state.setDensity);
   const setSidebarMode = useUiStore((state) => state.setSidebarMode);
   const setFontScale = useUiStore((state) => state.setFontScale);
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
+  const setShortcut = useUiStore((state) => state.setShortcut);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -117,7 +122,7 @@ export function SettingsPage() {
     const payload = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion },
+      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion, shortcuts },
       server: { serverUrl },
     };
     const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
@@ -139,6 +144,11 @@ export function SettingsPage() {
       if (ui.sidebarMode === 'icons' || ui.sidebarMode === 'expanded') setSidebarMode(ui.sidebarMode);
       if (ui.fontScale === 'standard' || ui.fontScale === 'large') setFontScale(ui.fontScale);
       if (ui.reducedMotion === 'system' || ui.reducedMotion === 'reduce' || ui.reducedMotion === 'normal') setReducedMotion(ui.reducedMotion);
+      if (ui.shortcuts && typeof ui.shortcuts === 'object') {
+        Object.entries(ui.shortcuts as Partial<Record<ShortcutAction, unknown>>).forEach(([action, shortcut]) => {
+          if (typeof shortcut === 'string' && shortcutActions.includes(action as ShortcutAction)) setShortcut(action as ShortcutAction, shortcut);
+        });
+      }
       if (typeof payload.server?.serverUrl === 'string') setServerUrl(payload.server.serverUrl);
       toast.success(t('settings.imported'));
     } catch (error) {
@@ -230,6 +240,27 @@ export function SettingsPage() {
                   ]}
                 />
               </Field>
+            </div>
+            <div className="grid gap-3 rounded-xl border app-control p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-app">{t('settings.shortcuts')}</h3>
+                <p className="mt-1 text-sm text-app-muted">{t('settings.shortcutsDescription')}</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {[
+                  { action: 'newTranscription' as const, label: t('settings.shortcutNewTranscription') },
+                  { action: 'globalSearch' as const, label: t('settings.shortcutGlobalSearch') },
+                  { action: 'settings' as const, label: t('settings.shortcutSettings') },
+                  { action: 'commandPalette' as const, label: t('settings.shortcutCommandPalette') },
+                ].map((item) => (
+                  <Field key={item.action} label={item.label}>
+                    <Input
+                      value={formatShortcut(shortcuts[item.action])}
+                      onChange={(event) => setShortcut(item.action, event.target.value)}
+                    />
+                  </Field>
+                ))}
+              </div>
             </div>
             <div className="grid gap-3 rounded-xl border app-control p-4">
               <div>
