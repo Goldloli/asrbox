@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { FileAudio, Files, Play, RefreshCw, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, RefreshCw, Settings, ShieldAlert } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -119,6 +119,47 @@ export function TranscribePage() {
     ...(readinessQuery.data?.warnings ?? []),
     ...(readinessQuery.data?.missing_models ?? []).map((model) => `Missing model: ${model}`),
   ];
+  const firstRunChecklist = [
+    { key: 'backend', label: t('onboarding.connectBackend'), done: readinessQuery.isSuccess },
+    {
+      key: 'model',
+      label: t('onboarding.downloadModel'),
+      done: models.some((model) => model.downloaded),
+      action: (
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/models">
+            <DownloadCloud className="size-4" />
+            {t('models.title')}
+          </Link>
+        </Button>
+      ),
+    },
+    {
+      key: 'provider',
+      label: t('onboarding.addProvider'),
+      done: providers.some((provider) => provider.enabled),
+      action: (
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/settings" search={{ tab: 'providers' }}>
+            <Settings className="size-4" />
+            {t('providers.title')}
+          </Link>
+        </Button>
+      ),
+    },
+    {
+      key: 'file',
+      label: t('onboarding.chooseFile'),
+      done: files.length > 0,
+      action: (
+        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+          <FileAudio className="size-4" />
+          {t('transcribe.chooseFile')}
+        </Button>
+      ),
+    },
+    { key: 'start', label: t('onboarding.startTranscription'), done: tasks.length > 0 },
+  ];
 
   return (
     <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_340px]">
@@ -202,6 +243,29 @@ export function TranscribePage() {
 
           {(preflightMutation.error || createMutation.error) && (
             <ErrorState error={preflightMutation.error ?? createMutation.error} />
+          )}
+
+          {tasks.length === 0 && (
+            <div className="grid gap-2 rounded-xl border app-control p-3">
+              <div>
+                <h2 className="text-sm font-semibold text-app">{t('onboarding.title')}</h2>
+                <p className="mt-1 text-xs text-app-muted">{t('onboarding.description')}</p>
+              </div>
+              <div className="grid gap-2">
+                {firstRunChecklist.map((item) => {
+                  const Icon = item.done ? CheckCircle2 : Circle;
+                  return (
+                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-[var(--app-control)] px-3 py-2">
+                      <span className="flex min-w-0 items-center gap-2 text-sm text-app-soft">
+                        <Icon className={cn('size-4 shrink-0', item.done ? 'text-[var(--app-success)]' : 'text-app-muted')} />
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      {item.action && !item.done && <span className="shrink-0">{item.action}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           <div className="grid gap-2">
