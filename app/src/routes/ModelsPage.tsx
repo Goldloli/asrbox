@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Database, DownloadCloud, RefreshCw } from 'lucide-react';
-import { apiClient, getActiveDownloadItems, type ModelStatus } from '../lib/api';
+import { BarChart3, Database, DownloadCloud, HardDrive, Info, RefreshCw, Star, Trash2, XCircle } from 'lucide-react';
+import { apiClient, getActiveDownloadItems, type ModelProgress, type ModelStatus } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
-import { formatBytes } from '../lib/format';
-import { ModelDownloadCard } from '../components/ModelDownloadCard';
-import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
+import { formatBytes, formatPercent } from '../lib/format';
+import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type ModelCategory } from '../lib/modelCatalog';
 import { useI18n } from '../lib/i18n';
+import { ConfirmAction } from '../components/ConfirmAction';
 
 type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
 type ModelViewCategory = ModelCategory | 'all' | 'pinned';
+type Translate = ReturnType<typeof useI18n>['t'];
 
 export function ModelsPage() {
   const queryClient = useQueryClient();
@@ -84,6 +85,7 @@ export function ModelsPage() {
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && !model.downloaded) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
   const benchmarkModels = visibleModels.slice(0, 4);
+  const modelGroups = createModelGroups(visibleModels, progressByModel, pinnedModelNames, t);
   const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
     { value: 'recommended', label: t('models.categoryRecommended') },
     { value: 'pinned', label: t('models.categoryPinned') },
@@ -129,21 +131,31 @@ export function ModelsPage() {
             ))}
           </div>
           {modelsQuery.error && <ErrorState title={t('common.unableToLoad')} error={modelsQuery.error} />}
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {visibleModels.map((model) => (
-              <ModelDownloadCard
-                key={model.model_name}
-                model={model}
-                progress={progressByModel[model.model_name]}
-                pinned={pinnedModelNames.includes(model.model_name)}
-                description={modelDescription(model, locale)}
-                bestFor={modelBestFor(model, locale)}
-                onTogglePin={() => togglePinnedModel(model.model_name)}
-                onDownload={() => download.mutate(model.model_name)}
-                onCancel={() => cancel.mutate(model.model_name)}
-                onUnload={() => unload.mutate(model.model_name)}
-                onDelete={() => remove.mutate(model.model_name)}
-              />
+          <div className="grid gap-4">
+            {modelGroups.map((group) => (
+              <section key={group.key} className="grid gap-2">
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <h2 className="text-sm font-semibold text-app">{group.title}</h2>
+                  <span className="text-xs text-app-muted">{group.models.length}</span>
+                </div>
+                <div className="grid gap-2">
+                  {group.models.map((model) => (
+                    <ModelListRow
+                      key={model.model_name}
+                      model={model}
+                      progress={progressByModel[model.model_name]}
+                      pinned={pinnedModelNames.includes(model.model_name)}
+                      description={modelDescription(model, locale)}
+                      bestFor={modelBestFor(model, locale)}
+                      onTogglePin={() => togglePinnedModel(model.model_name)}
+                      onDownload={() => download.mutate(model.model_name)}
+                      onCancel={() => cancel.mutate(model.model_name)}
+                      onUnload={() => unload.mutate(model.model_name)}
+                      onDelete={() => remove.mutate(model.model_name)}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
           {visibleModels.length === 0 && (
@@ -291,6 +303,178 @@ export function ModelsPage() {
         </Panel>
       </div>
     </section>
+  );
+}
+
+function createModelGroups(
+  models: ModelStatus[],
+  progressByModel: Record<string, ModelProgress>,
+  pinnedModelNames: string[],
+  t: Translate,
+) {
+  const issues = models.filter((model) => model.compatible === false || Boolean(model.error || model.download_error || model.compatibility_error));
+  const downloading = models.filter((model) => model.downloading || progressByModel[model.model_name]);
+  const pinned = models.filter((model) => pinnedModelNames.includes(model.model_name));
+  const local = models.filter((model) => model.downloaded && !downloading.includes(model) && !pinned.includes(model));
+  const recommended = models.filter((model) => isRecommendedModel(model) && !model.downloaded && !downloading.includes(model) && !pinned.includes(model) && !issues.includes(model));
+  const available = models.filter(
+    (model) => !issues.includes(model) && !downloading.includes(model) && !pinned.includes(model) && !local.includes(model) && !recommended.includes(model),
+  );
+
+  return [
+    { key: 'issues', title: t('models.groupIssues'), models: issues },
+    { key: 'downloading', title: t('models.groupDownloading'), models: downloading.filter((model) => !issues.includes(model)) },
+    { key: 'pinned', title: t('models.groupPinned'), models: pinned.filter((model) => !issues.includes(model) && !downloading.includes(model)) },
+    { key: 'local', title: t('models.groupLocal'), models: local.filter((model) => !issues.includes(model)) },
+    { key: 'recommended', title: t('models.groupRecommended'), models: recommended },
+    { key: 'available', title: t('models.groupAvailable'), models: available },
+  ].filter((group) => group.models.length > 0);
+}
+
+function ModelListRow({
+  model,
+  progress,
+  pinned,
+  description,
+  bestFor,
+  onTogglePin,
+  onDownload,
+  onCancel,
+  onUnload,
+  onDelete,
+}: {
+  model: ModelStatus;
+  progress?: ModelProgress;
+  pinned: boolean;
+  description: string;
+  bestFor: string;
+  onTogglePin: () => void;
+  onDownload: () => void;
+  onCancel: () => void;
+  onUnload: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useI18n();
+  const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
+  const error = progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error;
+
+  return (
+    <article className="grid gap-2 rounded-lg border app-control px-3 py-3">
+      <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
+        <div className="grid size-10 place-items-center rounded-lg border app-control text-app-accent">
+          <HardDrive className="size-5" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="truncate text-sm font-semibold text-app">{model.display_name}</h2>
+            <Badge tone={model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
+              {model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
+            </Badge>
+            {pinned && <Badge tone="accent">{t('models.pinned')}</Badge>}
+            {model.compatible === false && <Badge tone="danger">{t('common.incompatible')}</Badge>}
+          </div>
+          <p className="mt-1 truncate text-xs text-app-muted">
+            {model.model_name} · {model.engine} · {model.runtime} · {model.model_size} · {model.size_mb} MB
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            size="icon"
+            variant={pinned ? 'primary' : 'ghost'}
+            onClick={onTogglePin}
+            title={pinned ? t('models.unpin') : t('models.pin')}
+            aria-label={pinned ? t('models.unpin') : t('models.pin')}
+          >
+            <Star className={pinned ? 'size-4 fill-current' : 'size-4'} />
+          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button" size="sm" variant="secondary">
+                <Info className="size-4" />
+                {t('common.details')}
+              </Button>
+            </DialogTrigger>
+            <DialogContent title={model.display_name}>
+              <div className="grid gap-4">
+                <p className="text-sm leading-6 text-app-soft">{description}</p>
+                <div className="grid gap-2 text-sm md:grid-cols-2">
+                  <StorageMetric label={t('models.bestFor')} value={bestFor} />
+                  <StorageMetric label={t('models.runtime')} value={model.runtime} />
+                  <StorageMetric label={t('models.size')} value={`${model.size_mb} MB`} />
+                  <StorageMetric label={t('models.categoryAll')} value={modelCategory(model)} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {model.languages.map((language) => <Badge key={language}>{language}</Badge>)}
+                  {model.loaded && <Badge tone="accent">{t('common.loaded')}</Badge>}
+                  {model.cache_detected && <Badge tone="neutral">{formatBytes((model.cache_size_mb ?? 0) * 1024 * 1024)}</Badge>}
+                </div>
+                {error && (
+                  <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
+                    {error}
+                  </p>
+                )}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <ConfirmAction
+                    title={t('confirm.unloadTitle')}
+                    description={t('confirm.unloadModelDescription')}
+                    confirmLabel={t('common.unload')}
+                    tone="secondary"
+                    onConfirm={onUnload}
+                  >
+                    <Button variant="secondary" size="sm">{t('common.unload')}</Button>
+                  </ConfirmAction>
+                  <ConfirmAction
+                    title={t('confirm.deleteTitle')}
+                    description={t('confirm.deleteModelDescription')}
+                    confirmLabel={t('common.delete')}
+                    onConfirm={onDelete}
+                  >
+                    <Button variant="danger" size="sm">
+                      <Trash2 className="size-4" />
+                      {t('common.delete')}
+                    </Button>
+                  </ConfirmAction>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          {model.downloading ? (
+            <ConfirmAction
+              title={t('confirm.cancelTitle')}
+              description={t('confirm.cancelModelDescription')}
+              confirmLabel={t('common.cancel')}
+              tone="secondary"
+              onConfirm={onCancel}
+            >
+              <Button variant="secondary" size="sm">
+                <XCircle className="size-4" />
+                {t('common.cancel')}
+              </Button>
+            </ConfirmAction>
+          ) : (
+            <Button variant="secondary" size="sm" onClick={onDownload}>
+              <DownloadCloud className="size-4" />
+              {t('common.download')}
+            </Button>
+          )}
+        </div>
+      </div>
+      {(model.downloading || progress) && (
+        <div className="grid gap-1">
+          <div className="flex justify-between gap-3 text-xs text-app-muted">
+            <span className="truncate">{progress?.filename ?? progress?.status ?? t('common.downloading')}</span>
+            <span>{formatPercent(activeProgress)}</span>
+          </div>
+          <Progress value={activeProgress} />
+        </div>
+      )}
+      {error && (
+        <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
+          {error}
+        </p>
+      )}
+    </article>
   );
 }
 
