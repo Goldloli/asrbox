@@ -25,6 +25,13 @@ const exportPresets = [
   { key: 'debug', labelKey: 'tasks.exportPresetDebug', formats: ['json', 'txt'] },
 ] as const;
 
+interface RecentExport {
+  taskId: string;
+  filename: string;
+  format: string;
+  createdAt: string;
+}
+
 export function TasksPage() {
   const queryClient = useQueryClient();
   const { t, statusLabel } = useI18n();
@@ -44,6 +51,7 @@ export function TasksPage() {
   const [taskCollectionsById, setTaskCollectionsById] = useState<Record<string, string>>({});
   const [collectionFilter, setCollectionFilter] = useState('all');
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
@@ -90,6 +98,7 @@ export function TasksPage() {
   );
   const selectedCompletedTasks = selectedTasks.filter((task) => task.status === 'completed');
   const selectedExportFormats = Array.from(new Set(selectedCompletedTasks.flatMap((task) => getTaskOutputFormats(task)))).slice(0, 6);
+  const selectedRecentExports = selectedTask ? recentExports.filter((item) => item.taskId === selectedTask.id).slice(0, 5) : [];
   const allFilteredSelected = filteredTasks.length > 0 && filteredTasks.every((task) => selectedTaskIds.includes(task.id));
 
   const diagnosticsQuery = useQuery({
@@ -179,8 +188,16 @@ export function TasksPage() {
       link.rel = 'noopener noreferrer';
       link.download = '';
       link.click();
+      recordRecentExport(task, format);
     });
     toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+  };
+
+  const recordRecentExport = (task: TranscriptionTask, format: string) => {
+    setRecentExports((current) => [
+      { taskId: task.id, filename: task.filename, format, createdAt: new Date().toISOString() },
+      ...current,
+    ].slice(0, 20));
   };
 
   const downloadTaskFormat = async (task: TranscriptionTask, format: string) => {
@@ -193,6 +210,7 @@ export function TasksPage() {
       link.rel = 'noopener noreferrer';
       link.download = `${task.filename}.${format}`;
       link.click();
+      recordRecentExport(task, format);
     } finally {
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     }
@@ -506,11 +524,18 @@ export function TasksPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {outputFileFormats.map((format) => (
-                      <Button key={format} asChild size="sm" variant="secondary">
-                        <a href={apiClient.exportTaskUrl(selectedTask.id, format)}>
-                          <Download className="size-4" />
-                          {format.toUpperCase()}
-                        </a>
+                      <Button
+                        key={format}
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          downloadTaskFormat(selectedTask, format)
+                            .then(() => toast.info(t('toast.downloadStarted'), format.toUpperCase()))
+                            .catch((error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)));
+                        }}
+                      >
+                        <Download className="size-4" />
+                        {format.toUpperCase()}
                       </Button>
                     ))}
                     <Button
@@ -538,6 +563,21 @@ export function TasksPage() {
                   </div>
                 </div>
               )}
+              <div className="grid gap-2 rounded-xl border app-control p-3">
+                <h3 className="text-sm font-semibold text-app">{t('tasks.recentExports')}</h3>
+                {selectedRecentExports.length > 0 ? (
+                  <div className="grid gap-2">
+                    {selectedRecentExports.map((item, index) => (
+                      <div key={`${item.taskId}-${item.format}-${item.createdAt}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border app-border px-3 py-2 text-xs">
+                        <span className="truncate text-app">{item.filename}.{item.format}</span>
+                        <span className="shrink-0 text-app-muted">{formatDate(item.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-app-muted">{t('tasks.noRecentExports')}</p>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
