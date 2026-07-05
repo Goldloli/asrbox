@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
+import { Activity, Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -13,12 +13,14 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
   const toast = useToast();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
+  const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 
   const displayedText = useMemo(() => {
     if (!task) return '';
@@ -30,6 +32,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   useEffect(() => {
     setDraftText(displayedText);
     setIsEditing(false);
+    setWaveformStatus('idle');
   }, [displayedText, task?.id]);
 
   if (!task) {
@@ -90,6 +93,23 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       void audio.play().catch(() => undefined);
     } catch {
       // The media element may reject seeking before metadata is available.
+    }
+  };
+  const generateWaveform = async () => {
+    const canvas = waveformCanvasRef.current;
+    if (!canvas) return;
+
+    setWaveformStatus('loading');
+    try {
+      const response = await fetch(apiClient.taskAudioUrl(task.id));
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const audioContext = new AudioContext();
+      const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+      drawAudioWaveform(canvas, buffer);
+      await audioContext.close();
+      setWaveformStatus('ready');
+    } catch {
+      setWaveformStatus('error');
     }
   };
 
@@ -193,6 +213,23 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           <audio ref={audioRef} controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
             {t('transcript.audioUnsupported')}
           </audio>
+        </section>
+        <section className="grid gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.waveform')}</h2>
+            <Button variant="secondary" size="sm" onClick={generateWaveform} disabled={waveformStatus === 'loading'}>
+              <Activity className="size-4" />
+              {waveformStatus === 'loading' ? t('transcript.waveformLoading') : t('transcript.generateWaveform')}
+            </Button>
+          </div>
+          <div className="rounded-lg border app-control p-3">
+            <canvas ref={waveformCanvasRef} className="h-24 w-full" aria-label={t('transcript.waveform')} />
+            {waveformStatus !== 'ready' && (
+              <p className="text-center text-xs text-app-muted">
+                {waveformStatus === 'error' ? t('transcript.waveformUnavailable') : t('transcript.waveformHint')}
+              </p>
+            )}
+          </div>
         </section>
         <section className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -352,4 +389,41 @@ function formatSubtitleTime(seconds: number, format: 'srt' | 'vtt') {
 
 function padTime(value: number) {
   return value.toString().padStart(2, '0');
+}
+
+function drawAudioWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer) {
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = Math.max(320, Math.floor(canvas.clientWidth * pixelRatio));
+  const height = Math.floor(96 * pixelRatio);
+  const channelData = buffer.getChannelData(0);
+  const samplesPerPixel = Math.max(1, Math.floor(channelData.length / width));
+  const context = canvas.getContext('2d');
+  if (!context) return;
+
+  canvas.width = width;
+  canvas.height = height;
+  context.clearRect(0, 0, width, height);
+
+  const styles = getComputedStyle(document.documentElement);
+  context.strokeStyle = styles.getPropertyValue('--app-accent').trim() || '#facc15';
+  context.lineWidth = Math.max(1, pixelRatio);
+  context.beginPath();
+
+  for (let x = 0; x < width; x += 2) {
+    const start = x * samplesPerPixel;
+    const end = Math.min(start + samplesPerPixel, channelData.length);
+    let min = 1;
+    let max = -1;
+    for (let index = start; index < end; index += 1) {
+      const sample = channelData[index] ?? 0;
+      min = Math.min(min, sample);
+      max = Math.max(max, sample);
+    }
+    const top = ((1 - max) * height) / 2;
+    const bottom = ((1 - min) * height) / 2;
+    context.moveTo(x + 0.5, top);
+    context.lineTo(x + 0.5, bottom);
+  }
+
+  context.stroke();
 }

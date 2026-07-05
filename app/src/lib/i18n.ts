@@ -170,6 +170,11 @@ const dictionaries = {
     'transcript.noMatches': 'No matches',
     'transcript.audioPlayer': 'Audio player',
     'transcript.audioUnsupported': 'Your browser cannot play this audio.',
+    'transcript.waveform': 'Waveform',
+    'transcript.generateWaveform': 'Generate waveform',
+    'transcript.waveformLoading': 'Generating',
+    'transcript.waveformHint': 'Generate a waveform from the task audio when needed.',
+    'transcript.waveformUnavailable': 'Unable to generate waveform from this audio.',
     'transcript.subtitlePreview': 'Subtitle preview',
     'transcript.jumpToSegment': 'Jump to segment time',
 
@@ -506,6 +511,11 @@ const dictionaries = {
     'transcript.noMatches': '没有匹配项',
     'transcript.audioPlayer': '音频播放器',
     'transcript.audioUnsupported': '当前浏览器无法播放此音频。',
+    'transcript.waveform': '音频波形',
+    'transcript.generateWaveform': '生成波形',
+    'transcript.waveformLoading': '生成中',
+    'transcript.waveformHint': '需要查看时再从任务音频生成真实波形。',
+    'transcript.waveformUnavailable': '无法从该音频生成波形。',
     'transcript.subtitlePreview': '字幕预览',
     'transcript.jumpToSegment': '跳转到分段时间',
 
