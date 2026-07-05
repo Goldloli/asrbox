@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCcw, Scissors, Square, Star, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Clipboard, Download, FileAudio, Folder, FolderOpen, History, RotateCcw, Scissors, Square, Star, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -35,12 +35,24 @@ export function TasksPage() {
   const [taskTagsById, setTaskTagsById] = useState<Record<string, string[]>>({});
   const [favoriteTaskIds, setFavoriteTaskIds] = useState<string[]>([]);
   const [taskNotesById, setTaskNotesById] = useState<Record<string, string>>({});
+  const [taskCollectionsById, setTaskCollectionsById] = useState<Record<string, string>>({});
+  const [collectionFilter, setCollectionFilter] = useState('all');
+  const [newCollectionName, setNewCollectionName] = useState('');
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
   const tasks = tasksQuery.data?.items ?? [];
 
-  const filteredTasks = useMemo(() => (status === 'all' ? tasks : tasks.filter((task) => task.status === status)), [status, tasks]);
+  const collections = useMemo(
+    () => Array.from(new Set(Object.values(taskCollectionsById).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [taskCollectionsById],
+  );
+  const filteredTasks = useMemo(() => {
+    const statusTasks = status === 'all' ? tasks : tasks.filter((task) => task.status === status);
+    if (collectionFilter === 'all') return statusTasks;
+    if (collectionFilter === 'none') return statusTasks.filter((task) => !taskCollectionsById[task.id]);
+    return statusTasks.filter((task) => taskCollectionsById[task.id] === collectionFilter);
+  }, [collectionFilter, status, taskCollectionsById, tasks]);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
   const selectedTasks = useMemo(
     () => tasks.filter((task) => selectedTaskIds.includes(task.id)),
@@ -167,6 +179,26 @@ export function TasksPage() {
     ));
   };
 
+  const assignTaskCollection = (taskId: string, value: string) => {
+    setTaskCollectionsById((current) => {
+      const next = { ...current };
+      if (value === 'none') {
+        delete next[taskId];
+      } else {
+        next[taskId] = value;
+      }
+      return next;
+    });
+  };
+
+  const createCollectionForTask = (taskId: string) => {
+    const name = newCollectionName.trim();
+    if (!name) return;
+    assignTaskCollection(taskId, name);
+    setCollectionFilter(name);
+    setNewCollectionName('');
+  };
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel className="overflow-hidden">
@@ -186,6 +218,20 @@ export function TasksPage() {
         />
         <div className="grid gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-end">
+            <label className="grid gap-2 text-xs font-medium text-app-muted">
+              {t('tasks.collectionFilter')}
+              <Select
+                value={collectionFilter}
+                onValueChange={setCollectionFilter}
+                options={[
+                  { value: 'all', label: t('tasks.allCollections') },
+                  { value: 'none', label: t('tasks.noCollection') },
+                  ...collections.map((collection) => ({ value: collection, label: collection })),
+                ]}
+              />
+            </label>
+          </div>
           {filteredTasks.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border app-control px-3 py-2">
               <label className="flex items-center gap-2 text-xs text-app-muted">
@@ -253,6 +299,7 @@ export function TasksPage() {
                 selected={selectedTask?.id === task.id}
                 checked={selectedTaskIds.includes(task.id)}
                 favorited={favoriteTaskIds.includes(task.id)}
+                collection={taskCollectionsById[task.id]}
                 onToggle={() => toggleTaskSelection(task.id)}
                 onSelect={() => setSelectedTaskId(task.id)}
               />
@@ -316,6 +363,31 @@ export function TasksPage() {
                   placeholder={t('tasks.notesPlaceholder')}
                   className="min-h-24"
                 />
+              </div>
+              <div className="grid gap-3 rounded-xl border app-control p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-app">{t('tasks.collection')}</h3>
+                  <span className="text-xs text-app-muted">{t('tasks.collectionHint')}</span>
+                </div>
+                <Select
+                  value={taskCollectionsById[selectedTask.id] ?? 'none'}
+                  onValueChange={(value) => assignTaskCollection(selectedTask.id, value)}
+                  options={[
+                    { value: 'none', label: t('tasks.noCollection') },
+                    ...collections.map((collection) => ({ value: collection, label: collection })),
+                  ]}
+                />
+                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <Input
+                    value={newCollectionName}
+                    onChange={(event) => setNewCollectionName(event.target.value)}
+                    placeholder={t('tasks.collectionPlaceholder')}
+                  />
+                  <Button size="sm" variant="secondary" onClick={() => createCollectionForTask(selectedTask.id)}>
+                    <Folder className="size-4" />
+                    {t('tasks.createCollection')}
+                  </Button>
+                </div>
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               {selectedTask.status === 'completed' && (
@@ -481,6 +553,7 @@ function TaskRow({
   selected,
   checked,
   favorited,
+  collection,
   onToggle,
   onSelect,
 }: {
@@ -488,6 +561,7 @@ function TaskRow({
   selected: boolean;
   checked: boolean;
   favorited: boolean;
+  collection?: string;
   onToggle: () => void;
   onSelect: () => void;
 }) {
@@ -521,6 +595,12 @@ function TaskRow({
           <span>{formatDate(task.updated_at)}</span>
           <span>{formatPercent(task.progress)}</span>
         </div>
+        {collection && (
+          <div className="flex min-w-0 items-center gap-1 text-xs text-app-muted">
+            <Folder className="size-3.5 shrink-0" />
+            <span className="truncate">{collection}</span>
+          </div>
+        )}
       </button>
     </article>
   );
