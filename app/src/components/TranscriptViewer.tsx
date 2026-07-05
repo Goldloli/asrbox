@@ -15,6 +15,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
+  const [speakerLabelsByTask, setSpeakerLabelsByTask] = useState<Record<string, Record<number, string>>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,6 +27,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     if (!task) return '';
     return editedTextByTask[task.id] ?? task.text ?? '';
   }, [editedTextByTask, task]);
+  const speakerLabels = task ? speakerLabelsByTask[task.id] ?? {} : {};
   const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
   const subtitlePreview = useMemo(() => (task ? formatSubtitlePreview(task.segments, subtitleFormat) : ''), [subtitleFormat, task]);
 
@@ -111,6 +113,15 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     } catch {
       setWaveformStatus('error');
     }
+  };
+  const setSegmentSpeaker = (segmentId: number, value: string) => {
+    setSpeakerLabelsByTask((current) => ({
+      ...current,
+      [task.id]: {
+        ...(current[task.id] ?? {}),
+        [segmentId]: value,
+      },
+    }));
   };
 
   return (
@@ -268,7 +279,16 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                     {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
                   </button>
                   <div className="flex items-start gap-2">
-                    <p className="min-w-0 flex-1 text-sm leading-6 text-app-soft">{renderHighlightedText(segment.text, searchQuery)}</p>
+                    <div className="grid min-w-0 flex-1 gap-2">
+                      <Input
+                        value={speakerLabels[segment.id] ?? segment.speaker ?? ''}
+                        onChange={(event) => setSegmentSpeaker(segment.id, event.target.value)}
+                        placeholder={t('transcript.speakerPlaceholder')}
+                        className="h-8 max-w-40 text-xs"
+                        aria-label={t('transcript.speakerLabel')}
+                      />
+                      <p className="text-sm leading-6 text-app-soft">{renderHighlightedText(segment.text, searchQuery)}</p>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"

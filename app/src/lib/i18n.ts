@@ -177,6 +177,8 @@ const dictionaries = {
     'transcript.waveformUnavailable': 'Unable to generate waveform from this audio.',
     'transcript.subtitlePreview': 'Subtitle preview',
     'transcript.jumpToSegment': 'Jump to segment time',
+    'transcript.speakerLabel': 'Speaker label',
+    'transcript.speakerPlaceholder': 'Speaker',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -518,6 +520,8 @@ const dictionaries = {
     'transcript.waveformUnavailable': '无法从该音频生成波形。',
     'transcript.subtitlePreview': '字幕预览',
     'transcript.jumpToSegment': '跳转到分段时间',
+    'transcript.speakerLabel': '说话人标签',
+    'transcript.speakerPlaceholder': '说话人',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
