@@ -168,6 +168,8 @@ const dictionaries = {
     'transcript.replaceAll': 'Replace all',
     'transcript.replaceSaved': 'Replacement saved locally',
     'transcript.noMatches': 'No matches',
+    'transcript.audioPlayer': 'Audio player',
+    'transcript.audioUnsupported': 'Your browser cannot play this audio.',
     'transcript.subtitlePreview': 'Subtitle preview',
 
     'tasks.eyebrow': 'Queue',
@@ -501,6 +503,8 @@ const dictionaries = {
     'transcript.replaceAll': '全部替换',
     'transcript.replaceSaved': '替换已保存到本地编辑',
     'transcript.noMatches': '没有匹配项',
+    'transcript.audioPlayer': '音频播放器',
+    'transcript.audioUnsupported': '当前浏览器无法播放此音频。',
     'transcript.subtitlePreview': '字幕预览',
 
     'tasks.eyebrow': '队列',

@@ -178,6 +178,12 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           {hasLocalEdit && <p className="text-xs text-app-muted">{t('transcript.localEditHint')}</p>}
         </section>
         <section className="grid gap-3">
+          <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
+          <audio controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
+            {t('transcript.audioUnsupported')}
+          </audio>
+        </section>
+        <section className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
             <div className="flex rounded-lg border app-control p-1">

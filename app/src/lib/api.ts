@@ -415,6 +415,10 @@ class ApiClient {
     return `${this.baseUrl()}/tasks/${id}/export/${format}`;
   }
 
+  taskAudioUrl(id: string) {
+    return `${this.baseUrl()}/tasks/${id}/audio`;
+  }
+
   eventsUrl() {
     return `${this.baseUrl()}/events`;
   }
