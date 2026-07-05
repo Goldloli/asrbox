@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, RefreshCw, Save } from 'lucide-react';
+import { Download, RefreshCw, Save, Upload } from 'lucide-react';
 import { useSearch } from '@tanstack/react-router';
 import { apiClient } from '../lib/api';
 import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
@@ -50,6 +50,7 @@ export function SettingsPage() {
   const [vad, setVad] = useState(true);
   const [localConcurrency, setLocalConcurrency] = useState(1);
   const [providerConcurrency, setProviderConcurrency] = useState(2);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!settingsQuery.data) return;
@@ -85,6 +86,39 @@ export function SettingsPage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
+
+  const exportFrontendSettings = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion },
+      server: { serverUrl },
+    };
+    const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = 'asrbox-frontend-settings.json';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    toast.success(t('settings.exported'));
+  };
+
+  const importFrontendSettings = async (file: File) => {
+    try {
+      const payload = JSON.parse(await file.text()) as { ui?: Record<string, unknown>; server?: { serverUrl?: unknown } };
+      const ui = payload.ui ?? {};
+      if (ui.locale === 'zh' || ui.locale === 'en') setLocale(ui.locale);
+      if (ui.theme === 'system' || ui.theme === 'dark' || ui.theme === 'light') setTheme(ui.theme);
+      if (ui.density === 'comfortable' || ui.density === 'compact') setDensity(ui.density);
+      if (ui.sidebarMode === 'icons' || ui.sidebarMode === 'expanded') setSidebarMode(ui.sidebarMode);
+      if (ui.fontScale === 'standard' || ui.fontScale === 'large') setFontScale(ui.fontScale);
+      if (ui.reducedMotion === 'system' || ui.reducedMotion === 'reduce' || ui.reducedMotion === 'normal') setReducedMotion(ui.reducedMotion);
+      if (typeof payload.server?.serverUrl === 'string') setServerUrl(payload.server.serverUrl);
+      toast.success(t('settings.imported'));
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
 
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(normalizeSettingsTab(value))} className="grid gap-4">
@@ -170,6 +204,33 @@ export function SettingsPage() {
                   ]}
                 />
               </Field>
+            </div>
+            <div className="grid gap-3 rounded-xl border app-control p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-app">{t('settings.importExport')}</h3>
+                <p className="mt-1 text-sm text-app-muted">{t('settings.importExportDescription')}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={exportFrontendSettings}>
+                  <Download className="size-4" />
+                  {t('settings.exportSettings')}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => importInputRef.current?.click()}>
+                  <Upload className="size-4" />
+                  {t('settings.importSettings')}
+                </Button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    if (file) importFrontendSettings(file);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </div>
             </div>
           </div>
         </Panel>
