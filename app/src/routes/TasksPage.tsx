@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Download, FileAudio, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -16,6 +16,7 @@ import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
+const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 
 export function TasksPage() {
   const queryClient = useQueryClient();
@@ -110,6 +111,15 @@ export function TasksPage() {
       link.click();
     });
     toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+  };
+
+  const copyTaskText = async (task: TranscriptionTask) => {
+    try {
+      await navigator.clipboard.writeText(task.text ?? '');
+      toast.success(t('toast.copied'));
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
   };
 
   return (
@@ -235,6 +245,36 @@ export function TasksPage() {
                 <Metric label={t('tasks.progress')} value={formatPercent(selectedTask.progress)} />
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
+              {selectedTask.status === 'completed' && (
+                <div className="grid gap-3 rounded-xl border app-control p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-app">{t('tasks.outputFiles')}</h3>
+                    <Button size="sm" variant="secondary" onClick={() => copyTaskText(selectedTask)} disabled={!selectedTask.text}>
+                      <Clipboard className="size-4" />
+                      {t('tasks.copyFullText')}
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {outputFileFormats.map((format) => (
+                      <Button key={format} asChild size="sm" variant="secondary">
+                        <a href={apiClient.exportTaskUrl(selectedTask.id, format)}>
+                          <Download className="size-4" />
+                          {format.toUpperCase()}
+                        </a>
+                      </Button>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled
+                      title={t('tasks.openFileLocationUnavailable')}
+                    >
+                      <FolderOpen className="size-4" />
+                      {t('tasks.openFileLocation')}
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <ConfirmAction
                   title={t('confirm.cancelTitle')}
