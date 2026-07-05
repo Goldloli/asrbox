@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCcw, Scissors, Square, Trash2, Wand2 } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -9,7 +9,7 @@ import { Button, EmptyState, ErrorState, Panel, PanelHeader, Progress, Tabs, Tab
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
-import { TaskTimeline } from '../components/TaskTimeline';
+import { TaskTimeline, type TaskTimelineTab } from '../components/TaskTimeline';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
@@ -25,6 +25,8 @@ export function TasksPage() {
   const [status, setStatus] = useState<'all' | TaskStatus>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [detailTab, setDetailTab] = useState<'timeline' | 'transcript'>('timeline');
+  const [timelineTab, setTimelineTab] = useState<TaskTimelineTab>('diagnostics');
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
@@ -304,6 +306,17 @@ export function TasksPage() {
                   <RotateCcw className="size-4" />
                   {t('tasks.retryChunks')}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setDetailTab('timeline');
+                    setTimelineTab('versions');
+                  }}
+                >
+                  <History className="size-4" />
+                  {t('tasks.versions')}
+                </Button>
                 <ConfirmAction
                   title={t('confirm.cleanupTitle')}
                   description={t('confirm.cleanupTaskDescription')}
@@ -344,13 +357,19 @@ export function TasksPage() {
         {selectedTask && (
           <Panel className="overflow-hidden">
             <div className="p-5">
-              <Tabs defaultValue="timeline" className="grid gap-4">
+              <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'timeline' | 'transcript')} className="grid gap-4">
                 <TabsList>
                   <TabsTrigger value="timeline">{t('tasks.timeline')}</TabsTrigger>
                   <TabsTrigger value="transcript">{t('transcript.title')}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="timeline">
-                  <TaskTimeline diagnostics={diagnosticsQuery.data} logs={logsQuery.data} versions={versionsQuery.data} />
+                  <TaskTimeline
+                    diagnostics={diagnosticsQuery.data}
+                    logs={logsQuery.data}
+                    versions={versionsQuery.data}
+                    value={timelineTab}
+                    onValueChange={setTimelineTab}
+                  />
                 </TabsContent>
                 <TabsContent value="transcript">
                   <TranscriptViewer task={selectedTask} />
