@@ -16,6 +16,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
   const [speakerLabelsByTask, setSpeakerLabelsByTask] = useState<Record<string, Record<number, string>>>({});
+  const [segmentTimesByTask, setSegmentTimesByTask] = useState<Record<string, Record<number, { start: number; end: number }>>>({});
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,8 +29,16 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     return editedTextByTask[task.id] ?? task.text ?? '';
   }, [editedTextByTask, task]);
   const speakerLabels = task ? speakerLabelsByTask[task.id] ?? {} : {};
+  const segmentTimes = task ? segmentTimesByTask[task.id] ?? {} : {};
+  const displaySegments = useMemo(() => {
+    if (!task) return [];
+    return task.segments.map((segment) => ({
+      ...segment,
+      ...(segmentTimes[segment.id] ?? {}),
+    }));
+  }, [segmentTimes, task]);
   const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
-  const subtitlePreview = useMemo(() => (task ? formatSubtitlePreview(task.segments, subtitleFormat) : ''), [subtitleFormat, task]);
+  const subtitlePreview = useMemo(() => formatSubtitlePreview(displaySegments, subtitleFormat), [displaySegments, subtitleFormat]);
 
   useEffect(() => {
     setDraftText(displayedText);
@@ -120,6 +129,24 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       [task.id]: {
         ...(current[task.id] ?? {}),
         [segmentId]: value,
+      },
+    }));
+  };
+  const setSegmentTime = (segmentId: number, field: 'start' | 'end', value: string) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+
+    const segment = displaySegments.find((item) => item.id === segmentId);
+    if (!segment) return;
+
+    setSegmentTimesByTask((current) => ({
+      ...current,
+      [task.id]: {
+        ...(current[task.id] ?? {}),
+        [segmentId]: {
+          start: field === 'start' ? Math.max(0, numericValue) : segment.start,
+          end: field === 'end' ? Math.max(0, numericValue) : segment.end,
+        },
       },
     }));
   };
@@ -266,18 +293,40 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
           <div className="max-h-[36vh] overflow-auto rounded-lg border border-white/10">
-            {task.segments.length > 0 ? (
-              task.segments.map((segment) => (
-                <div key={segment.id} className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-3 last:border-b-0">
-                  <button
-                    type="button"
-                    className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
-                    onClick={() => seekToSegment(segment.start)}
-                    aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
-                    title={t('transcript.jumpToSegment')}
-                  >
-                    {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
-                  </button>
+            {displaySegments.length > 0 ? (
+              displaySegments.map((segment) => (
+                <div key={segment.id} className="grid grid-cols-[132px_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-3 last:border-b-0">
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+                      onClick={() => seekToSegment(segment.start)}
+                      aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
+                      title={t('transcript.jumpToSegment')}
+                    >
+                      {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
+                    </button>
+                    <div className="grid grid-cols-2 gap-1">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={segment.start}
+                        onChange={(event) => setSegmentTime(segment.id, 'start', event.target.value)}
+                        aria-label={t('transcript.timestampStart')}
+                        className="h-8 px-2 text-[11px]"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={segment.end}
+                        onChange={(event) => setSegmentTime(segment.id, 'end', event.target.value)}
+                        aria-label={t('transcript.timestampEnd')}
+                        className="h-8 px-2 text-[11px]"
+                      />
+                    </div>
+                  </div>
                   <div className="flex items-start gap-2">
                     <div className="grid min-w-0 flex-1 gap-2">
                       <Input
