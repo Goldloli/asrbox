@@ -162,6 +162,8 @@ const dictionaries = {
     'transcript.localEditSaved': 'Local edit saved',
     'transcript.saveLocalEdit': 'Save local edit',
     'transcript.copySegment': 'Copy segment',
+    'transcript.searchPlaceholder': 'Search in current transcript',
+    'transcript.matches': 'matches',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -488,6 +490,8 @@ const dictionaries = {
     'transcript.localEditSaved': '本地编辑已保存',
     'transcript.saveLocalEdit': '保存本地编辑',
     'transcript.copySegment': '复制分段',
+    'transcript.searchPlaceholder': '搜索当前转写',
+    'transcript.matches': '处匹配',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
