@@ -16,6 +16,8 @@ import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
+type DateFilter = 'all' | 'today' | '7d' | '30d';
+type ErrorFilter = 'all' | 'with' | 'without';
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 const exportPresets = [
   { key: 'subtitles', labelKey: 'tasks.exportPresetSubtitles', formats: ['srt', 'vtt', 'ass'] },
@@ -27,7 +29,11 @@ export function TasksPage() {
   const queryClient = useQueryClient();
   const { t, statusLabel } = useI18n();
   const toast = useToast();
-  const [status, setStatus] = useState<'all' | TaskStatus>('all');
+  const [statusFilters, setStatusFilters] = useState<TaskStatus[]>([]);
+  const [modelFilters, setModelFilters] = useState<string[]>([]);
+  const [providerFilters, setProviderFilters] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [errorFilter, setErrorFilter] = useState<ErrorFilter>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [detailTab, setDetailTab] = useState<'timeline' | 'transcript'>('timeline');
@@ -47,12 +53,36 @@ export function TasksPage() {
     () => Array.from(new Set(Object.values(taskCollectionsById).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [taskCollectionsById],
   );
+  const modelOptions = useMemo(
+    () => Array.from(new Set(tasks.map((task) => task.model_name).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
+    [tasks],
+  );
+  const providerOptions = useMemo(
+    () => Array.from(new Set(tasks.map((task) => task.provider_id ?? task.source).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [tasks],
+  );
   const filteredTasks = useMemo(() => {
-    const statusTasks = status === 'all' ? tasks : tasks.filter((task) => task.status === status);
-    if (collectionFilter === 'all') return statusTasks;
-    if (collectionFilter === 'none') return statusTasks.filter((task) => !taskCollectionsById[task.id]);
-    return statusTasks.filter((task) => taskCollectionsById[task.id] === collectionFilter);
-  }, [collectionFilter, status, taskCollectionsById, tasks]);
+    const now = Date.now();
+    return tasks.filter((task) => {
+      if (statusFilters.length > 0 && !statusFilters.includes(task.status)) return false;
+      if (collectionFilter === 'none' && taskCollectionsById[task.id]) return false;
+      if (collectionFilter !== 'all' && collectionFilter !== 'none' && taskCollectionsById[task.id] !== collectionFilter) return false;
+      if (modelFilters.length > 0 && (!task.model_name || !modelFilters.includes(task.model_name))) return false;
+      const provider = task.provider_id ?? task.source;
+      if (providerFilters.length > 0 && !providerFilters.includes(provider)) return false;
+      const hasError = Boolean(task.error || task.error_code);
+      if (errorFilter === 'with' && !hasError) return false;
+      if (errorFilter === 'without' && hasError) return false;
+      if (dateFilter !== 'all') {
+        const updatedAt = new Date(task.updated_at).getTime();
+        const ageDays = (now - updatedAt) / 86_400_000;
+        if (dateFilter === 'today' && ageDays >= 1) return false;
+        if (dateFilter === '7d' && ageDays > 7) return false;
+        if (dateFilter === '30d' && ageDays > 30) return false;
+      }
+      return true;
+    });
+  }, [collectionFilter, dateFilter, errorFilter, modelFilters, providerFilters, statusFilters, taskCollectionsById, tasks]);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
   const selectedTasks = useMemo(
     () => tasks.filter((task) => selectedTaskIds.includes(task.id)),
@@ -98,6 +128,18 @@ export function TasksPage() {
     setSelectedTaskIds((current) => (
       current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]
     ));
+  };
+
+  const toggleListValue = (values: string[], value: string) => (
+    values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
+  );
+
+  const toggleStatusFilter = (item: 'all' | TaskStatus) => {
+    if (item === 'all') {
+      setStatusFilters([]);
+      return;
+    }
+    setStatusFilters((current) => toggleListValue(current, item) as TaskStatus[]);
   };
 
   const toggleFilteredSelection = () => {
@@ -209,7 +251,12 @@ export function TasksPage() {
           action={
             <div className="hidden gap-2 lg:flex">
               {statuses.map((item) => (
-                <Button key={item} size="sm" variant={status === item ? 'primary' : 'secondary'} onClick={() => setStatus(item)}>
+                <Button
+                  key={item}
+                  size="sm"
+                  variant={(item === 'all' ? statusFilters.length === 0 : statusFilters.includes(item)) ? 'primary' : 'secondary'}
+                  onClick={() => toggleStatusFilter(item)}
+                >
                   {statusLabel(item)}
                 </Button>
               ))}
@@ -218,19 +265,62 @@ export function TasksPage() {
         />
         <div className="grid gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,260px)_1fr] sm:items-end">
-            <label className="grid gap-2 text-xs font-medium text-app-muted">
-              {t('tasks.collectionFilter')}
-              <Select
-                value={collectionFilter}
-                onValueChange={setCollectionFilter}
-                options={[
-                  { value: 'all', label: t('tasks.allCollections') },
-                  { value: 'none', label: t('tasks.noCollection') },
-                  ...collections.map((collection) => ({ value: collection, label: collection })),
-                ]}
+          <div className="grid gap-3 rounded-xl border app-control p-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <label className="grid gap-2 text-xs font-medium text-app-muted">
+                {t('tasks.collectionFilter')}
+                <Select
+                  value={collectionFilter}
+                  onValueChange={setCollectionFilter}
+                  options={[
+                    { value: 'all', label: t('tasks.allCollections') },
+                    { value: 'none', label: t('tasks.noCollection') },
+                    ...collections.map((collection) => ({ value: collection, label: collection })),
+                  ]}
+                />
+              </label>
+              <label className="grid gap-2 text-xs font-medium text-app-muted">
+                {t('tasks.dateFilter')}
+                <Select
+                  value={dateFilter}
+                  onValueChange={(value) => setDateFilter(value as DateFilter)}
+                  options={[
+                    { value: 'all', label: t('tasks.dateAll') },
+                    { value: 'today', label: t('tasks.dateToday') },
+                    { value: '7d', label: t('tasks.dateLast7') },
+                    { value: '30d', label: t('tasks.dateLast30') },
+                  ]}
+                />
+              </label>
+              <label className="grid gap-2 text-xs font-medium text-app-muted">
+                {t('tasks.errorFilter')}
+                <Select
+                  value={errorFilter}
+                  onValueChange={(value) => setErrorFilter(value as ErrorFilter)}
+                  options={[
+                    { value: 'all', label: t('tasks.errorAll') },
+                    { value: 'with', label: t('tasks.withErrors') },
+                    { value: 'without', label: t('tasks.withoutErrors') },
+                  ]}
+                />
+              </label>
+            </div>
+            {modelOptions.length > 0 && (
+              <FilterCheckboxGroup
+                title={t('tasks.modelFilter')}
+                options={modelOptions}
+                values={modelFilters}
+                onToggle={(value) => setModelFilters((current) => toggleListValue(current, value))}
               />
-            </label>
+            )}
+            {providerOptions.length > 0 && (
+              <FilterCheckboxGroup
+                title={t('tasks.platformFilter')}
+                options={providerOptions}
+                values={providerFilters}
+                onToggle={(value) => setProviderFilters((current) => toggleListValue(current, value))}
+              />
+            )}
           </div>
           {filteredTasks.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border app-control px-3 py-2">
@@ -611,6 +701,37 @@ function Metric({ label, value }: { label: string; value?: string | null }) {
     <div className="rounded-lg border app-control px-3 py-2">
       <p className="text-app-muted">{label}</p>
       <p className="mt-1 truncate text-app">{value || '-'}</p>
+    </div>
+  );
+}
+
+function FilterCheckboxGroup({
+  title,
+  options,
+  values,
+  onToggle,
+}: {
+  title: string;
+  options: string[];
+  values: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <p className="text-xs font-medium text-app-muted">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <label key={option} className="flex h-8 items-center gap-2 rounded-lg border app-control px-3 text-xs text-app-soft">
+            <input
+              type="checkbox"
+              checked={values.includes(option)}
+              onChange={() => onToggle(option)}
+              className="size-3.5 rounded border app-control accent-[var(--app-accent)]"
+            />
+            <span className="max-w-44 truncate">{option}</span>
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
