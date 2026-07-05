@@ -5,6 +5,7 @@ import { useI18n } from '../lib/i18n';
 import { matchesShortcut } from '../lib/shortcuts';
 import { useUiStore } from '../stores/uiStore';
 import { Button, Dialog, DialogContent, EmptyState, Input } from './weiui';
+import { ResultItemContent, resultItemClassName } from './ResultItem';
 
 type CommandItem = {
   id: string;
@@ -118,16 +119,10 @@ export function CommandPalette() {
                 <Button
                   key={command.id}
                   variant="ghost"
-                  className="h-auto justify-start rounded-xl border app-control px-3 py-3 text-left hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)]"
+                  className={`h-auto justify-start ${resultItemClassName}`}
                   onClick={() => runCommand(command)}
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--app-control-strong)] text-app-accent">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-app">{command.label}</span>
-                    <span className="mt-0.5 block truncate text-xs text-app-muted">{command.description}</span>
-                  </span>
+                  <ResultItemContent icon={<Icon className="size-4" />} title={command.label} description={command.description} />
                 </Button>
               );
             })}

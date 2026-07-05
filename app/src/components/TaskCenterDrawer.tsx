@@ -1,10 +1,11 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { DownloadCloud, ListChecks, X } from 'lucide-react';
-import { Badge, Button, Progress } from './weiui';
+import { DownloadCloud, FileAudio, ListChecks, X } from 'lucide-react';
+import { Button, Progress } from './weiui';
 import { getActiveDownloadItems, getActiveTaskItems, type ModelProgress, type TranscriptionTask } from '../lib/api';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatPercent } from '../lib/format';
 import { useI18n } from '../lib/i18n';
+import { ResultItemContent } from './ResultItem';
 
 export function TaskCenterDrawer() {
   const { t, statusLabel } = useI18n();
@@ -73,14 +74,16 @@ function TaskSection({ title, empty, children }: { title: string; empty: string;
 function TaskCenterTask({ task, statusLabel }: { task: TranscriptionTask; statusLabel: string }) {
   return (
     <div className="grid gap-2 rounded-lg border app-border bg-[var(--app-control)] px-3 py-3">
-      <div className="flex min-w-0 items-center justify-between gap-3 text-sm">
-        <span className="truncate font-medium text-app">{task.filename}</span>
-        <Badge tone={task.status === 'completed' ? 'success' : task.status === 'failed' || task.status === 'failed_resumable' ? 'danger' : 'warning'}>
-          {statusLabel}
-        </Badge>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <ResultItemContent
+          icon={<FileAudio className="size-4" />}
+          title={task.filename}
+          description={`${task.model_name ?? task.provider_id ?? task.source} · ${formatPercent(task.progress)}`}
+          meta={statusLabel}
+          tone={task.status === 'completed' ? 'success' : task.status === 'failed' || task.status === 'failed_resumable' ? 'danger' : 'warning'}
+        />
       </div>
       <Progress value={task.progress} />
-      <p className="truncate text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</p>
     </div>
   );
 }
@@ -88,17 +91,16 @@ function TaskCenterTask({ task, statusLabel }: { task: TranscriptionTask; status
 function TaskCenterDownload({ download }: { download: ModelProgress }) {
   return (
     <div className="grid gap-2 rounded-lg border app-border bg-[var(--app-control)] px-3 py-3">
-      <div className="flex min-w-0 items-center justify-between gap-3 text-sm">
-        <span className="truncate font-medium text-app">{download.model_name}</span>
-        <Badge tone={download.status === 'error' ? 'danger' : download.status === 'complete' ? 'success' : 'warning'}>
-          {download.status}
-        </Badge>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <ResultItemContent
+          icon={<DownloadCloud className="size-4" />}
+          title={download.model_name}
+          description={download.filename ?? download.source ?? formatPercent(download.progress)}
+          meta={download.status}
+          tone={download.status === 'error' ? 'danger' : download.status === 'complete' ? 'success' : 'warning'}
+        />
       </div>
       <Progress value={download.progress} />
-      <p className="truncate text-xs text-app-muted">
-        <DownloadCloud className="mr-1 inline size-3" />
-        {download.filename ?? download.source ?? formatPercent(download.progress)}
-      </p>
     </div>
   );
 }
