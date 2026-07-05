@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import type { TaskDiagnostic, TaskLogEntry, TaskVersion } from '../lib/api';
+import type { TaskDiagnostic, TaskLogEntry, TaskQuality, TaskVersion } from '../lib/api';
 import { formatDate } from '../lib/format';
-import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from './weiui';
+import { Badge, Button, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from './weiui';
 import { useI18n } from '../lib/i18n';
 
-export type TaskTimelineTab = 'diagnostics' | 'logs' | 'versions';
+export type TaskTimelineTab = 'diagnostics' | 'logs' | 'versions' | 'quality';
 
 export function TaskTimeline({
   diagnostics,
   logs,
   versions,
+  quality,
   currentText,
   value,
   onValueChange,
@@ -17,6 +18,7 @@ export function TaskTimeline({
   diagnostics?: TaskDiagnostic[];
   logs?: TaskLogEntry[];
   versions?: TaskVersion[];
+  quality?: TaskQuality;
   currentText?: string | null;
   value?: TaskTimelineTab;
   onValueChange?: (value: TaskTimelineTab) => void;
@@ -33,6 +35,7 @@ export function TaskTimeline({
         <TabsTrigger value="diagnostics">{t('tasks.diagnostics')}</TabsTrigger>
         <TabsTrigger value="logs">{t('tasks.logs')}</TabsTrigger>
         <TabsTrigger value="versions">{t('tasks.versions')}</TabsTrigger>
+        <TabsTrigger value="quality">{t('tasks.quality')}</TabsTrigger>
       </TabsList>
       <TabsContent value="diagnostics">
         <TimelineList
@@ -59,7 +62,61 @@ export function TaskTimeline({
       <TabsContent value="versions">
         <VersionHistoryList versions={versions ?? []} currentText={currentText ?? ''} />
       </TabsContent>
+      <TabsContent value="quality">
+        <QualityPanel quality={quality} />
+      </TabsContent>
     </Tabs>
+  );
+}
+
+function QualityPanel({ quality }: { quality?: TaskQuality }) {
+  const { t } = useI18n();
+
+  if (!quality) return <p className="rounded-lg border app-border px-4 py-8 text-center text-sm text-app-muted">{t('tasks.noQuality')}</p>;
+
+  const warnings = quality.warnings ?? [];
+  const metrics = Object.entries(quality.metrics ?? {});
+  const overlapCount = Number(quality.metrics?.overlap_count ?? 0);
+  const invalidTimeCount = Number(quality.metrics?.invalid_time_count ?? 0);
+  const score = Math.max(0, Math.min(100, 100 - warnings.length * 18 - overlapCount * 8 - invalidTimeCount * 12));
+
+  return (
+    <div className="grid gap-3">
+      <div className="rounded-lg border app-control p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-app">{t('tasks.qualityScore')}</h4>
+          <Badge tone={warnings.length > 0 ? 'warning' : 'success'}>{score}</Badge>
+        </div>
+        <Progress value={score} />
+      </div>
+
+      <div className="rounded-lg border app-control p-3">
+        <h4 className="mb-2 text-sm font-semibold text-app">{t('tasks.qualityWarnings')}</h4>
+        {warnings.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {warnings.map((warning) => <Badge key={warning} tone="warning">{warning}</Badge>)}
+          </div>
+        ) : (
+          <p className="text-sm text-app-muted">{t('tasks.noQualityWarnings')}</p>
+        )}
+      </div>
+
+      <div className="rounded-lg border app-control p-3">
+        <h4 className="mb-2 text-sm font-semibold text-app">{t('tasks.qualityMetrics')}</h4>
+        {metrics.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {metrics.map(([key, value]) => (
+              <div key={key} className="rounded-lg border app-border px-3 py-2">
+                <p className="truncate text-app-muted">{key}</p>
+                <p className="mt-1 truncate text-app">{String(value)}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-app-muted">{t('tasks.noQuality')}</p>
+        )}
+      </div>
+    </div>
   );
 }
 

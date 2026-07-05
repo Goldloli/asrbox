@@ -10,6 +10,7 @@ export const queryKeys = {
   taskDiagnostics: (id: string) => ['tasks', id, 'diagnostics'] as const,
   taskLogs: (id: string) => ['tasks', id, 'logs'] as const,
   taskVersions: (id: string) => ['tasks', id, 'versions'] as const,
+  taskQuality: (id: string) => ['tasks', id, 'quality'] as const,
   models: ['models'] as const,
   activeDownloads: ['models', 'active-downloads'] as const,
   modelStorage: ['models', 'storage'] as const,
