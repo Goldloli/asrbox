@@ -5,7 +5,7 @@ import { ArchiveX, Clipboard, Download, FileAudio, FolderOpen, History, RotateCc
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Button, EmptyState, ErrorState, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -32,6 +32,7 @@ export function TasksPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [detailTab, setDetailTab] = useState<'timeline' | 'transcript'>('timeline');
   const [timelineTab, setTimelineTab] = useState<TaskTimelineTab>('diagnostics');
+  const [taskTagsById, setTaskTagsById] = useState<Record<string, string[]>>({});
   const [batchBusy, setBatchBusy] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
@@ -151,6 +152,11 @@ export function TasksPage() {
     } catch (error) {
       toast.error(t('toast.actionFailed'), toastErrorMessage(error));
     }
+  };
+
+  const setTaskTags = (taskId: string, value: string) => {
+    const tags = value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
+    setTaskTagsById((current) => ({ ...current, [taskId]: Array.from(new Set(tags)) }));
   };
 
   return (
@@ -274,6 +280,24 @@ export function TasksPage() {
                 <Metric label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
                 <Metric label={t('tasks.created')} value={formatDate(selectedTask.created_at)} />
                 <Metric label={t('tasks.progress')} value={formatPercent(selectedTask.progress)} />
+              </div>
+              <div className="grid gap-2 rounded-xl border app-control p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-app">{t('tasks.tags')}</h3>
+                  <span className="text-xs text-app-muted">{t('tasks.tagsHint')}</span>
+                </div>
+                <Input
+                  value={(taskTagsById[selectedTask.id] ?? []).join(', ')}
+                  onChange={(event) => setTaskTags(selectedTask.id, event.target.value)}
+                  placeholder={t('tasks.tagsPlaceholder')}
+                />
+                <div className="flex min-h-6 flex-wrap gap-2">
+                  {(taskTagsById[selectedTask.id] ?? []).length > 0 ? (
+                    taskTagsById[selectedTask.id].map((tag) => <Badge key={tag} tone="accent">{tag}</Badge>)
+                  ) : (
+                    <span className="text-xs text-app-muted">{t('tasks.noTags')}</span>
+                  )}
+                </div>
               </div>
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               {selectedTask.status === 'completed' && (
