@@ -17,6 +17,7 @@ function AppRuntime() {
 function ThemeRuntime() {
   const theme = useUiStore((state) => state.theme);
   const density = useUiStore((state) => state.density);
+  const fontScale = useUiStore((state) => state.fontScale);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -34,6 +35,10 @@ function ThemeRuntime() {
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);
   }, [density]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-scale', fontScale);
+  }, [fontScale]);
 
   return null;
 }
