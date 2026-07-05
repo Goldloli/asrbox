@@ -353,16 +353,6 @@ const dictionaries = {
     'providers.saveProvider': 'Save provider',
     'providers.createProvider': 'Create provider',
 
-    'exports.eyebrow': 'Output',
-    'exports.title': 'Exports',
-    'exports.description': 'Download generated transcript artifacts from completed tasks.',
-    'exports.search': 'Search completed tasks',
-    'exports.empty': 'No completed exports',
-    'exports.emptyBody': 'Completed transcription tasks will expose the formats selected when the task was created.',
-    'exports.waiting': 'Waiting for output',
-    'exports.waitingDescription': 'task(s) still processing',
-    'exports.noPending': 'No pending export blockers.',
-
     'settings.eyebrow': 'Preferences',
     'settings.title': 'Settings',
     'settings.description': 'Configure the web client and default ASR behavior.',
@@ -787,16 +777,6 @@ const dictionaries = {
     'providers.keepKey': '留空表示保留已保存的 Key。',
     'providers.saveProvider': '保存平台',
     'providers.createProvider': '创建平台',
-
-    'exports.eyebrow': '输出',
-    'exports.title': '导出',
-    'exports.description': '下载已完成任务生成的转写文件。',
-    'exports.search': '搜索已完成任务',
-    'exports.empty': '暂无可导出的任务',
-    'exports.emptyBody': '转写完成后，会按任务创建时选择的格式提供下载。',
-    'exports.waiting': '等待输出',
-    'exports.waitingDescription': '个任务仍在处理中',
-    'exports.noPending': '暂无等待导出的任务。',
 
     'settings.eyebrow': '偏好',
     'settings.title': '设置',

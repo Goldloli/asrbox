@@ -29,7 +29,7 @@ const providersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/providers',
   beforeLoad: () => {
-    throw redirect({ to: '/settings' });
+    throw redirect({ to: '/settings', search: { tab: 'providers' } });
   },
 });
 
