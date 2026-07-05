@@ -27,7 +27,7 @@ export function MobileNav() {
             to={item.to}
             aria-label={item.brand ? t('nav.home') : t(item.labelKey)}
             className={cn(
-              'grid min-w-0 place-items-center gap-1 px-2 py-2 text-[11px] font-medium text-app-muted transition',
+              'grid min-w-0 place-items-center gap-1 px-2 py-2 text-[11px] font-medium text-app-muted transition focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30',
               active && 'text-[var(--app-accent-text)]',
             )}
           >

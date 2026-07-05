@@ -13,6 +13,7 @@ const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
+const appVersion = 'v0.1.0';
 
 export function Sidebar() {
   const matchRoute = useMatchRoute();
@@ -57,7 +58,7 @@ export function Sidebar() {
                 <Link
                   to={item.to}
                   className={cn(
-                    'rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app',
+                    'rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30',
                     expanded ? 'flex h-11 items-center gap-3 px-3' : 'grid size-11 place-items-center',
                     active
                       ? 'border-[var(--app-accent)] bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] shadow-inner shadow-[var(--app-shadow)]'
@@ -73,12 +74,17 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className={cn(
-        'mb-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.22em] text-app-faint',
-        !expanded && 'rotate-[-90deg]',
-      )}>
-        ASRbox
-      </div>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={cn(
+            'mb-1 rounded-lg border app-control px-2 py-1.5 text-[10px] font-semibold uppercase text-app-muted',
+            expanded ? 'text-center tracking-[0.04em]' : 'w-11 text-center tracking-[0.16em]',
+          )}>
+            {expanded ? `${appVersion} · Local` : 'v0.1'}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>{`ASRbox ${appVersion}`}</TooltipContent>
+      </Tooltip>
     </aside>
   );
 }
