@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, DownloadCloud, RefreshCw } from 'lucide-react';
-import { apiClient, getActiveDownloadItems } from '../lib/api';
+import { BarChart3, Database, DownloadCloud, RefreshCw } from 'lucide-react';
+import { apiClient, getActiveDownloadItems, type ModelStatus } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { ModelDownloadCard } from '../components/ModelDownloadCard';
@@ -83,6 +83,7 @@ export function ModelsPage() {
   const guideRecommendedModel =
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && !model.downloaded) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
+  const benchmarkModels = visibleModels.slice(0, 4);
   const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
     { value: 'recommended', label: t('models.categoryRecommended') },
     { value: 'pinned', label: t('models.categoryPinned') },
@@ -215,6 +216,21 @@ export function ModelsPage() {
         </Panel>
 
         <Panel className="overflow-hidden">
+          <PanelHeader eyebrow={t('models.benchmarkEyebrow')} title={t('models.benchmarkTitle')} description={t('models.benchmarkBody')} />
+          <div className="grid gap-3 p-5">
+            {benchmarkModels.map((model) => (
+              <BenchmarkCard key={model.model_name} model={model} />
+            ))}
+            {benchmarkModels.length === 0 && (
+              <div className="flex items-center gap-2 rounded-lg border app-control px-3 py-3 text-sm text-app-muted">
+                <BarChart3 className="size-4" />
+                {t('models.noBenchmarkModels')}
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        <Panel className="overflow-hidden">
           <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={`${downloads.length} ${locale === 'zh' ? '进行中' : 'running'}`} />
           <div className="grid gap-3 p-5">
             {downloads.map((download) => (
@@ -285,4 +301,50 @@ function StorageMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 truncate text-sm font-medium text-zinc-100">{value}</p>
     </div>
   );
+}
+
+function BenchmarkCard({ model }: { model: ModelStatus }) {
+  const { t } = useI18n();
+  const scores = modelBenchmarkScores(model);
+
+  return (
+    <article className="grid gap-3 rounded-xl border app-control px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold text-app">{model.display_name}</h3>
+          <p className="mt-1 text-xs text-app-muted">{model.engine} · {model.model_size}</p>
+        </div>
+        <Badge tone="neutral">{t('models.benchmarkEstimated')}</Badge>
+      </div>
+      <BenchmarkBar label={t('models.benchmarkSpeed')} value={scores.speed} />
+      <BenchmarkBar label={t('models.benchmarkAccuracy')} value={scores.accuracy} />
+      <BenchmarkBar label={t('models.benchmarkStorage')} value={scores.storage} />
+    </article>
+  );
+}
+
+function BenchmarkBar({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex justify-between gap-3 text-xs text-app-muted">
+        <span>{label}</span>
+        <span>{value}</span>
+      </div>
+      <Progress value={value} />
+    </div>
+  );
+}
+
+function modelBenchmarkScores(model: ModelStatus) {
+  const size = model.model_size.toLowerCase();
+  const sizeSpeed = size.includes('tiny') ? 95 : size.includes('base') ? 86 : size.includes('small') ? 74 : size.includes('medium') ? 58 : 42;
+  const runtimeBoost = model.runtime.toLowerCase().includes('mlx') || model.engine.toLowerCase().includes('faster') ? 10 : 0;
+  const accuracy = size.includes('large') ? 92 : size.includes('medium') ? 78 : size.includes('small') ? 64 : 52;
+  const storage = Math.max(20, Math.min(95, Math.round(100 - model.size_mb / 45)));
+
+  return {
+    speed: Math.min(98, sizeSpeed + runtimeBoost),
+    accuracy: Math.min(98, accuracy + (model.supports_word_timestamps ? 3 : 0) + (model.supports_diarization ? 3 : 0)),
+    storage,
+  };
 }
