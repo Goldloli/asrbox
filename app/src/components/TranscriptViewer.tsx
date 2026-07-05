@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clipboard, Download, FileText, Pencil, Save, Search, X } from 'lucide-react';
+import { Clipboard, Download, FileText, Pencil, Replace, Save, Search, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -16,6 +16,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
 
   const displayedText = useMemo(() => {
     if (!task) return '';
@@ -50,6 +51,21 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     setEditedTextByTask((current) => ({ ...current, [task.id]: draftText }));
     setIsEditing(false);
     toast.success(t('transcript.localEditSaved'));
+  };
+  const replaceAllMatches = () => {
+    if (!searchQuery.trim()) return;
+    if (matchCount === 0) {
+      toast.info(t('transcript.noMatches'));
+      return;
+    }
+
+    const nextText = replaceTextMatches(displayedText, searchQuery, replaceQuery);
+    setEditedTextByTask((current) => ({ ...current, [task.id]: nextText }));
+    setDraftText(nextText);
+    setIsEditing(false);
+    setSearchQuery('');
+    setReplaceQuery('');
+    toast.success(t('transcript.replaceSaved'), `${matchCount} ${t('transcript.matches')}`);
   };
   const copyText = async (text: string) => {
     try {
@@ -129,6 +145,16 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                 className="pl-9"
               />
             </div>
+            <Input
+              value={replaceQuery}
+              onChange={(event) => setReplaceQuery(event.target.value)}
+              placeholder={t('transcript.replacePlaceholder')}
+              className="min-w-0 flex-1 sm:min-w-48"
+            />
+            <Button variant="secondary" size="sm" onClick={replaceAllMatches} disabled={!searchQuery.trim() || matchCount === 0}>
+              <Replace className="size-4" />
+              {t('transcript.replaceAll')}
+            </Button>
             {searchQuery.trim() && (
               <Badge tone={matchCount > 0 ? 'accent' : 'neutral'}>
                 {matchCount} {t('transcript.matches')}
@@ -228,4 +254,26 @@ function renderHighlightedText(text: string, query: string) {
       <span key={partIndex}>{part.text}</span>
     )
   ));
+}
+
+function replaceTextMatches(text: string, query: string, replacement: string) {
+  const needle = query.trim();
+  if (!needle) return text;
+
+  const haystack = text.toLowerCase();
+  const normalizedNeedle = needle.toLowerCase();
+  const pieces: string[] = [];
+  let index = 0;
+
+  while (index < text.length) {
+    const found = haystack.indexOf(normalizedNeedle, index);
+    if (found === -1) {
+      pieces.push(text.slice(index));
+      break;
+    }
+    pieces.push(text.slice(index, found), replacement);
+    index = found + needle.length;
+  }
+
+  return pieces.join('');
 }
