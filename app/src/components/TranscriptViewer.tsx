@@ -103,6 +103,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     setIsEditing(false);
   };
   const seekToSegment = (seconds: number) => {
+    openAudio({ taskId: task.id, url: apiClient.taskAudioUrl(task.id), title: task.filename, startAt: seconds });
     const audio = audioRef.current;
     if (!audio) return;
     try {
