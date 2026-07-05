@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { FileAudio, Files, Play, RefreshCw, ShieldAlert } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
@@ -41,6 +42,7 @@ export function TranscribePage() {
   const tasks = tasksQuery.data?.items ?? [];
   const models = modelsQuery.data?.models ?? [];
   const providers = providersQuery.data?.items ?? [];
+  const recentTasks = tasks.slice(0, 5);
 
   useEffect(() => {
     if (!selectedTaskId && tasks[0]) setSelectedTaskId(tasks[0].id);
@@ -203,9 +205,16 @@ export function TranscribePage() {
           )}
 
           <div className="grid gap-2">
-            <h2 className="text-sm font-semibold text-zinc-100">{t('transcribe.recentTasks')}</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-zinc-100">{t('transcribe.recentTasks')}</h2>
+              {tasks.length > recentTasks.length && (
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/tasks">{t('transcribe.viewAllTasks')}</Link>
+                </Button>
+              )}
+            </div>
             <div className="grid max-h-[36vh] gap-2 overflow-auto pr-1">
-              {tasks.map((task) => (
+              {recentTasks.map((task) => (
                 <button
                   key={task.id}
                   className={cn(
