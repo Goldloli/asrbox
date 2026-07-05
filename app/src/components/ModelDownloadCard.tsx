@@ -36,12 +36,12 @@ export function ModelDownloadCard({
       <div className="grid gap-4 p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-amber-200">
+            <div className="grid size-10 shrink-0 place-items-center rounded-lg border app-control text-app-accent">
               <HardDrive className="size-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-zinc-100">{model.display_name}</h2>
-              <p className="mt-1 text-xs text-zinc-500">
+              <h2 className="truncate text-sm font-semibold text-app">{model.display_name}</h2>
+              <p className="mt-1 text-xs text-app-muted">
                 {model.engine} · {model.runtime} · {model.model_size} · {model.size_mb} MB
               </p>
             </div>
@@ -62,15 +62,15 @@ export function ModelDownloadCard({
             </Badge>
           </div>
         </div>
-        <p className="text-sm leading-6 text-zinc-300">{description}</p>
+        <p className="text-sm leading-6 text-app-soft">{description}</p>
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-            <p className="text-zinc-600">{t('models.bestFor')}</p>
-            <p className="mt-1 text-zinc-200">{bestFor}</p>
+          <div className="rounded-lg border app-control px-3 py-2">
+            <p className="text-app-muted">{t('models.bestFor')}</p>
+            <p className="mt-1 text-app">{bestFor}</p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-            <p className="text-zinc-600">{t('models.runtime')}</p>
-            <p className="mt-1 text-zinc-200">{model.runtime}</p>
+          <div className="rounded-lg border app-control px-3 py-2">
+            <p className="text-app-muted">{t('models.runtime')}</p>
+            <p className="mt-1 text-app">{model.runtime}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -81,7 +81,7 @@ export function ModelDownloadCard({
         </div>
         {(model.downloading || progress) && (
           <div className="grid gap-2">
-            <div className="flex justify-between gap-3 text-xs text-zinc-500">
+            <div className="flex justify-between gap-3 text-xs text-app-muted">
               <span className="truncate">{progress?.filename ?? progress?.status ?? t('common.downloading')}</span>
               <span>{formatPercent(activeProgress)}</span>
             </div>
@@ -89,7 +89,7 @@ export function ModelDownloadCard({
           </div>
         )}
         {(model.compatibility_error || model.download_error || model.error || progress?.error) && (
-          <p className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+          <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
             {progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error}
           </p>
         )}

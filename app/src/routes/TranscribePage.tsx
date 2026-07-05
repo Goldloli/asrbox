@@ -175,16 +175,16 @@ export function TranscribePage() {
           }
         />
         <div className="grid gap-4 p-5">
-          <label className="grid min-h-36 cursor-pointer place-items-center rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-6 text-center transition hover:border-amber-300/40 hover:bg-amber-300/5">
+          <label className="grid min-h-36 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-6 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)]">
             <div className="grid justify-items-center gap-3">
-              <div className="grid size-12 place-items-center rounded-xl border border-white/10 bg-zinc-950 text-amber-200">
+              <div className="grid size-12 place-items-center rounded-xl border app-control text-app-accent">
                 {files.length > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
               </div>
               <div>
-                <p className="text-sm font-medium text-zinc-100">
+                <p className="text-sm font-medium text-app">
                   {files.length ? `${files.length} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
                 </p>
-                <p className="mt-1 text-xs text-zinc-500">{files[0]?.name ?? t('transcribe.fileHint')}</p>
+                <p className="mt-1 text-xs text-app-muted">{files[0]?.name ?? t('transcribe.fileHint')}</p>
               </div>
             </div>
             <input
@@ -212,9 +212,9 @@ export function TranscribePage() {
           </div>
 
           {preflight && (
-            <div className="grid gap-3 rounded-xl border border-white/10 bg-zinc-950/50 p-4">
+            <div className="grid gap-3 rounded-xl border app-control p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-zinc-100">{preflight.filename}</span>
+                <span className="text-sm font-medium text-app">{preflight.filename}</span>
                 <Badge tone={preflight.supported_format && preflight.has_audio_stream ? 'success' : 'danger'}>
                   {preflight.supported_format && preflight.has_audio_stream ? t('common.ready') : t('common.blocked')}
                 </Badge>
@@ -228,7 +228,7 @@ export function TranscribePage() {
               {preflight.warnings.length > 0 && (
                 <div className="grid gap-1">
                   {preflight.warnings.map((warning) => (
-                    <p key={warning} className="text-xs text-amber-200">{warning}</p>
+                    <p key={warning} className="text-xs text-app-accent">{warning}</p>
                   ))}
                 </div>
               )}
@@ -236,8 +236,8 @@ export function TranscribePage() {
           )}
 
           {readinessIssues.length > 0 && (
-            <div className="grid gap-1 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
-              {readinessIssues.slice(0, 4).map((issue) => <p key={issue} className="text-xs text-amber-100">{issue}</p>)}
+            <div className="grid gap-1 rounded-xl border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] p-4">
+              {readinessIssues.slice(0, 4).map((issue) => <p key={issue} className="text-xs text-app-accent">{issue}</p>)}
             </div>
           )}
 
@@ -270,7 +270,7 @@ export function TranscribePage() {
 
           <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-zinc-100">{t('transcribe.recentTasks')}</h2>
+              <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
               {tasks.length > recentTasks.length && (
                 <Button asChild variant="ghost" size="sm">
                   <Link to="/tasks">{t('transcribe.viewAllTasks')}</Link>
@@ -282,17 +282,17 @@ export function TranscribePage() {
                 <button
                   key={task.id}
                   className={cn(
-                    'grid gap-2 rounded-xl border px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/[0.04]',
-                    selectedTask?.id === task.id ? 'border-amber-300/40 bg-amber-300/10' : 'border-white/10 bg-white/[0.03]',
+                    'grid gap-2 rounded-xl border px-3 py-3 text-left transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)]',
+                    selectedTask?.id === task.id ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
                   )}
                   onClick={() => setSelectedTaskId(task.id)}
                 >
                   <div className="flex min-w-0 items-center justify-between gap-3">
-                    <span className="truncate text-sm font-medium text-zinc-100">{task.filename}</span>
+                    <span className="truncate text-sm font-medium text-app">{task.filename}</span>
                     <StatusPill status={task.status} />
                   </div>
                   <Progress value={task.progress} />
-                  <span className="text-xs text-zinc-500">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
+                  <span className="text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
                 </button>
               ))}
               {tasks.length === 0 && (
