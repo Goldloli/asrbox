@@ -16,6 +16,7 @@ function AppRuntime() {
 
 function ThemeRuntime() {
   const theme = useUiStore((state) => state.theme);
+  const density = useUiStore((state) => state.density);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -29,6 +30,10 @@ function ThemeRuntime() {
     media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-density', density);
+  }, [density]);
 
   return null;
 }
