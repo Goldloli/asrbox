@@ -156,6 +156,11 @@ const dictionaries = {
     'transcript.emptyTitle': 'No transcription selected',
     'transcript.emptyBody': 'Choose a task from the queue or start a new transcription.',
     'transcript.placeholder': 'Transcript will appear here.',
+    'transcript.edit': 'Edit',
+    'transcript.localEdit': 'Local edit',
+    'transcript.localEditHint': 'This edit is kept in the current workspace session and does not change exported files.',
+    'transcript.localEditSaved': 'Local edit saved',
+    'transcript.saveLocalEdit': 'Save local edit',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -476,6 +481,11 @@ const dictionaries = {
     'transcript.emptyTitle': '未选择转写任务',
     'transcript.emptyBody': '从队列中选择一个任务，或开始一次新的转写。',
     'transcript.placeholder': '转写结果会显示在这里。',
+    'transcript.edit': '编辑',
+    'transcript.localEdit': '本地编辑',
+    'transcript.localEditHint': '当前编辑仅保存在本次工作台会话中，不会修改已导出的文件。',
+    'transcript.localEditSaved': '本地编辑已保存',
+    'transcript.saveLocalEdit': '保存本地编辑',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
