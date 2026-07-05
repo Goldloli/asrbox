@@ -1,16 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, RefreshCw, Save, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CloudOff, Database, Download, HardDrive, RefreshCw, Save, Upload } from 'lucide-react';
 import { useSearch } from '@tanstack/react-router';
-import { apiClient } from '../lib/api';
-import { queryKeys, useModelStorageQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
+import { apiClient, type ModelStorage, type RuntimeStatus } from '../lib/api';
+import { queryKeys, useActiveTasksQuery, useHealthQuery, useModelStorageQuery, useModelsQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
-import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { Badge, Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
-import { RuntimeHealthCard } from '../components/RuntimeHealthCard';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
 import { ProvidersPage } from './ProvidersPage';
@@ -44,8 +43,11 @@ export function SettingsPage() {
   const setShortcut = useUiStore((state) => state.setShortcut);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
+  const healthQuery = useHealthQuery();
   const runtimeQuery = useRuntimeQuery();
   const storageQuery = useModelStorageQuery();
+  const modelsQuery = useModelsQuery();
+  const activeTasksQuery = useActiveTasksQuery();
   const search = useSearch({ strict: false }) as { tab?: string };
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => normalizeSettingsTab(search.tab));
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
@@ -347,7 +349,21 @@ export function SettingsPage() {
 
       <TabsContent value="storage">
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_460px]">
-          <RuntimeHealthCard runtime={runtimeQuery.data} />
+          <DiagnosticsHealthCenter
+            connected={healthQuery.isSuccess}
+            runtime={runtimeQuery.data}
+            storage={storageQuery.data}
+            modelCount={modelsQuery.data?.models.length ?? 0}
+            downloadedModelCount={(modelsQuery.data?.models ?? []).filter((model) => model.downloaded).length}
+            recentError={activeTasksQuery.data?.recent_error}
+            onRefresh={() => {
+              healthQuery.refetch();
+              runtimeQuery.refetch();
+              storageQuery.refetch();
+              modelsQuery.refetch();
+              activeTasksQuery.refetch();
+            }}
+          />
           <Panel className="overflow-hidden">
             <PanelHeader
               eyebrow={t('settings.storage')}
@@ -432,6 +448,141 @@ export function SettingsPage() {
         </section>
       </TabsContent>
     </Tabs>
+  );
+}
+
+function DiagnosticsHealthCenter({
+  connected,
+  runtime,
+  storage,
+  modelCount,
+  downloadedModelCount,
+  recentError,
+  onRefresh,
+}: {
+  connected: boolean;
+  runtime?: RuntimeStatus;
+  storage?: ModelStorage;
+  modelCount: number;
+  downloadedModelCount: number;
+  recentError?: string | null;
+  onRefresh: () => void;
+}) {
+  const { t } = useI18n();
+  const runtimeChecks = runtime
+    ? [
+        ['ffmpeg', runtime.ffmpeg_available],
+        ['ffprobe', runtime.ffprobe_available],
+        ['torch', runtime.torch_available],
+        ['faster-whisper', runtime.faster_whisper_available],
+        ['FunASR', runtime.funasr_available],
+        ['MLX', runtime.mlx_available],
+        ['Qwen3 ASR', runtime.qwen3_asr_available],
+        ['diarization', runtime.diarization_ready],
+      ]
+    : [];
+
+  return (
+    <Panel className="overflow-hidden">
+      <PanelHeader
+        eyebrow={t('settings.healthEyebrow')}
+        title={t('settings.healthTitle')}
+        description={runtime?.platform ?? t('settings.runtimeUnavailable')}
+        action={
+          <Button size="sm" variant="secondary" onClick={onRefresh}>
+            <RefreshCw className="size-4" />
+            {t('common.refresh')}
+          </Button>
+        }
+      />
+      <div className="grid gap-4 p-5">
+        <div className="grid gap-2 md:grid-cols-2">
+          <HealthMetric
+            icon={connected ? <CheckCircle2 className="size-4" /> : <CloudOff className="size-4" />}
+            title={t('settings.backendConnection')}
+            value={connected ? t('status.backendOnline') : t('status.backendOffline')}
+            tone={connected ? 'success' : 'danger'}
+          />
+          <HealthMetric
+            icon={<HardDrive className="size-4" />}
+            title={t('settings.modelAvailability')}
+            value={`${downloadedModelCount}/${modelCount} ${t('models.descriptionDownloaded')}`}
+            tone={downloadedModelCount > 0 ? 'success' : 'warning'}
+          />
+          <HealthMetric
+            icon={<Database className="size-4" />}
+            title={t('settings.freeDisk')}
+            value={formatBytes(runtime?.free_disk_bytes ?? storage?.free_bytes)}
+            tone={(runtime?.free_disk_bytes ?? storage?.free_bytes ?? 0) > 1_000_000_000 ? 'success' : 'warning'}
+          />
+          <HealthMetric
+            icon={<AlertTriangle className="size-4" />}
+            title={t('settings.recentErrors')}
+            value={recentError || t('settings.noRecentErrors')}
+            tone={recentError ? 'danger' : 'neutral'}
+          />
+        </div>
+
+        <div className="grid gap-2">
+          <h3 className="text-sm font-semibold text-app">{t('settings.runtimeCapabilities')}</h3>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {runtimeChecks.map(([label, ok]) => (
+              <div key={String(label)} className="flex items-center justify-between gap-2 rounded-lg border app-control px-3 py-2">
+                <span className="text-xs text-app-muted">{label}</span>
+                {ok ? <CheckCircle2 className="size-4 text-[var(--app-success)]" /> : <CloudOff className="size-4 text-app-faint" />}
+              </div>
+            ))}
+            {runtimeChecks.length === 0 && (
+              <p className="rounded-lg border app-control px-3 py-3 text-sm text-app-muted md:col-span-4">{t('settings.runtimeHint')}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          <PathRow label={t('settings.dataPaths')} value={runtime?.data_dir} />
+          <PathRow label={t('settings.modelsPath')} value={runtime?.models_dir ?? storage?.models_dir} />
+        </div>
+
+        {runtime?.warnings?.length ? (
+          <div className="grid gap-2">
+            {runtime.warnings.map((warning) => (
+              <p key={warning} className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-sm text-app-accent">
+                {warning}
+              </p>
+            ))}
+          </div>
+        ) : null}
+
+        <Button asChild variant="secondary">
+          <a href={apiClient.runtimeDiagnosticBundleUrl()}>
+            <Download className="size-4" />
+            {t('settings.diagnosticBundle')}
+          </a>
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
+function HealthMetric({
+  icon,
+  title,
+  value,
+  tone,
+}: {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  tone: 'neutral' | 'success' | 'warning' | 'danger';
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg border app-control px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium text-app-muted">{title}</span>
+        <Badge tone={tone}>{icon}</Badge>
+      </div>
+      <p className="break-words text-sm font-medium text-app">{value}</p>
+    </div>
   );
 }
 
