@@ -161,6 +161,7 @@ const dictionaries = {
     'transcript.localEditHint': 'This edit is kept in the current workspace session and does not change exported files.',
     'transcript.localEditSaved': 'Local edit saved',
     'transcript.saveLocalEdit': 'Save local edit',
+    'transcript.copySegment': 'Copy segment',
 
     'tasks.eyebrow': 'Queue',
     'tasks.title': 'Tasks',
@@ -486,6 +487,7 @@ const dictionaries = {
     'transcript.localEditHint': '当前编辑仅保存在本次工作台会话中，不会修改已导出的文件。',
     'transcript.localEditSaved': '本地编辑已保存',
     'transcript.saveLocalEdit': '保存本地编辑',
+    'transcript.copySegment': '复制分段',
 
     'tasks.eyebrow': '队列',
     'tasks.title': '任务',
