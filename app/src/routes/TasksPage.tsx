@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { ArchiveX, Clipboard, Download, FileAudio, Folder, FolderOpen, History, RotateCcw, Scissors, Square, Star, Trash2, Wand2 } from 'lucide-react';
@@ -19,6 +19,7 @@ const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'c
 type DateFilter = 'all' | 'today' | '7d' | '30d';
 type ErrorFilter = 'all' | 'with' | 'without';
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
+const lastTaskStorageKey = 'asrbox-last-task-id';
 const exportPresets = [
   { key: 'subtitles', labelKey: 'tasks.exportPresetSubtitles', formats: ['srt', 'vtt', 'ass'] },
   { key: 'text', labelKey: 'tasks.exportPresetText', formats: ['txt', 'md'] },
@@ -138,6 +139,16 @@ export function TasksPage() {
   const retryChunks = useTaskMutation(apiClient.retryFailedChunks.bind(apiClient), refresh, t('toast.taskChunksRetried'));
   const cleanupArtifacts = useTaskMutation(apiClient.cleanupTaskArtifacts.bind(apiClient), refresh, t('toast.taskArtifactsCleaned'));
   const remove = useTaskMutation(apiClient.deleteTask.bind(apiClient), refresh, t('toast.taskDeleted'));
+
+  useEffect(() => {
+    if (selectedTaskId) localStorage.setItem(lastTaskStorageKey, selectedTaskId);
+  }, [selectedTaskId]);
+
+  useEffect(() => {
+    if (selectedTaskId || tasks.length === 0) return;
+    const lastTaskId = localStorage.getItem(lastTaskStorageKey);
+    if (lastTaskId && tasks.some((task) => task.id === lastTaskId)) setSelectedTaskId(lastTaskId);
+  }, [selectedTaskId, tasks]);
 
   const toggleTaskSelection = (taskId: string) => {
     setSelectedTaskIds((current) => (
