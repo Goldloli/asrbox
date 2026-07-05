@@ -10,11 +10,14 @@ import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type ModelCategory } from '../lib/modelCatalog';
 import { useI18n } from '../lib/i18n';
 
+type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
+
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const toast = useToast();
   const [category, setCategory] = useState<ModelCategory | 'all'>('recommended');
+  const [guidePreference, setGuidePreference] = useState<GuidePreference>('general');
   const modelsQuery = useModelsQuery();
   const downloadsQuery = useActiveDownloadsQuery();
   const storageQuery = useModelStorageQuery();
@@ -71,6 +74,10 @@ export function ModelsPage() {
     return modelCategory(model) === category;
   });
   const recommendedDownloadModel = models.find((model) => isRecommendedModel(model) && !model.downloaded) ?? models.find((model) => !model.downloaded);
+  const guideCategory = guidePreference === 'general' ? 'recommended' : guidePreference;
+  const guideRecommendedModel =
+    models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && !model.downloaded) ??
+    models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
   const categoryItems: Array<{ value: ModelCategory | 'all'; label: string }> = [
     { value: 'recommended', label: t('models.categoryRecommended') },
     { value: 'all', label: t('models.categoryAll') },
@@ -78,6 +85,13 @@ export function ModelsPage() {
     { value: 'faster', label: t('models.categoryFaster') },
     { value: 'chinese', label: t('models.categoryChinese') },
     { value: 'whisper', label: t('models.categoryWhisper') },
+  ];
+  const guideItems: Array<{ value: GuidePreference; label: string }> = [
+    { value: 'general', label: t('models.guideGeneral') },
+    { value: 'apple', label: t('models.guideApple') },
+    { value: 'faster', label: t('models.guideFaster') },
+    { value: 'chinese', label: t('models.guideChinese') },
+    { value: 'whisper', label: t('models.guideWhisper') },
   ];
 
   return (
@@ -143,21 +157,46 @@ export function ModelsPage() {
         <Panel className="overflow-hidden">
           <PanelHeader eyebrow={t('models.recommended')} title={t('models.guideTitle')} description={t('models.guideBody')} />
           <div className="grid gap-3 p-5">
-            {models.filter(isRecommendedModel).map((model) => (
-              <button
-                key={model.model_name}
-                className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition hover:border-amber-300/40 hover:bg-amber-300/10"
-                onClick={() => setCategory(modelCategory(model))}
-              >
+            <div className="flex flex-wrap gap-2">
+              {guideItems.map((item) => (
+                <Button
+                  key={item.value}
+                  size="sm"
+                  variant={guidePreference === item.value ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    setGuidePreference(item.value);
+                    setCategory(item.value === 'general' ? 'recommended' : item.value);
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+            {guideRecommendedModel ? (
+              <article className="grid gap-3 rounded-xl border app-control px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-zinc-100">{model.display_name}</span>
-                  <Badge tone={model.downloaded ? 'success' : 'neutral'}>
-                    {model.downloaded ? t('common.downloaded') : t('common.notDownloaded')}
+                  <span className="font-medium text-app">{guideRecommendedModel.display_name}</span>
+                  <Badge tone={guideRecommendedModel.downloaded ? 'success' : 'accent'}>
+                    {guideRecommendedModel.downloaded ? t('common.downloaded') : t('models.recommended')}
                   </Badge>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">{modelDescription(model, locale)}</p>
-              </button>
-            ))}
+                <p className="text-sm leading-6 text-app-muted">{modelDescription(guideRecommendedModel, locale)}</p>
+                <p className="text-xs text-app-muted">{modelBestFor(guideRecommendedModel, locale)}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setCategory(guideCategory)}>
+                    {t('models.showMatches')}
+                  </Button>
+                  {!guideRecommendedModel.downloaded && (
+                    <Button size="sm" onClick={() => download.mutate(guideRecommendedModel.model_name)}>
+                      <DownloadCloud className="size-4" />
+                      {t('common.download')}
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ) : (
+              <EmptyState title={t('models.noModels')} body={t('models.noModelsBody')} />
+            )}
           </div>
         </Panel>
 
