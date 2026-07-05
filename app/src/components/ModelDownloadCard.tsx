@@ -1,4 +1,4 @@
-import { DownloadCloud, HardDrive, Trash2, XCircle } from 'lucide-react';
+import { DownloadCloud, HardDrive, Star, Trash2, XCircle } from 'lucide-react';
 import type { ModelProgress, ModelStatus } from '../lib/api';
 import { formatPercent } from '../lib/format';
 import { Badge, Button, Panel, Progress } from './weiui';
@@ -8,8 +8,10 @@ import { ConfirmAction } from './ConfirmAction';
 export function ModelDownloadCard({
   model,
   progress,
+  pinned,
   description,
   bestFor,
+  onTogglePin,
   onDownload,
   onCancel,
   onUnload,
@@ -17,8 +19,10 @@ export function ModelDownloadCard({
 }: {
   model: ModelStatus;
   progress?: ModelProgress;
+  pinned: boolean;
   description: string;
   bestFor: string;
+  onTogglePin: () => void;
   onDownload: () => void;
   onCancel: () => void;
   onUnload: () => void;
@@ -42,9 +46,21 @@ export function ModelDownloadCard({
               </p>
             </div>
           </div>
-          <Badge tone={model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
-            {model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              size="icon"
+              variant={pinned ? 'primary' : 'ghost'}
+              onClick={onTogglePin}
+              title={pinned ? t('models.unpin') : t('models.pin')}
+              aria-label={pinned ? t('models.unpin') : t('models.pin')}
+            >
+              <Star className={pinned ? 'size-4 fill-current' : 'size-4'} />
+            </Button>
+            <Badge tone={model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
+              {model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
+            </Badge>
+          </div>
         </div>
         <p className="text-sm leading-6 text-zinc-300">{description}</p>
         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -59,6 +75,7 @@ export function ModelDownloadCard({
         </div>
         <div className="flex flex-wrap gap-1.5">
           {model.languages.map((language) => <Badge key={language}>{language}</Badge>)}
+          {pinned && <Badge tone="accent">{t('models.pinned')}</Badge>}
           {model.loaded && <Badge tone="accent">{t('common.loaded')}</Badge>}
           {model.compatible === false && <Badge tone="danger">{t('common.incompatible')}</Badge>}
         </div>

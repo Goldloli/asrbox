@@ -11,13 +11,15 @@ import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type
 import { useI18n } from '../lib/i18n';
 
 type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
+type ModelViewCategory = ModelCategory | 'all' | 'pinned';
 
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const toast = useToast();
-  const [category, setCategory] = useState<ModelCategory | 'all'>('recommended');
+  const [category, setCategory] = useState<ModelViewCategory>('recommended');
   const [guidePreference, setGuidePreference] = useState<GuidePreference>('general');
+  const [pinnedModelNames, setPinnedModelNames] = useState<string[]>([]);
   const modelsQuery = useModelsQuery();
   const downloadsQuery = useActiveDownloadsQuery();
   const storageQuery = useModelStorageQuery();
@@ -68,18 +70,22 @@ export function ModelsPage() {
 
   const downloadedCount = models.filter((model) => model.downloaded).length;
   const loadedCount = models.filter((model) => model.loaded).length;
-  const visibleModels = models.filter((model) => {
-    if (category === 'all') return true;
-    if (category === 'recommended') return isRecommendedModel(model);
-    return modelCategory(model) === category;
-  });
+  const visibleModels = models
+    .filter((model) => {
+      if (category === 'all') return true;
+      if (category === 'pinned') return pinnedModelNames.includes(model.model_name);
+      if (category === 'recommended') return isRecommendedModel(model);
+      return modelCategory(model) === category;
+    })
+    .sort((a, b) => Number(pinnedModelNames.includes(b.model_name)) - Number(pinnedModelNames.includes(a.model_name)));
   const recommendedDownloadModel = models.find((model) => isRecommendedModel(model) && !model.downloaded) ?? models.find((model) => !model.downloaded);
   const guideCategory = guidePreference === 'general' ? 'recommended' : guidePreference;
   const guideRecommendedModel =
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && !model.downloaded) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
-  const categoryItems: Array<{ value: ModelCategory | 'all'; label: string }> = [
+  const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
     { value: 'recommended', label: t('models.categoryRecommended') },
+    { value: 'pinned', label: t('models.categoryPinned') },
     { value: 'all', label: t('models.categoryAll') },
     { value: 'apple', label: t('models.categoryApple') },
     { value: 'faster', label: t('models.categoryFaster') },
@@ -93,6 +99,12 @@ export function ModelsPage() {
     { value: 'chinese', label: t('models.guideChinese') },
     { value: 'whisper', label: t('models.guideWhisper') },
   ];
+
+  const togglePinnedModel = (modelName: string) => {
+    setPinnedModelNames((current) => (
+      current.includes(modelName) ? current.filter((name) => name !== modelName) : [...current, modelName]
+    ));
+  };
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -122,8 +134,10 @@ export function ModelsPage() {
                 key={model.model_name}
                 model={model}
                 progress={progressByModel[model.model_name]}
+                pinned={pinnedModelNames.includes(model.model_name)}
                 description={modelDescription(model, locale)}
                 bestFor={modelBestFor(model, locale)}
+                onTogglePin={() => togglePinnedModel(model.model_name)}
                 onDownload={() => download.mutate(model.model_name)}
                 onCancel={() => cancel.mutate(model.model_name)}
                 onUnload={() => unload.mutate(model.model_name)}
