@@ -161,7 +161,7 @@ try {
         const page = await context.newPage();
         const url = `${baseUrl}${route.path}`;
         await page.goto(url, { waitUntil: 'domcontentloaded' });
-        await page.waitForLoadState('networkidle').catch(() => undefined);
+        await page.waitForLoadState('networkidle', { timeout: 1500 }).catch(() => undefined);
         await page.waitForTimeout(300);
 
         const screenshotName = `${viewport.name}-${state.name}-${route.name}.png`;

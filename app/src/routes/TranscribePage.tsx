@@ -5,7 +5,7 @@ import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, RefreshCw,
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select } from '../components/weiui';
+import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select, Tooltip, TooltipContent, TooltipTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { StatusPill } from '../components/StatusPill';
@@ -31,7 +31,6 @@ export function TranscribePage() {
   const [modelName, setModelName] = useState('whisper-base');
   const [providerId, setProviderId] = useState('');
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
-  const [outputFormats, setOutputFormats] = useState<string[]>(['txt', 'srt', 'json']);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<TranscriptionPreflight | null>(null);
 
@@ -93,7 +92,7 @@ export function TranscribePage() {
         modelName: backend === 'local' ? modelName : undefined,
         providerId: backend === 'provider' ? providerId : undefined,
         language: backendLanguage(language),
-        outputFormats,
+        outputFormats: formats,
         ...postprocessOptions(language),
       };
       if (files.length === 1) return apiClient.createTranscription({ file: files[0], ...payload });
@@ -107,12 +106,6 @@ export function TranscribePage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
-
-  const toggleFormat = (format: string) => {
-    setOutputFormats((current) =>
-      current.includes(format) ? current.filter((item) => item !== format) : [...current, format],
-    );
-  };
 
   const readinessIssues = [
     ...(readinessQuery.data?.issues ?? []),
@@ -201,10 +194,23 @@ export function TranscribePage() {
           </label>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" onClick={() => preflightMutation.mutate()} disabled={!files[0] || preflightMutation.isPending}>
-              <ShieldAlert className="size-4" />
-              {t('transcribe.preflight')}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="secondary"
+                    onClick={() => preflightMutation.mutate()}
+                    disabled={!files[0] || preflightMutation.isPending}
+                    className="w-full"
+                    title={!files[0] ? t('transcribe.preflightDisabled') : t('transcribe.preflightHelp')}
+                  >
+                    <ShieldAlert className="size-4" />
+                    {t('transcribe.preflight')}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{files[0] ? t('transcribe.preflightHelp') : t('transcribe.preflightDisabled')}</TooltipContent>
+            </Tooltip>
             <Button onClick={() => createMutation.mutate()} disabled={files.length === 0 || createMutation.isPending}>
               <Play className="size-4" />
               {createMutation.isPending ? t('transcribe.starting') : files.length > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
@@ -345,21 +351,6 @@ export function TranscribePage() {
               onValueChange={(value) => setLanguage(normalizeLanguageValue(value))}
               options={languageOptions(locale)}
             />
-          </Field>
-          <Field label={t('transcribe.exports')}>
-            <div className="flex flex-wrap gap-2">
-              {formats.map((format) => (
-                <Button
-                  key={format}
-                  type="button"
-                  size="sm"
-                  variant={outputFormats.includes(format) ? 'primary' : 'secondary'}
-                  onClick={() => toggleFormat(format)}
-                >
-                  {format.toUpperCase()}
-                </Button>
-              ))}
-            </div>
           </Field>
         </div>
       </Panel>

@@ -1,22 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, ChevronDown, Clipboard, Download, FileText, Pencil, Play, Replace, Save, Search, X } from 'lucide-react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, Clipboard, FileText, Pause, Pencil, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { apiClient, type TranscriptionTask } from '../lib/api';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
+import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
-import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 import { toastErrorMessage, useToast } from './Toast';
-import { useAudioStore } from '../stores/audioStore';
-import { countTextMatches, drawAudioWaveform, formatOutputTemplate, formatSubtitlePreview, renderHighlightedText, replaceTextMatches } from './transcript/transcriptUtils';
+import { countTextMatches, drawAudioWaveform, formatSubtitlePreview, renderHighlightedText, replaceTextMatches } from './transcript/transcriptUtils';
 
 export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
   const toast = useToast();
-  const openAudio = useAudioStore((state) => state.openAudio);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
   const [speakerLabelsByTask, setSpeakerLabelsByTask] = useState<Record<string, Record<number, string>>>({});
   const [segmentTimesByTask, setSegmentTimesByTask] = useState<Record<string, Record<number, { start: number; end: number }>>>({});
@@ -25,8 +20,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
-  const [outputTemplate, setOutputTemplate] = useState<'minutes' | 'transcript' | 'subtitles' | 'markdown'>('transcript');
-  const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [seekTarget, setSeekTarget] = useState<number | null>(null);
 
   const displayedText = useMemo(() => {
     if (!task) return '';
@@ -43,14 +37,11 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   }, [segmentTimes, task]);
   const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
   const subtitlePreview = useMemo(() => formatSubtitlePreview(displaySegments, subtitleFormat), [displaySegments, subtitleFormat]);
-  const outputTemplatePreview = useMemo(() => (
-    task ? formatOutputTemplate(outputTemplate, task.filename, displayedText, displaySegments, subtitleFormat) : ''
-  ), [displaySegments, displayedText, outputTemplate, subtitleFormat, task]);
 
   useEffect(() => {
     setDraftText(displayedText);
     setIsEditing(false);
-    setWaveformStatus('idle');
+    setSeekTarget(null);
   }, [displayedText, task?.id]);
 
   if (!task) {
@@ -104,32 +95,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     setIsEditing(false);
   };
   const seekToSegment = (seconds: number) => {
-    openAudio({ taskId: task.id, url: apiClient.taskAudioUrl(task.id), title: task.filename, startAt: seconds });
-    const audio = audioRef.current;
-    if (!audio) return;
-    try {
-      audio.currentTime = Math.max(0, seconds);
-      void audio.play().catch(() => undefined);
-    } catch {
-      // The media element may reject seeking before metadata is available.
-    }
-  };
-  const generateWaveform = async () => {
-    const canvas = waveformCanvasRef.current;
-    if (!canvas) return;
-
-    setWaveformStatus('loading');
-    try {
-      const response = await fetch(apiClient.taskAudioUrl(task.id));
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const audioContext = new AudioContext();
-      const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
-      drawAudioWaveform(canvas, buffer);
-      await audioContext.close();
-      setWaveformStatus('ready');
-    } catch {
-      setWaveformStatus('error');
-    }
+    setSeekTarget(Math.max(0, seconds));
   };
   const setSegmentSpeaker = (segmentId: number, value: string) => {
     setSpeakerLabelsByTask((current) => ({
@@ -158,8 +124,6 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       },
     }));
   };
-  const exportFormats = task.status === 'completed' ? getTaskOutputFormats(task) : [];
-
   return (
     <Panel className="min-h-[calc(100dvh-160px)] overflow-hidden">
       <PanelHeader
@@ -202,26 +166,6 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                 <Pencil className="size-4" />
                 {t('transcript.edit')}
               </Button>
-            )}
-            {exportFormats.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="sm">
-                    <Download className="size-4" />
-                    {t('tasks.outputFiles')}
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {exportFormats.map((format) => (
-                    <DropdownMenuItem key={format} asChild>
-                      <a href={apiClient.exportTaskUrl(task.id, format)}>
-                        {format.toUpperCase()}
-                      </a>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
             )}
           </div>
         </div>
@@ -266,39 +210,12 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           )}
           {hasLocalEdit && <p className="text-xs text-app-muted">{t('transcript.localEditHint')}</p>}
         </section>
-        <section className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => openAudio({ taskId: task.id, url: apiClient.taskAudioUrl(task.id), title: task.filename })}
-            >
-              <Play className="size-4" />
-              {t('audio.openPersistent')}
-            </Button>
-          </div>
-          <audio ref={audioRef} controls preload="none" src={apiClient.taskAudioUrl(task.id)} className="w-full">
-            {t('transcript.audioUnsupported')}
-          </audio>
-        </section>
-        <section className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.waveform')}</h2>
-            <Button variant="secondary" size="sm" onClick={generateWaveform} disabled={waveformStatus === 'loading'}>
-              <Activity className="size-4" />
-              {waveformStatus === 'loading' ? t('transcript.waveformLoading') : t('transcript.generateWaveform')}
-            </Button>
-          </div>
-          <div className="rounded-lg border app-control p-3">
-            <canvas ref={waveformCanvasRef} className="h-24 w-full" aria-label={t('transcript.waveform')} />
-            {waveformStatus !== 'ready' && (
-              <p className="text-center text-xs text-app-muted">
-                {waveformStatus === 'error' ? t('transcript.waveformUnavailable') : t('transcript.waveformHint')}
-              </p>
-            )}
-          </div>
-        </section>
+        <WaveformAudioPlayer
+          taskId={task.id}
+          title={task.filename}
+          seekTarget={seekTarget}
+          onSeekHandled={() => setSeekTarget(null)}
+        />
         <section className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
@@ -318,30 +235,6 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
           </div>
           <pre className="max-h-56 overflow-auto rounded-lg border app-control p-3 font-mono text-xs leading-5 text-app-soft">
             {subtitlePreview || t('transcript.noSegments')}
-          </pre>
-        </section>
-        <section className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.outputTemplate')}</h2>
-            <Button variant="secondary" size="sm" onClick={() => copyText(outputTemplatePreview)} disabled={!outputTemplatePreview}>
-              <Clipboard className="size-4" />
-              {t('common.copy')}
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(['minutes', 'transcript', 'subtitles', 'markdown'] as const).map((template) => (
-              <Button
-                key={template}
-                variant={outputTemplate === template ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setOutputTemplate(template)}
-              >
-                {t(`transcript.template.${template}`)}
-              </Button>
-            ))}
-          </div>
-          <pre className="max-h-72 overflow-auto rounded-lg border app-control p-3 whitespace-pre-wrap font-mono text-xs leading-5 text-app-soft">
-            {outputTemplatePreview}
           </pre>
         </section>
         <section className="grid gap-3">
@@ -413,4 +306,184 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       </div>
     </Panel>
   );
+}
+
+function WaveformAudioPlayer({
+  taskId,
+  title,
+  seekTarget,
+  onSeekHandled,
+}: {
+  taskId: string;
+  title: string;
+  seekTarget: number | null;
+  onSeekHandled: () => void;
+}) {
+  const { t } = useI18n();
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
+  const audioUrl = apiClient.taskAudioUrl(taskId);
+  const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    setWaveformStatus('idle');
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, [audioUrl]);
+
+  useEffect(() => {
+    const canvas = waveformCanvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    const loadWaveform = async () => {
+      setWaveformStatus('loading');
+      try {
+        const response = await fetch(audioUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const audioContext = new AudioContext();
+        const buffer = await audioContext.decodeAudioData(await response.arrayBuffer());
+        if (!cancelled) {
+          drawAudioWaveform(canvas, buffer);
+          setWaveformStatus('ready');
+        }
+        await audioContext.close();
+      } catch {
+        if (!cancelled) setWaveformStatus('error');
+      }
+    };
+
+    void loadWaveform();
+    return () => {
+      cancelled = true;
+    };
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (seekTarget == null) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const nextTime = Math.max(0, seekTarget);
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+    void audio.play().then(() => setIsPlaying(true)).catch(() => undefined);
+    onSeekHandled();
+  }, [onSeekHandled, seekTarget]);
+
+  const togglePlayback = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      void audio.play().then(() => setIsPlaying(true)).catch(() => undefined);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const seekToRatio = (ratio: number) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const nextTime = Math.max(0, Math.min(duration, duration * ratio));
+    audio.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
+  const handleWaveformClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    seekToRatio((event.clientX - rect.left) / rect.width);
+  };
+
+  return (
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
+          <p className="mt-1 text-xs text-app-muted">{title}</p>
+        </div>
+        <Badge tone={waveformStatus === 'error' ? 'danger' : waveformStatus === 'ready' ? 'success' : 'neutral'}>
+          {waveformStatus === 'loading' ? t('transcript.waveformLoading') : waveformStatus === 'error' ? t('transcript.waveformUnavailable') : t('transcript.waveform')}
+        </Badge>
+      </div>
+      <div className="grid gap-3 rounded-xl border app-control p-3">
+        <audio
+          ref={audioRef}
+          preload="metadata"
+          src={audioUrl}
+          onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+        >
+          {t('transcript.audioUnsupported')}
+        </audio>
+        <div className="flex items-center gap-3">
+          <Button type="button" size="icon" variant="secondary" onClick={togglePlayback} aria-label={isPlaying ? t('audio.pause') : t('audio.play')}>
+            {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+          </Button>
+          <div className="w-24 shrink-0 font-mono text-xs text-app-muted">
+            {formatAudioTime(currentTime)} / {formatAudioTime(duration)}
+          </div>
+          <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
+            <Volume2 className="size-4 text-app-muted" />
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              aria-label={t('audio.volume')}
+              onChange={(event) => {
+                const nextVolume = Number(event.target.value);
+                setVolume(nextVolume);
+                if (audioRef.current) audioRef.current.volume = nextVolume;
+              }}
+              className="w-full accent-[var(--app-accent)]"
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          className="relative min-h-24 overflow-hidden rounded-lg border app-border bg-[var(--app-panel)] text-left focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+          onClick={handleWaveformClick}
+          aria-label={t('transcript.waveformSeek')}
+        >
+          <canvas ref={waveformCanvasRef} className="h-24 w-full opacity-90" aria-hidden="true" />
+          {duration > 0 && (
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 border-r border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]/50"
+              style={{ width: `${Math.min(100, Math.max(0, (currentTime / duration) * 100))}%` }}
+            />
+          )}
+          {waveformStatus !== 'ready' && (
+            <div className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center text-xs text-app-muted">
+              <span className="inline-flex items-center gap-2">
+                {waveformStatus === 'loading' && <Activity className="size-4 animate-pulse" />}
+                {waveformStatus === 'error' ? t('transcript.waveformUnavailable') : t('transcript.waveformHint')}
+              </span>
+            </div>
+          )}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function formatAudioTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${remainingSeconds}`;
 }
