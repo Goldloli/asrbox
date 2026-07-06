@@ -174,10 +174,10 @@ export function TranscribePage() {
             </Button>
           }
         />
-        <div className="grid gap-4 p-5">
-          <label className="grid min-h-36 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-6 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)]">
+        <div className="grid gap-3 p-4 sm:gap-4 sm:p-5">
+          <label className="grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6">
             <div className="grid justify-items-center gap-3">
-              <div className="grid size-12 place-items-center rounded-xl border app-control text-app-accent">
+              <div className="grid size-10 place-items-center rounded-xl border app-control text-app-accent sm:size-12">
                 {files.length > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
               </div>
               <div>
@@ -255,7 +255,7 @@ export function TranscribePage() {
                 {firstRunChecklist.map((item) => {
                   const Icon = item.done ? CheckCircle2 : Circle;
                   return (
-                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-[var(--app-control)] px-3 py-2">
+                    <div key={item.key} className="flex min-h-9 items-center justify-between gap-3 rounded-lg bg-[var(--app-control)] px-3 py-1.5 sm:py-2">
                       <span className="flex min-w-0 items-center gap-2 text-sm text-app-soft">
                         <Icon className={cn('size-4 shrink-0', item.done ? 'text-[var(--app-success)]' : 'text-app-muted')} />
                         <span className="truncate">{item.label}</span>
@@ -268,7 +268,7 @@ export function TranscribePage() {
             </div>
           )}
 
-          <div className="grid gap-2">
+          {tasks.length > 0 && <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
               {tasks.length > recentTasks.length && (
@@ -295,22 +295,8 @@ export function TranscribePage() {
                   <span className="text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
                 </button>
               ))}
-              {tasks.length === 0 && (
-                <div className="flex items-start gap-3 rounded-lg border app-control px-3 py-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-xl border app-control text-app-accent">
-                    <FileAudio className="size-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-app">{t('transcribe.noTasks')}</h3>
-                    <p className="mt-1 text-sm leading-6 text-app-muted">{t('transcribe.noTasksBody')}</p>
-                  </div>
-                  <div className="shrink-0">
-                    <Button size="sm" onClick={() => fileInputRef.current?.click()}>{t('transcribe.chooseFile')}</Button>
-                  </div>
-                </div>
-              )}
             </div>
-          </div>
+          </div>}
         </div>
       </Panel>
 
