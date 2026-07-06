@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.goldloli.asrbox",
   "build": {
-    "beforeDevCommand": "bun run dev:web",
+    "beforeDevCommand": "cd .. && bun run dev:web",
+    "beforeBuildCommand": "cd .. && bun run build:web",
     "devUrl": "http://127.0.0.1:5173",
     "frontendDist": "../../web/dist"
   },
@@ -18,7 +19,7 @@
     ]
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "targets": "all"
   }
 }
