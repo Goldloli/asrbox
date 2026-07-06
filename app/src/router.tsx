@@ -1,28 +1,41 @@
+import { lazy, Suspense, type ComponentType } from 'react';
 import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { Layout } from './components/Layout';
-import { ModelsPage } from './routes/ModelsPage';
-import { SettingsPage } from './routes/SettingsPage';
-import { TasksPage } from './routes/TasksPage';
-import { TranscribePage } from './routes/TranscribePage';
+import { LoadingState } from './components/weiui';
+
+const TranscribePage = lazy(() => import('./routes/TranscribePage').then((module) => ({ default: module.TranscribePage })));
+const TasksPage = lazy(() => import('./routes/TasksPage').then((module) => ({ default: module.TasksPage })));
+const ModelsPage = lazy(() => import('./routes/ModelsPage').then((module) => ({ default: module.ModelsPage })));
+const SettingsPage = lazy(() => import('./routes/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+
+function withSuspense(Component: ComponentType) {
+  return function RouteComponent() {
+    return (
+      <Suspense fallback={<LoadingState label="Loading" />}>
+        <Component />
+      </Suspense>
+    );
+  };
+}
 
 const rootRoute = createRootRoute({ component: Layout });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: TranscribePage,
+  component: withSuspense(TranscribePage),
 });
 
 const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tasks',
-  component: TasksPage,
+  component: withSuspense(TasksPage),
 });
 
 const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/models',
-  component: ModelsPage,
+  component: withSuspense(ModelsPage),
 });
 
 const providersRoute = createRoute({
@@ -44,7 +57,7 @@ const exportsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsPage,
+  component: withSuspense(SettingsPage),
 });
 
 const routeTree = rootRoute.addChildren([

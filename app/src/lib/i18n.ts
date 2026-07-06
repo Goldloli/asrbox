@@ -4,6 +4,7 @@ import { useUiStore, type Locale } from '../stores/uiStore';
 const dictionaries = {
   en: {
     'app.subtitle': 'local transcription workbench',
+    'app.skipToContent': 'Skip to content',
     'status.backendOnline': 'Backend online',
     'status.backendOffline': 'Backend offline',
     'status.ffmpegReady': 'ffmpeg ready',
@@ -450,6 +451,7 @@ const dictionaries = {
   },
   zh: {
     'app.subtitle': '本地转写工作台',
+    'app.skipToContent': '跳到主内容',
     'status.backendOnline': '后端在线',
     'status.backendOffline': '后端离线',
     'status.ffmpegReady': 'ffmpeg 可用',

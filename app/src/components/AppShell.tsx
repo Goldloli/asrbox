@@ -15,14 +15,22 @@ import { useI18n } from '../lib/i18n';
 import { getActiveDownloadItems, getActiveTaskItems } from '../lib/api';
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
+
   return (
     <div className="app-bg flex h-dvh min-w-[320px] overflow-hidden">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:border focus:border-[color:var(--app-accent)] focus:bg-[var(--app-panel-solid)] focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+      >
+        {t('app.skipToContent')}
+      </a>
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <GlobalShortcuts />
         <CommandPalette />
         <TopStatusBar />
-        <main className="min-h-0 flex-1 overflow-auto">
+        <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
           <div className="mx-auto w-full max-w-[1680px] p-4 xl:p-5">{children}</div>
         </main>
         <PersistentAudioPlayer />
