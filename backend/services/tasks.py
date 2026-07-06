@@ -34,6 +34,8 @@ from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
 from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
 from backend.utils.events import event_bus
+from backend.utils.transcript_text import normalize_transcript_text
+from backend.utils.transcript_text import transcript_text_from_segments
 
 CHUNK_SIZE = 1024 * 1024
 LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
@@ -555,7 +557,7 @@ def _transcribe_chunks(db: Session, row: TranscriptionTask, normalized_path: Pat
     from backend.models import TranscriptionResult
 
     return TranscriptionResult(
-        text="\n".join(text for text in texts if text),
+        text=transcript_text_from_segments(all_segments) or "\n".join(text for text in texts if text),
         language=row.language,
         duration=row.duration_ms / 1000 if row.duration_ms else (all_segments[-1].end if all_segments else None),
         segments=all_segments,
@@ -628,7 +630,14 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             traditional_to_simplified=bool(options.get("traditional_to_simplified", False)),
         )
         _write_options(row, options)
-        row.text = "\n".join(segment.text for segment in segments) or result.text
+        text_from_segments = transcript_text_from_segments(segments)
+        segment_altering_options = (
+            mode == "aggressive"
+            or bool(options.get("merge_short_segments", False))
+            or bool(options.get("traditional_to_simplified", False))
+            or bool(options.get("diarization", settings.diarization))
+        )
+        row.text = text_from_segments if segment_altering_options else (normalize_transcript_text(result.text) or text_from_segments)
         if row.duration_ms is None:
             row.duration_ms = int((result.duration or 0) * 1000)
         _store_segments(db, row, segments)
@@ -862,7 +871,7 @@ def postprocess_task(
         traditional_to_simplified=traditional_to_simplified,
     )
     _store_segments(db, row, processed)
-    row.text = "\n".join(segment.text for segment in processed)
+    row.text = transcript_text_from_segments(processed)
     row.updated_at = _utc_now()
     db.commit()
     db.refresh(row)
@@ -883,7 +892,7 @@ def _reindex_segments(db: Session, task_id: str) -> None:
 
 def _save_edit_version(db: Session, row: TranscriptionTask) -> TranscriptionTaskResponse:
     _reindex_segments(db, row.id)
-    row.text = "\n".join(segment.text for segment in _segments_for_task(db, row.id))
+    row.text = transcript_text_from_segments(_segments_for_task(db, row.id))
     row.updated_at = _utc_now()
     db.commit()
     db.refresh(row)
@@ -1064,7 +1073,7 @@ def _merge_completed_chunks(db: Session, row: TranscriptionTask) -> None:
         if chunk.text
     ]
     _store_segments(db, row, segments)
-    row.text = "\n".join(segment.text for segment in segments)
+    row.text = transcript_text_from_segments(segments)
     if chunks and not db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == row.id, TranscriptionChunk.status == "failed").first():
         row.status = "completed"
         row.progress = 100
@@ -1093,7 +1102,7 @@ def retry_chunk(db: Session, task_id: str, chunk_id: int) -> TranscriptionTaskRe
     db.commit()
     try:
         result = _transcribe_path_for_row(db, row, path)
-        chunk.text = result.text or "\n".join(segment.text for segment in result.segments)
+        chunk.text = result.text or transcript_text_from_segments(result.segments)
         chunk.status = "completed"
         chunk.progress = 100
         db.commit()

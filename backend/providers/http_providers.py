@@ -9,6 +9,7 @@ import requests
 
 from backend.models import ProviderHealth, TranscriptSegment, TranscriptionResult
 from backend.providers.base import ProviderError
+from backend.utils.transcript_text import transcript_text_from_segments
 
 
 def _get_path(data: Any, path: str | None):
@@ -74,7 +75,7 @@ def _result_from_payload(data: Any, *, text_path: str | None, segments_path: str
     segments = _segments_from_payload(_get_path(data, segments_path) if segments_path else data.get("segments") if isinstance(data, dict) else None)
     text = str(text_value or "").strip()
     if not text and segments:
-        text = "\n".join(segment.text for segment in segments)
+        text = transcript_text_from_segments(segments)
     if text and not segments:
         segments = [TranscriptSegment(id=1, start=0.0, end=0.0, text=text)]
     return TranscriptionResult(
