@@ -8,6 +8,7 @@ import requests
 
 from backend.models import ProviderHealth, TranscriptSegment, TranscriptionResult
 from backend.providers.base import ProviderError
+from backend.utils.transcript_text import transcript_text_from_segments
 
 API_BASE_URL = "https://member.bilibili.com/x/bcut/rubick-interface"
 API_REQ_UPLOAD = f"{API_BASE_URL}/resource/create"
@@ -46,7 +47,7 @@ class BcutProvider:
             for index, item in enumerate(response.get("utterances", []), 1)
         ]
         return TranscriptionResult(
-            text="\n".join(segment.text for segment in segments),
+            text=transcript_text_from_segments(segments),
             language=options.get("language"),
             duration=segments[-1].end if segments else None,
             segments=segments,

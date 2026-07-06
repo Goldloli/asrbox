@@ -9,6 +9,8 @@ from backend import config
 from backend.backends.registry import ASRModelConfig
 from backend.models import TranscriptSegment, TranscriptionResult
 from backend.utils.hf_offline_patch import local_hf_files_only
+from backend.utils.transcript_text import normalize_transcript_text
+from backend.utils.transcript_text import transcript_text_from_segments
 
 try:
     from faster_whisper import WhisperModel
@@ -189,8 +191,9 @@ class FasterWhisperBackend:
         words: list[dict] = []
         texts: list[str] = []
         for index, item in enumerate(raw_segments, 1):
-            text = str(getattr(item, "text", "") or "").strip()
-            texts.append(text)
+            raw_text = str(getattr(item, "text", "") or "")
+            text = raw_text.strip()
+            texts.append(raw_text)
             segments.append(
                 TranscriptSegment(
                     id=index,
@@ -210,7 +213,7 @@ class FasterWhisperBackend:
                     }
                 )
 
-        text = "".join(texts).strip()
+        text = normalize_transcript_text("".join(texts)) or transcript_text_from_segments(segments)
         return TranscriptionResult(
             text=text,
             language=getattr(info, "language", language),
@@ -257,7 +260,7 @@ class FunASRBackend:
         segments = _funasr_segments(raw_items, text)
         duration = segments[-1].end if segments else None
         return TranscriptionResult(
-            text=text or "\n".join(segment.text for segment in segments),
+            text=text or transcript_text_from_segments(segments),
             language=language,
             duration=duration,
             segments=segments,
@@ -303,7 +306,7 @@ class MLXWhisperBackend:
         if text and not segments:
             segments = [TranscriptSegment(id=1, start=0.0, end=0.0, text=text)]
         return TranscriptionResult(
-            text=text or "\n".join(segment.text for segment in segments),
+            text=text or transcript_text_from_segments(segments),
             language=language,
             duration=segments[-1].end if segments else None,
             segments=segments,
