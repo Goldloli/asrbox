@@ -8,5 +8,6 @@ __pycache__/
 node_modules/
 dist/
 data/
+frontend-audit-screenshots/95-gate/
 .DS_Store
 测试音视频/
