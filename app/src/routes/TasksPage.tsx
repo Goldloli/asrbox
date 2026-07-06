@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArchiveX, Clipboard, Download, FileAudio, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2 } from 'lucide-react';
+import { ArchiveX, CheckSquare, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -13,20 +13,14 @@ import { TaskTimeline, type TaskTimelineTab } from '../components/TaskTimeline';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
-import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 import { ErrorDiagnosticsPanel, FilterCheckboxGroup, Metric, TaskRow, useTaskMutation } from '../components/tasks/TaskWorkbenchParts';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
+import { downloadUrl } from '../lib/downloads';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
 type ErrorFilter = 'all' | 'with' | 'without';
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
-const lastTaskStorageKey = 'asrbox-last-task-id';
-const exportPresets = [
-  { key: 'subtitles', labelKey: 'tasks.exportPresetSubtitles', formats: ['srt', 'vtt', 'ass'] },
-  { key: 'text', labelKey: 'tasks.exportPresetText', formats: ['txt', 'md'] },
-  { key: 'debug', labelKey: 'tasks.exportPresetDebug', formats: ['json', 'txt'] },
-] as const;
 
 interface RecentExport {
   taskId: string;
@@ -57,6 +51,8 @@ export function TasksPage() {
   const [newCollectionName, setNewCollectionName] = useState('');
   const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
   const tasks = tasksQuery.data?.items ?? [];
@@ -112,15 +108,22 @@ export function TasksPage() {
       return true;
     });
   }, [collectionFilter, dateFilter, errorFilter, modelFilters, providerFilters, statusFilters, taskCollectionsById, taskNotesById, taskSearchQuery, taskTagsById, tasks]);
-  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? filteredTasks[0] ?? tasks[0];
+  const selectedTask = selectedTaskId ? tasks.find((task) => task.id === selectedTaskId) : undefined;
   const selectedTasks = useMemo(
     () => tasks.filter((task) => selectedTaskIds.includes(task.id)),
     [selectedTaskIds, tasks],
   );
   const selectedCompletedTasks = selectedTasks.filter((task) => task.status === 'completed');
-  const selectedExportFormats = Array.from(new Set(selectedCompletedTasks.flatMap((task) => getTaskOutputFormats(task)))).slice(0, 6);
   const selectedRecentExports = selectedTask ? recentExports.filter((item) => item.taskId === selectedTask.id).slice(0, 5) : [];
   const allFilteredSelected = filteredTasks.length > 0 && filteredTasks.every((task) => selectedTaskIds.includes(task.id));
+  const activeTaskCount = getActiveTaskItems(activeTasksQuery.data).length;
+  const activeFilterCount =
+    statusFilters.length +
+    modelFilters.length +
+    providerFilters.length +
+    (dateFilter !== 'all' ? 1 : 0) +
+    (errorFilter !== 'all' ? 1 : 0) +
+    (collectionFilter !== 'all' ? 1 : 0);
 
   const diagnosticsQuery = useQuery({
     queryKey: selectedTask ? queryKeys.taskDiagnostics(selectedTask.id) : ['tasks', 'empty', 'diagnostics'],
@@ -161,13 +164,7 @@ export function TasksPage() {
   const remove = useTaskMutation(apiClient.deleteTask.bind(apiClient), refresh, t('toast.taskDeleted'));
 
   useEffect(() => {
-    if (selectedTaskId) localStorage.setItem(lastTaskStorageKey, selectedTaskId);
-  }, [selectedTaskId]);
-
-  useEffect(() => {
-    if (selectedTaskId || tasks.length === 0) return;
-    const lastTaskId = localStorage.getItem(lastTaskStorageKey);
-    if (lastTaskId && tasks.some((task) => task.id === lastTaskId)) setSelectedTaskId(lastTaskId);
+    if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) setSelectedTaskId(null);
   }, [selectedTaskId, tasks]);
 
   const toggleTaskSelection = (taskId: string) => {
@@ -212,16 +209,13 @@ export function TasksPage() {
     }
   };
 
-  const exportSelectedTasks = (format: string) => {
-    selectedCompletedTasks.forEach((task) => {
-      const link = document.createElement('a');
-      link.href = apiClient.exportTaskUrl(task.id, format);
-      link.rel = 'noopener noreferrer';
-      link.download = '';
-      link.click();
-      recordRecentExport(task, format);
-    });
-    toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+  const exportSelectedTasks = async (format: string) => {
+    try {
+      await Promise.all(selectedCompletedTasks.map((task) => downloadTaskFormat(task, format)));
+      toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
   };
 
   const recordRecentExport = (task: TranscriptionTask, format: string) => {
@@ -232,28 +226,25 @@ export function TasksPage() {
   };
 
   const downloadTaskFormat = async (task: TranscriptionTask, format: string) => {
-    const response = await fetch(apiClient.exportTaskUrl(task.id, format));
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const blobUrl = URL.createObjectURL(await response.blob());
-    try {
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.rel = 'noopener noreferrer';
-      link.download = `${task.filename}.${format}`;
-      link.click();
-      recordRecentExport(task, format);
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    }
+    await downloadUrl(apiClient.exportTaskUrl(task.id, format), `${task.filename}.${format}`);
+    recordRecentExport(task, format);
   };
 
-  const exportTaskFormats = async (task: TranscriptionTask, formats: readonly string[], label: string) => {
-    try {
-      await Promise.all(formats.map((format) => downloadTaskFormat(task, format)));
-      toast.info(t('tasks.exportPresetStarted'), label);
-    } catch (error) {
-      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
-    }
+  const clearFilters = () => {
+    setStatusFilters([]);
+    setCollectionFilter('all');
+    setDateFilter('all');
+    setErrorFilter('all');
+    setModelFilters([]);
+    setProviderFilters([]);
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((current) => {
+      const next = !current;
+      if (!next) setSelectedTaskIds([]);
+      return next;
+    });
   };
 
   const copyTaskText = async (task: TranscriptionTask) => {
@@ -297,108 +288,124 @@ export function TasksPage() {
   };
 
   return (
-    <section className="grid gap-4 pb-28 xl:grid-cols-[380px_minmax(0,1fr)] xl:pb-0">
+    <section className="mx-auto grid max-w-5xl gap-4 pb-28 xl:pb-0">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('tasks.eyebrow')}
           title={t('tasks.title')}
-          description={`${tasks.length} ${t('tasks.description')} · ${getActiveTaskItems(activeTasksQuery.data).length} ${t('tasks.active')}`}
+          description={t('tasks.listOnlyDescription')}
           action={
-            <div className="hidden gap-2 xl:hidden 2xl:flex">
-              {statuses.map((item) => (
-                <Button
-                  key={item}
-                  size="sm"
-                  variant={(item === 'all' ? statusFilters.length === 0 : statusFilters.includes(item)) ? 'primary' : 'secondary'}
-                  onClick={() => toggleStatusFilter(item)}
-                >
-                  {statusLabel(item)}
-                </Button>
-              ))}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button size="sm" variant={showFilters ? 'primary' : 'secondary'} onClick={() => setShowFilters((current) => !current)}>
+                <Filter className="size-4" />
+                {activeFilterCount > 0 ? `${t('tasks.filters')} ${activeFilterCount}` : t('tasks.filters')}
+              </Button>
+              <Button size="sm" variant={selectionMode ? 'primary' : 'secondary'} onClick={toggleSelectionMode}>
+                <CheckSquare className="size-4" />
+                {selectionMode ? t('common.cancel') : t('tasks.selectMode')}
+              </Button>
             </div>
           }
         />
         <div className="grid gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
-            <Input
-              value={taskSearchQuery}
-              onChange={(event) => setTaskSearchQuery(event.target.value)}
-              placeholder={t('search.placeholder')}
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
+              <Input
+                value={taskSearchQuery}
+                onChange={(event) => setTaskSearchQuery(event.target.value)}
+                placeholder={t('search.placeholder')}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-app-muted">
+              <Badge>{tasks.length} {t('tasks.description')}</Badge>
+              <Badge tone={activeTaskCount > 0 ? 'warning' : 'neutral'}>{activeTaskCount} {t('tasks.active')}</Badge>
+              <Badge>{filteredTasks.length} {t('tasks.filtered')}</Badge>
+            </div>
           </div>
-          <div className="grid gap-3 rounded-xl border app-control p-3">
-            <div className="flex flex-wrap gap-2 2xl:hidden">
-              {statuses.map((item) => (
-                <Button
-                  key={item}
-                  size="sm"
-                  variant={(item === 'all' ? statusFilters.length === 0 : statusFilters.includes(item)) ? 'primary' : 'secondary'}
-                  onClick={() => toggleStatusFilter(item)}
-                >
-                  {statusLabel(item)}
+
+          {showFilters && (
+            <div className="grid gap-3 rounded-xl border app-control p-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-app">{t('tasks.filters')}</h2>
+                <Button size="sm" variant="ghost" onClick={clearFilters} disabled={activeFilterCount === 0}>
+                  <X className="size-4" />
+                  {t('tasks.clearFilters')}
                 </Button>
-              ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {statuses.map((item) => (
+                  <Button
+                    key={item}
+                    size="sm"
+                    variant={(item === 'all' ? statusFilters.length === 0 : statusFilters.includes(item)) ? 'primary' : 'secondary'}
+                    onClick={() => toggleStatusFilter(item)}
+                  >
+                    {statusLabel(item)}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                <label className="grid gap-2 text-xs font-medium text-app-muted">
+                  {t('tasks.collectionFilter')}
+                  <Select
+                    value={collectionFilter}
+                    onValueChange={setCollectionFilter}
+                    options={[
+                      { value: 'all', label: t('tasks.allCollections') },
+                      { value: 'none', label: t('tasks.noCollection') },
+                      ...collections.map((collection) => ({ value: collection, label: collection })),
+                    ]}
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-medium text-app-muted">
+                  {t('tasks.dateFilter')}
+                  <Select
+                    value={dateFilter}
+                    onValueChange={(value) => setDateFilter(value as DateFilter)}
+                    options={[
+                      { value: 'all', label: t('tasks.dateAll') },
+                      { value: 'today', label: t('tasks.dateToday') },
+                      { value: '7d', label: t('tasks.dateLast7') },
+                      { value: '30d', label: t('tasks.dateLast30') },
+                    ]}
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-medium text-app-muted">
+                  {t('tasks.errorFilter')}
+                  <Select
+                    value={errorFilter}
+                    onValueChange={(value) => setErrorFilter(value as ErrorFilter)}
+                    options={[
+                      { value: 'all', label: t('tasks.errorAll') },
+                      { value: 'with', label: t('tasks.withErrors') },
+                      { value: 'without', label: t('tasks.withoutErrors') },
+                    ]}
+                  />
+                </label>
+              </div>
+              {modelOptions.length > 0 && (
+                <FilterCheckboxGroup
+                  title={t('tasks.modelFilter')}
+                  options={modelOptions}
+                  values={modelFilters}
+                  onToggle={(value) => setModelFilters((current) => toggleListValue(current, value))}
+                />
+              )}
+              {providerOptions.length > 0 && (
+                <FilterCheckboxGroup
+                  title={t('tasks.platformFilter')}
+                  options={providerOptions}
+                  values={providerFilters}
+                  onToggle={(value) => setProviderFilters((current) => toggleListValue(current, value))}
+                />
+              )}
             </div>
-            <div className="grid gap-2">
-              <label className="grid gap-2 text-xs font-medium text-app-muted">
-                {t('tasks.collectionFilter')}
-                <Select
-                  value={collectionFilter}
-                  onValueChange={setCollectionFilter}
-                  options={[
-                    { value: 'all', label: t('tasks.allCollections') },
-                    { value: 'none', label: t('tasks.noCollection') },
-                    ...collections.map((collection) => ({ value: collection, label: collection })),
-                  ]}
-                />
-              </label>
-              <label className="grid gap-2 text-xs font-medium text-app-muted">
-                {t('tasks.dateFilter')}
-                <Select
-                  value={dateFilter}
-                  onValueChange={(value) => setDateFilter(value as DateFilter)}
-                  options={[
-                    { value: 'all', label: t('tasks.dateAll') },
-                    { value: 'today', label: t('tasks.dateToday') },
-                    { value: '7d', label: t('tasks.dateLast7') },
-                    { value: '30d', label: t('tasks.dateLast30') },
-                  ]}
-                />
-              </label>
-              <label className="grid gap-2 text-xs font-medium text-app-muted">
-                {t('tasks.errorFilter')}
-                <Select
-                  value={errorFilter}
-                  onValueChange={(value) => setErrorFilter(value as ErrorFilter)}
-                  options={[
-                    { value: 'all', label: t('tasks.errorAll') },
-                    { value: 'with', label: t('tasks.withErrors') },
-                    { value: 'without', label: t('tasks.withoutErrors') },
-                  ]}
-                />
-              </label>
-            </div>
-            {modelOptions.length > 0 && (
-              <FilterCheckboxGroup
-                title={t('tasks.modelFilter')}
-                options={modelOptions}
-                values={modelFilters}
-                onToggle={(value) => setModelFilters((current) => toggleListValue(current, value))}
-              />
-            )}
-            {providerOptions.length > 0 && (
-              <FilterCheckboxGroup
-                title={t('tasks.platformFilter')}
-                options={providerOptions}
-                values={providerFilters}
-                onToggle={(value) => setProviderFilters((current) => toggleListValue(current, value))}
-              />
-            )}
-          </div>
-          {filteredTasks.length > 0 && (
+          )}
+
+          {selectionMode && filteredTasks.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl border app-control px-3 py-2">
               <label className="flex items-center gap-2 text-xs text-app-muted">
                 <input
@@ -431,7 +438,7 @@ export function TasksPage() {
                   <RotateCcw className="size-4" />
                   {t('tasks.retry')}
                 </Button>
-                {selectedExportFormats.map((format) => (
+                {outputFileFormats.map((format) => (
                   <Button
                     key={format}
                     size="sm"
@@ -457,7 +464,8 @@ export function TasksPage() {
               </div>
             </div>
           )}
-          <div className="grid max-h-[calc(100dvh-420px)] min-h-64 gap-2 overflow-auto pr-1">
+
+          <div className="grid max-h-[calc(100dvh-260px)] min-h-80 gap-2 overflow-auto pr-1">
             {filteredTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -466,8 +474,9 @@ export function TasksPage() {
                 checked={selectedTaskIds.includes(task.id)}
                 favorited={favoriteTaskIds.includes(task.id)}
                 collection={taskCollectionsById[task.id]}
+                selectionMode={selectionMode}
                 onToggle={() => toggleTaskSelection(task.id)}
-                onSelect={() => setSelectedTaskId(task.id)}
+                onSelect={() => (selectionMode ? toggleTaskSelection(task.id) : setSelectedTaskId(task.id))}
               />
             ))}
             {filteredTasks.length === 0 && (
@@ -490,16 +499,29 @@ export function TasksPage() {
         </div>
       </Panel>
 
-      <div className="grid min-w-0 content-start gap-4">
-        <Panel className="overflow-hidden">
-          <PanelHeader
-            eyebrow={t('tasks.inspector')}
-            title={selectedTask?.filename ?? t('tasks.noSelected')}
-            description={selectedTask ? `${selectedTask.id} · ${formatDate(selectedTask.updated_at)}` : t('tasks.selectFromQueue')}
-            action={selectedTask && <StatusPill status={selectedTask.status} />}
+      {selectedTask && (
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            className="absolute inset-0 bg-[var(--app-overlay)]"
+            aria-label={t('tasks.closeDetails')}
+            onClick={() => setSelectedTaskId(null)}
           />
-          {selectedTask ? (
-            <div className="grid gap-4 p-5">
+          <aside className="absolute inset-y-0 right-0 grid w-full max-w-[920px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-l app-border bg-[var(--app-panel-solid)] text-app shadow-2xl shadow-[var(--app-shadow)]">
+            <header className="flex items-start justify-between gap-4 border-b app-border px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase text-app-accent">{t('tasks.inspector')}</p>
+                <h2 className="mt-1 truncate text-lg font-semibold text-app">{selectedTask.filename}</h2>
+                <p className="mt-1 text-xs text-app-muted">{selectedTask.id} · {formatDate(selectedTask.updated_at)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusPill status={selectedTask.status} />
+                <Button size="icon" variant="ghost" aria-label={t('tasks.closeDetails')} title={t('tasks.closeDetails')} onClick={() => setSelectedTaskId(null)}>
+                  <X className="size-4" />
+                </Button>
+              </div>
+            </header>
+            <div className="grid content-start gap-4 overflow-auto p-5">
               <Progress value={selectedTask.progress} />
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <Metric label={t('tasks.engine')} value={selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source} />
@@ -608,19 +630,6 @@ export function TasksPage() {
                       {t('tasks.openFileLocation')}
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-2 border-t app-border pt-3">
-                    {exportPresets.map((preset) => (
-                      <Button
-                        key={preset.key}
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => exportTaskFormats(selectedTask, preset.formats, t(preset.labelKey))}
-                      >
-                        <Download className="size-4" />
-                        {t(preset.labelKey)}
-                      </Button>
-                    ))}
-                  </div>
                 </div>
               )}
               <div className="grid gap-2 rounded-xl border app-control p-3">
@@ -638,7 +647,7 @@ export function TasksPage() {
                   <p className="text-sm text-app-muted">{t('tasks.noRecentExports')}</p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 rounded-xl border app-control p-3">
                 <Button
                   size="sm"
                   variant={favoriteTaskIds.includes(selectedTask.id) ? 'primary' : 'secondary'}
@@ -710,23 +719,7 @@ export function TasksPage() {
                   </Button>
                 </ConfirmAction>
               </div>
-            </div>
-          ) : (
-            <EmptyState
-              title={t('tasks.noSelected')}
-              action={
-                <Button asChild>
-                  <Link to="/">{t('transcribe.start')}</Link>
-                </Button>
-              }
-            />
-          )}
-        </Panel>
-
-        {selectedTask && (
-          <Panel className="overflow-hidden">
-            <div className="p-5">
-              <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'timeline' | 'transcript')} className="grid gap-4">
+              <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'timeline' | 'transcript')} className="grid gap-4 rounded-xl border app-control p-3">
                 <TabsList>
                   <TabsTrigger value="timeline">{t('tasks.timeline')}</TabsTrigger>
                   <TabsTrigger value="transcript">{t('transcript.title')}</TabsTrigger>
@@ -747,9 +740,9 @@ export function TasksPage() {
                 </TabsContent>
               </Tabs>
             </div>
-          </Panel>
-        )}
-      </div>
+          </aside>
+        </div>
+      )}
     </section>
   );
 }

@@ -179,7 +179,7 @@ export function ModelsPage() {
         </div>
       </Panel>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel className="overflow-hidden">
           <PanelHeader eyebrow={t('models.recommended')} title={t('models.guideTitle')} description={t('models.guideBody')} />
           <div className="grid gap-3 p-5">
@@ -283,7 +283,7 @@ export function ModelsPage() {
             </div>
             <div className="grid max-h-80 gap-2 overflow-auto pr-1">
               {(storageQuery.data?.models ?? []).map((item) => (
-                <div key={item.model_name} className="flex items-center justify-between gap-3 rounded-lg border app-control px-3 py-2">
+                <div key={item.model_name} className="flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-lg border app-control px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm text-app">{item.model_name}</p>
                     <p className="truncate text-xs text-app-muted">{item.path}</p>

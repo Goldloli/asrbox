@@ -84,23 +84,6 @@ export function formatSubtitlePreview(segments: TranscriptionTask['segments'], f
   return format === 'vtt' ? `WEBVTT\n\n${body}` : body;
 }
 
-export function formatOutputTemplate(
-  template: 'minutes' | 'transcript' | 'subtitles' | 'markdown',
-  filename: string,
-  text: string,
-  segments: TranscriptionTask['segments'],
-  subtitleFormat: 'srt' | 'vtt',
-) {
-  if (template === 'minutes') {
-    return `# ${filename} 会议纪要\n\n## 结论\n- \n\n## 待办\n- \n\n## 原文记录\n${text || ''}`;
-  }
-  if (template === 'subtitles') return formatSubtitlePreview(segments, subtitleFormat);
-  if (template === 'markdown') {
-    return `# ${filename}\n\n## Notes\n\n## Transcript\n\n${text || ''}`;
-  }
-  return text || '';
-}
-
 export function drawAudioWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer) {
   const pixelRatio = window.devicePixelRatio || 1;
   const width = Math.max(320, Math.floor(canvas.clientWidth * pixelRatio));

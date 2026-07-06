@@ -15,6 +15,7 @@ export function TaskRow({
   checked,
   favorited,
   collection,
+  selectionMode = false,
   onToggle,
   onSelect,
 }: {
@@ -23,23 +24,27 @@ export function TaskRow({
   checked: boolean;
   favorited: boolean;
   collection?: string;
+  selectionMode?: boolean;
   onToggle: () => void;
   onSelect: () => void;
 }) {
   return (
     <article
       className={cn(
-        'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-lg border px-3 py-2.5 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
+        'grid items-start gap-2 rounded-lg border px-3 py-2.5 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
+        selectionMode ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1',
         selected ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
       )}
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onToggle}
-        aria-label={task.filename}
-        className="mt-1 size-4 rounded border app-control accent-[var(--app-accent)]"
-      />
+      {selectionMode && (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          aria-label={task.filename}
+          className="mt-1 size-4 rounded border app-control accent-[var(--app-accent)]"
+        />
+      )}
       <button type="button" className="grid min-w-0 gap-2 text-left" onClick={onSelect}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
