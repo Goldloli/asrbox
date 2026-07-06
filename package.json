@@ -12,6 +12,7 @@
     "dev:server": ".venv/bin/uvicorn backend.main:app --reload --port 17494",
     "setup:dev": "node scripts/setup-dev-sidecar.js",
     "build:web": "cd web && vite build",
+    "audit:frontend": "node scripts/frontend-quality-audit.mjs",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",
     "test:backend:real-models": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",
@@ -27,6 +28,7 @@
     "test:backend:all": "npm run test:backend && npm run test:backend:real-models && npm run test:backend:model-benchmark-full && npm run test:backend:long-audio && npm run test:backend:providers && npm run test:backend:storage-security && npm run test:backend:server"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^20.0.0",
     "typescript": "^5.6.0"
   },
