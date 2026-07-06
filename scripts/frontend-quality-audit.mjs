@@ -93,7 +93,20 @@ function preferenceScript(state) {
 async function collectPageMetrics(page) {
   return page.evaluate(() => {
     const bodyText = document.body.innerText.trim();
+    const isVisuallyHidden = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        element.classList.contains('sr-only') ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.opacity === '0' ||
+        rect.width <= 1 ||
+        rect.height <= 1
+      );
+    };
     const overflow = Array.from(document.querySelectorAll('body *'))
+      .filter((element) => !isVisuallyHidden(element))
       .map((element) => {
         const rect = element.getBoundingClientRect();
         return {
@@ -110,6 +123,7 @@ async function collectPageMetrics(page) {
 
     const clippedButtons = Array.from(document.querySelectorAll('button, a'))
       .filter((element) => {
+        if (isVisuallyHidden(element)) return false;
         const text = (element.textContent ?? '').trim();
         return text && (element.scrollWidth > element.clientWidth + 2 || element.scrollHeight > element.clientHeight + 2);
       })

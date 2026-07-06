@@ -11,5 +11,18 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalizedId = id.replace(/\\/g, '/');
+          if (!normalizedId.includes('node_modules')) return;
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(normalizedId)) return 'vendor-react';
+          if (normalizedId.includes('@tanstack')) return 'vendor-tanstack';
+          if (normalizedId.includes('@radix-ui')) return 'vendor-radix';
+          if (normalizedId.includes('lucide-react')) return 'vendor-icons';
+          return 'vendor';
+        },
+      },
+    },
   },
 });

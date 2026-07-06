@@ -169,7 +169,7 @@ export function TranscribePage() {
           title={t('transcribe.title')}
           description={t('transcribe.description')}
           action={
-            <Button variant="ghost" size="icon" onClick={() => tasksQuery.refetch()} title={t('common.refresh')}>
+            <Button variant="ghost" size="icon" onClick={() => tasksQuery.refetch()} title={t('common.refresh')} aria-label={t('common.refresh')}>
               <RefreshCw className="size-4" />
             </Button>
           }

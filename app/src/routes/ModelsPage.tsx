@@ -116,7 +116,7 @@ export function ModelsPage() {
           title={t('models.title')}
           description={`${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}
           action={
-            <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')}>
+            <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')} aria-label={t('common.refresh')}>
               <RefreshCw className="size-4" />
             </Button>
           }

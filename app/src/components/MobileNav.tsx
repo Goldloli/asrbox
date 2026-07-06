@@ -3,7 +3,7 @@ import { DownloadCloud, ListChecks, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
-import asrboxIcon from '../assets/asrbox-icon.png';
+import asrboxIcon from '../assets/asrbox-icon-256.png';
 
 const mobileNav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon?: LucideIcon; brand?: boolean }> = [
   { to: '/', labelKey: 'nav.transcribe', brand: true },

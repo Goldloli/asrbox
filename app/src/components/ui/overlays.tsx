@@ -27,7 +27,10 @@ export function DialogContent({ title, children }: { title: string; children: Re
       <DialogPrimitive.Content className="app-panel fixed left-1/2 top-1/2 z-50 max-h-[82vh] w-[min(720px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-xl border p-5 text-app focus:outline-none">
         <div className="mb-4 flex items-start justify-between gap-4">
           <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
-          <DialogPrimitive.Close className="grid size-8 place-items-center rounded-lg text-app-muted hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/25">
+          <DialogPrimitive.Close
+            aria-label="Close dialog"
+            className="grid size-8 place-items-center rounded-lg text-app-muted hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/25"
+          >
             <X className="size-4" />
           </DialogPrimitive.Close>
         </div>
