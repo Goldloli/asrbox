@@ -15,6 +15,7 @@ import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import { getTaskOutputFormats } from '../lib/transcriptionOptions';
 import { ErrorDiagnosticsPanel, FilterCheckboxGroup, Metric, TaskRow, useTaskMutation } from '../components/tasks/TaskWorkbenchParts';
+import { desktopCapabilities } from '../lib/desktopCapabilities';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
@@ -596,8 +597,12 @@ export function TasksPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled
-                      title={t('tasks.openFileLocationUnavailable')}
+                      disabled={!desktopCapabilities.canOpenFileLocation}
+                      title={desktopCapabilities.canOpenFileLocation ? t('tasks.openFileLocation') : t('tasks.openFileLocationUnavailable')}
+                      onClick={() => {
+                        desktopCapabilities.openFileLocation(selectedTask.normalized_audio_path ?? selectedTask.audio_path)
+                          .catch((error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)));
+                      }}
                     >
                       <FolderOpen className="size-4" />
                       {t('tasks.openFileLocation')}

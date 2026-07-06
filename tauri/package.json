@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo \"Tauri shell is reserved for phase 2\"",
-    "build": "echo \"Tauri shell is reserved for phase 2\""
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.5"
   }
 }
