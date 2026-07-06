@@ -170,7 +170,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       <div className="grid gap-5 p-5">
         <Progress value={task.progress} />
         {task.error && (
-          <div className="rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
             {task.error_code && <p className="mb-1 font-medium">{task.error_code}</p>}
             <p>{task.error}</p>
           </div>
