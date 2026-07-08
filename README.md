@@ -201,6 +201,17 @@ cargo test
 - `ASRBOX_FFMPEG_PATH`：显式指定 ffmpeg 路径。
 - `ASRBOX_FFPROBE_PATH`：显式指定 ffprobe 路径。
 
+## 项目文档
+
+- [贡献指南](CONTRIBUTING.md)
+- [安全政策](SECURITY.md)
+- [隐私说明](docs/privacy.md)
+- [模型说明](docs/models.md)
+- [故障排查](docs/troubleshooting.md)
+- [发布流程](docs/release.md)
+- [CI 说明](docs/ci.md)
+- [第三方依赖说明](THIRD_PARTY_NOTICES.md)
+
 ## 常见问题
 
 ### 后端离线

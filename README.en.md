@@ -200,6 +200,17 @@ Environment variables used by the backend:
 - `ASRBOX_FFMPEG_PATH`: explicit ffmpeg binary path.
 - `ASRBOX_FFPROBE_PATH`: explicit ffprobe binary path.
 
+## Project Docs
+
+- [Contributing guide](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Privacy notes](docs/privacy.md)
+- [Model guide](docs/models.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Release process](docs/release.md)
+- [CI notes](docs/ci.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+
 ## Troubleshooting
 
 ### Backend is offline
