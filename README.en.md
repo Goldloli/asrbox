@@ -235,4 +235,4 @@ Keep changes small and testable:
 
 ## License
 
-No license file is included yet. Add a `LICENSE` file before public release so contributors and users know how the project can be used, modified, and redistributed.
+ASRbox is released under the MIT License. See [LICENSE](LICENSE).
