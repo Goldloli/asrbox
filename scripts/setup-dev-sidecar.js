@@ -51,3 +51,4 @@ function ensureResourceDirectory(baseName) {
 
 createPlaceholder('asrbox-server');
 ensureResourceDirectory('asrbox-server');
+ensureResourceDirectory('ffmpeg');
