@@ -176,4 +176,6 @@ class ASRSettings(Base):
     output_formats_json = Column(Text, nullable=False, default='["txt","srt"]')
     max_concurrent_local_tasks = Column(Integer, nullable=False, default=1)
     max_concurrent_provider_tasks = Column(Integer, nullable=False, default=2)
+    ffmpeg_path = Column(Text, nullable=True)
+    ffprobe_path = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

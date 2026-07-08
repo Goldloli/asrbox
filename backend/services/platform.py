@@ -7,6 +7,8 @@ import shutil
 import sys
 from typing import Any
 
+from backend.services.ffmpeg_tools import resolve_tools
+
 
 def module_available(name: str) -> bool:
     try:
@@ -69,12 +71,15 @@ def detect_runtime() -> dict[str, Any]:
         except Exception as exc:
             warnings.append(f"torch inspection failed: {exc}")
 
-    ffmpeg_available = shutil.which("ffmpeg") is not None
-    ffprobe_available = shutil.which("ffprobe") is not None
+    tools = resolve_tools()
+    ffmpeg = tools["ffmpeg"]
+    ffprobe = tools["ffprobe"]
+    ffmpeg_available = ffmpeg.available
+    ffprobe_available = ffprobe.available
     if not ffmpeg_available:
-        warnings.append("ffmpeg is not available")
+        warnings.append(f"ffmpeg is not available: {ffmpeg.error or 'missing'}")
     if not ffprobe_available:
-        warnings.append("ffprobe is not available")
+        warnings.append(f"ffprobe is not available: {ffprobe.error or 'missing'}")
 
     pyannote_available = module_available("pyannote.audio")
     diarization_ready = pyannote_available and bool(os.environ.get("HF_TOKEN"))
@@ -99,6 +104,14 @@ def detect_runtime() -> dict[str, Any]:
         "platform": platform_module.platform(),
         "ffmpeg_available": ffmpeg_available,
         "ffprobe_available": ffprobe_available,
+        "ffmpeg_path": ffmpeg.path,
+        "ffprobe_path": ffprobe.path,
+        "ffmpeg_source": ffmpeg.source,
+        "ffprobe_source": ffprobe.source,
+        "ffmpeg_version": ffmpeg.version,
+        "ffprobe_version": ffprobe.version,
+        "ffmpeg_error": ffmpeg.error,
+        "ffprobe_error": ffprobe.error,
         "torch_available": torch_available,
         "torch_cuda_available": torch_cuda_available,
         "torch_mps_available": torch_mps_available,

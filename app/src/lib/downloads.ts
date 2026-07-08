@@ -1,6 +1,13 @@
+import { desktopCapabilities } from './desktopCapabilities';
+import { useUiStore } from '../stores/uiStore';
+
 export async function downloadUrl(url: string, filename: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  if (desktopCapabilities.canSaveTextFile) {
+    return desktopCapabilities.saveTextFile(filename, await response.text(), useUiStore.getState().exportDirectory);
+  }
 
   const blobUrl = URL.createObjectURL(await response.blob());
   try {
@@ -14,4 +21,5 @@ export async function downloadUrl(url: string, filename: string) {
   } finally {
     window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
   }
+  return filename;
 }

@@ -39,6 +39,24 @@ def test_health_reports_ready_and_filesystem(tmp_path: Path) -> None:
     }
 
 
+def test_health_allows_tauri_origin(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.get("/health", headers={"Origin": "tauri://localhost"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "tauri://localhost"
+
+
+def test_health_allows_null_origin_for_packaged_webview(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    response = client.get("/health", headers={"Origin": "null"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "null"
+
+
 def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -79,6 +97,14 @@ def test_runtime_status_reports_backend_capabilities(tmp_path: Path) -> None:
     assert body["data_dir"] == str(tmp_path)
     assert body["models_dir"] == str(tmp_path / "models")
     assert "ffmpeg_available" in body
+    assert body["ffmpeg_source"] in {"manual", "bundled", "system", "missing"}
+    assert body["ffprobe_source"] in {"manual", "bundled", "system", "missing"}
+    assert "ffmpeg_path" in body
+    assert "ffprobe_path" in body
+    assert "ffmpeg_version" in body
+    assert "ffprobe_version" in body
+    assert "ffmpeg_error" in body
+    assert "ffprobe_error" in body
     assert "faster_whisper_available" in body
     assert "funasr_available" in body
     assert "torchaudio_available" in body
@@ -359,6 +385,20 @@ def test_provider_crud_masks_secrets_and_supports_defaults(tmp_path: Path) -> No
     assert settings.json()["default_provider_id"] == provider_id
 
 
+def test_settings_can_store_and_clear_ffmpeg_paths(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    updated = client.put("/settings/asr", json={"ffmpeg_path": "/tmp/ffmpeg", "ffprobe_path": "/tmp/ffprobe"})
+    assert updated.status_code == 200
+    assert updated.json()["ffmpeg_path"] == "/tmp/ffmpeg"
+    assert updated.json()["ffprobe_path"] == "/tmp/ffprobe"
+
+    cleared = client.put("/settings/asr", json={"ffmpeg_path": None, "ffprobe_path": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["ffmpeg_path"] is None
+    assert cleared.json()["ffprobe_path"] is None
+
+
 def test_running_tasks_are_marked_interrupted_on_startup(tmp_path: Path) -> None:
     os.environ["ASRBOX_DATA_DIR"] = str(tmp_path)
     from backend.database.models import TranscriptionTask
@@ -452,6 +492,37 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
     versions = client.get(f"/tasks/{task_id}/versions")
     assert versions.status_code == 200
     assert versions.json()[0]["version_type"] == "transcribe"
+
+
+def test_clear_tasks_deletes_task_list(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr(
+        "backend.services.tasks.transcribe_with_local_model",
+        lambda model_name, audio_path, options: TranscriptionResult(
+            text="transcript",
+            duration=1.0,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="transcript")],
+        ),
+    )
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+
+    for filename in ("one.wav", "two.wav"):
+        response = client.post(
+            "/transcriptions",
+            files={"file": (filename, b"audio", "audio/wav")},
+            data={"backend": "local", "model_name": "whisper-base"},
+        )
+        assert response.status_code == 200
+        wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
+
+    assert client.get("/tasks").json()["total"] == 2
+    cleared = client.delete("/tasks")
+
+    assert cleared.status_code == 200
+    assert cleared.json()["deleted"] == 2
+    assert client.get("/tasks").json() == {"items": [], "total": 0}
 
 
 def test_failed_task_records_error_code_and_diagnostics(tmp_path: Path, monkeypatch) -> None:

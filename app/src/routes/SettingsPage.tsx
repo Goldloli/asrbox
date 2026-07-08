@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Download, RefreshCw, Save, Upload } from 'lucide-react';
+import { Download, FolderOpen, RefreshCw, RotateCcw, Save, Upload } from 'lucide-react';
 import { useSearch } from '@tanstack/react-router';
-import { apiClient } from '../lib/api';
+import { apiClient, type RuntimeStatus } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useHealthQuery, useModelStorageQuery, useModelsQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
-import { Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { Badge, Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { useI18n } from '../lib/i18n';
@@ -15,6 +15,7 @@ import { backendLanguage, languageOptions, normalizeLanguageValue, type Transcri
 import { ProvidersPage } from './ProvidersPage';
 import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
+import { desktopCapabilities } from '../lib/desktopCapabilities';
 
 type SettingsTab = 'general' | 'transcription' | 'providers' | 'storage';
 
@@ -34,6 +35,7 @@ export function SettingsPage() {
   const sidebarMode = useUiStore((state) => state.sidebarMode);
   const fontScale = useUiStore((state) => state.fontScale);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const exportDirectory = useUiStore((state) => state.exportDirectory);
   const shortcuts = useUiStore((state) => state.shortcuts);
   const setLocale = useUiStore((state) => state.setLocale);
   const setTheme = useUiStore((state) => state.setTheme);
@@ -41,6 +43,7 @@ export function SettingsPage() {
   const setSidebarMode = useUiStore((state) => state.setSidebarMode);
   const setFontScale = useUiStore((state) => state.setFontScale);
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
+  const setExportDirectory = useUiStore((state) => state.setExportDirectory);
   const setShortcut = useUiStore((state) => state.setShortcut);
   const { serverUrl, setServerUrl } = useServerStore();
   const settingsQuery = useSettingsQuery();
@@ -120,12 +123,42 @@ export function SettingsPage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
+  const updateToolPaths = useMutation({
+    mutationFn: (patch: { ffmpeg_path?: string | null; ffprobe_path?: string | null }) => apiClient.updateSettings(patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      queryClient.invalidateQueries({ queryKey: queryKeys.runtime });
+      toast.success(t('toast.settingsSaved'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+
+  const pickToolPath = async (tool: 'ffmpeg' | 'ffprobe') => {
+    try {
+      const path = await desktopCapabilities.pickExecutableFile();
+      if (!path) return;
+      updateToolPaths.mutate(tool === 'ffmpeg' ? { ffmpeg_path: path } : { ffprobe_path: path });
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
+
+  const chooseExportDirectory = async () => {
+    try {
+      const path = await desktopCapabilities.pickExportDirectory();
+      if (!path) return;
+      setExportDirectory(path);
+      toast.success(t('toast.settingsSaved'));
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
 
   const exportFrontendSettings = () => {
     const payload = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion, shortcuts },
+      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion, exportDirectory, shortcuts },
       server: { serverUrl },
     };
     const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
@@ -147,6 +180,7 @@ export function SettingsPage() {
       if (ui.sidebarMode === 'icons' || ui.sidebarMode === 'expanded') setSidebarMode(ui.sidebarMode);
       if (ui.fontScale === 'standard' || ui.fontScale === 'large') setFontScale(ui.fontScale);
       if (ui.reducedMotion === 'system' || ui.reducedMotion === 'reduce' || ui.reducedMotion === 'normal') setReducedMotion(ui.reducedMotion);
+      if (typeof ui.exportDirectory === 'string' || ui.exportDirectory === null) setExportDirectory(ui.exportDirectory);
       if (ui.shortcuts && typeof ui.shortcuts === 'object') {
         Object.entries(ui.shortcuts as Partial<Record<ShortcutAction, unknown>>).forEach(([action, shortcut]) => {
           if (typeof shortcut === 'string' && shortcutActions.includes(action as ShortcutAction)) setShortcut(action as ShortcutAction, shortcut);
@@ -243,6 +277,23 @@ export function SettingsPage() {
                   ]}
                 />
               </Field>
+            </div>
+            <div className="grid gap-3 rounded-xl border app-control p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-app">{t('settings.exportDirectory')}</h3>
+                <p className="mt-1 text-sm text-app-muted">{t('settings.exportDirectoryDescription')}</p>
+              </div>
+              <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <Input value={exportDirectory ?? t('settings.defaultExportDirectory')} readOnly />
+                <Button size="sm" variant="secondary" onClick={chooseExportDirectory} disabled={!desktopCapabilities.canPickExportDirectory}>
+                  <FolderOpen className="size-4" />
+                  {t('settings.chooseExportDirectory')}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setExportDirectory(null)} disabled={!exportDirectory}>
+                  <RotateCcw className="size-4" />
+                  {t('settings.resetExportDirectory')}
+                </Button>
+              </div>
             </div>
             <div className="grid gap-3 rounded-xl border app-control p-4">
               <div>
@@ -397,6 +448,65 @@ export function SettingsPage() {
             </div>
           </Panel>
           <Panel className="overflow-hidden xl:col-span-2">
+            <PanelHeader
+              eyebrow={t('settings.system')}
+              title={t('settings.mediaTools')}
+              description={t('settings.mediaToolsDescription')}
+              action={
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      runtimeQuery.refetch();
+                      settingsQuery.refetch();
+                    }}
+                  >
+                    <RefreshCw className="size-4" />
+                    {t('common.refresh')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => updateToolPaths.mutate({ ffmpeg_path: null, ffprobe_path: null })}
+                    disabled={updateToolPaths.isPending}
+                  >
+                    <RotateCcw className="size-4" />
+                    {t('settings.useBundledTools')}
+                  </Button>
+                </div>
+              }
+            />
+            <div className="grid gap-3 p-5 md:grid-cols-2">
+              <MediaToolRow
+                label="ffmpeg"
+                available={runtimeQuery.data?.ffmpeg_available}
+                source={runtimeQuery.data?.ffmpeg_source}
+                detectedPath={runtimeQuery.data?.ffmpeg_path}
+                configuredPath={settingsQuery.data?.ffmpeg_path}
+                version={runtimeQuery.data?.ffmpeg_version}
+                error={runtimeQuery.data?.ffmpeg_error}
+                canChoose={desktopCapabilities.canPickExecutableFile}
+                chooseLabel={t('settings.chooseFfmpeg')}
+                isPending={updateToolPaths.isPending}
+                onChoose={() => pickToolPath('ffmpeg')}
+              />
+              <MediaToolRow
+                label="ffprobe"
+                available={runtimeQuery.data?.ffprobe_available}
+                source={runtimeQuery.data?.ffprobe_source}
+                detectedPath={runtimeQuery.data?.ffprobe_path}
+                configuredPath={settingsQuery.data?.ffprobe_path}
+                version={runtimeQuery.data?.ffprobe_version}
+                error={runtimeQuery.data?.ffprobe_error}
+                canChoose={desktopCapabilities.canPickExecutableFile}
+                chooseLabel={t('settings.chooseFfprobe')}
+                isPending={updateToolPaths.isPending}
+                onChoose={() => pickToolPath('ffprobe')}
+              />
+            </div>
+          </Panel>
+          <Panel className="overflow-hidden xl:col-span-2">
             <PanelHeader title={t('settings.cleanupStrategy')} description={t('settings.cleanupStrategyDescription')} />
             <div className="grid gap-4 p-5">
               <div className="grid gap-2 md:grid-cols-2">
@@ -449,5 +559,62 @@ export function SettingsPage() {
         </section>
       </TabsContent>
     </Tabs>
+  );
+}
+
+function MediaToolRow({
+  label,
+  available,
+  source,
+  detectedPath,
+  configuredPath,
+  version,
+  error,
+  canChoose,
+  chooseLabel,
+  isPending,
+  onChoose,
+}: {
+  label: string;
+  available?: boolean;
+  source?: RuntimeStatus['ffmpeg_source'];
+  detectedPath?: string | null;
+  configuredPath?: string | null;
+  version?: string | null;
+  error?: string | null;
+  canChoose: boolean;
+  chooseLabel: string;
+  isPending: boolean;
+  onChoose: () => void;
+}) {
+  const { t } = useI18n();
+  const sourceLabel = {
+    manual: t('settings.toolManual'),
+    bundled: t('settings.toolBundled'),
+    system: t('settings.toolSystem'),
+    missing: t('settings.toolMissing'),
+  }[source ?? 'missing'];
+
+  return (
+    <div className="grid gap-3 rounded-lg border app-control p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-app">{label}</h3>
+          <p className="mt-1 text-xs text-app-muted">{version || error || t('settings.toolUnavailable')}</p>
+        </div>
+        <Badge tone={available ? 'success' : 'warning'}>{available ? t('common.ready') : t('common.blocked')}</Badge>
+      </div>
+      <div className="grid gap-2">
+        <PathRow label={t('settings.toolSource')} value={sourceLabel} />
+        <PathRow label={t('settings.toolConfiguredPath')} value={configuredPath} />
+        <PathRow label={t('settings.toolDetectedPath')} value={detectedPath} />
+      </div>
+      {canChoose && (
+        <Button size="sm" variant="secondary" onClick={onChoose} disabled={isPending}>
+          <FolderOpen className="size-4" />
+          {chooseLabel}
+        </Button>
+      )}
+    </div>
   );
 }

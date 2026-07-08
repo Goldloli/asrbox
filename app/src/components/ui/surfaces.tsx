@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
+import { friendlyErrorMessage } from '../../lib/errorMessages';
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
   return <section className={cn('app-panel rounded-xl border', className)}>{children}</section>;
@@ -58,7 +59,7 @@ export function CompactEmptyState({ title, body, icon, action }: { title: string
 }
 
 export function ErrorState({ title = 'Unable to load', error }: { title?: string; error: unknown }) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = friendlyErrorMessage(error);
   return (
     <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
       <p className="font-medium">{title}</p>

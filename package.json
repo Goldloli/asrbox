@@ -10,10 +10,10 @@
   "scripts": {
     "dev:web": "cd web && vite --host 127.0.0.1 --port 5173",
     "dev:server": ".venv/bin/uvicorn backend.main:app --reload --port 17494",
-    "dev:desktop": "bun --cwd tauri run dev",
+    "dev:desktop": "bun run setup:dev && bun run --cwd tauri dev",
     "setup:dev": "node scripts/setup-dev-sidecar.js",
     "build:web": "cd web && vite build",
-    "build:desktop": "bun --cwd tauri run build",
+    "build:desktop": "./scripts/build-server.sh && bun run --cwd tauri build",
     "audit:frontend": "node scripts/frontend-quality-audit.mjs",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",

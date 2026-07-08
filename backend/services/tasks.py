@@ -831,9 +831,18 @@ def delete_task(db: Session, task_id: str) -> bool:
     row = get_task_row(db, task_id)
     if row is None:
         return False
+    task_runtime.request_cancel(task_id)
     audio_path = config.resolve_storage_path(row.audio_path)
     if audio_path:
         audio_path.unlink(missing_ok=True)
+    normalized_audio_path = config.resolve_storage_path(row.normalized_audio_path)
+    if normalized_audio_path:
+        normalized_audio_path.unlink(missing_ok=True)
+    chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).all()
+    for chunk in chunks:
+        chunk_path = config.resolve_storage_path(chunk.audio_path)
+        if chunk_path:
+            chunk_path.unlink(missing_ok=True)
     db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
     db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
     db.query(TaskDiagnostic).filter(TaskDiagnostic.task_id == task_id).delete()
@@ -842,6 +851,15 @@ def delete_task(db: Session, task_id: str) -> bool:
     db.delete(row)
     db.commit()
     return True
+
+
+def delete_all_tasks(db: Session) -> int:
+    task_ids = [row.id for row in db.query(TranscriptionTask.id).all()]
+    deleted = 0
+    for task_id in task_ids:
+        if delete_task(db, task_id):
+            deleted += 1
+    return deleted
 
 
 def postprocess_task(

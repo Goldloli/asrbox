@@ -24,6 +24,11 @@ BASE_HIDDEN_IMPORTS = [
     "modelscope",
     "transformers.models.auto.processing_auto",
     "transformers.models.auto.modeling_auto",
+    "transformers.models.qwen3_asr",
+    "transformers.models.qwen3_asr.configuration_qwen3_asr",
+    "transformers.models.qwen3_asr.feature_extraction_qwen3_asr",
+    "transformers.models.qwen3_asr.modeling_qwen3_asr",
+    "transformers.models.qwen3_asr.processing_qwen3_asr",
 ]
 
 
@@ -35,7 +40,8 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "PyInstaller",
         "--name",
         "asrbox-server",
-        "--onefile",
+        "--onedir",
+        "--noconfirm",
         "--clean",
         "--runtime-hook",
         str(root / "pyi_rth_numpy_torch.py"),

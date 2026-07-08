@@ -202,6 +202,8 @@ export interface ASRSettings {
   output_formats: string[];
   max_concurrent_local_tasks: number;
   max_concurrent_provider_tasks: number;
+  ffmpeg_path?: string | null;
+  ffprobe_path?: string | null;
 }
 
 export interface RuntimeStatus {
@@ -209,6 +211,14 @@ export interface RuntimeStatus {
   platform: string;
   ffmpeg_available: boolean;
   ffprobe_available: boolean;
+  ffmpeg_path?: string | null;
+  ffprobe_path?: string | null;
+  ffmpeg_source: 'manual' | 'bundled' | 'system' | 'missing';
+  ffprobe_source: 'manual' | 'bundled' | 'system' | 'missing';
+  ffmpeg_version?: string | null;
+  ffprobe_version?: string | null;
+  ffmpeg_error?: string | null;
+  ffprobe_error?: string | null;
   torch_available: boolean;
   torch_cuda_available: boolean;
   torch_mps_available: boolean;
@@ -228,6 +238,13 @@ export interface RuntimeStatus {
   models_dir: string;
   free_disk_bytes?: number | null;
   warnings: string[];
+}
+
+export interface HealthStatus {
+  status: string;
+  version?: string;
+  port?: number;
+  backend_type?: string;
 }
 
 export interface TaskDiagnostic {
@@ -287,12 +304,13 @@ class ApiClient {
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
     const response = await fetch(`${this.baseUrl()}${path}`, {
       ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...init?.headers,
-      },
+      headers,
     });
     if (!response.ok) throw await parseError(response);
     if (response.status === 204) return undefined as T;
@@ -309,7 +327,7 @@ class ApiClient {
   }
 
   getHealth() {
-    return this.request<{ status: string; version?: string; port?: number }>('/health');
+    return this.request<HealthStatus>('/health');
   }
 
   getReadiness() {
@@ -422,6 +440,10 @@ class ApiClient {
 
   deleteTask(id: string) {
     return this.request<{ message: string }>(`/tasks/${id}`, { method: 'DELETE' });
+  }
+
+  clearTasks() {
+    return this.request<{ deleted: number }>('/tasks', { method: 'DELETE' });
   }
 
   exportTaskUrl(id: string, format: string) {

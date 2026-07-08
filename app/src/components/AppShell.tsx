@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, Radio } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, PlugZap, Radio } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
@@ -8,11 +8,12 @@ import { GlobalSearch } from './GlobalSearch';
 import { CommandPalette } from './CommandPalette';
 import { GlobalShortcuts } from './GlobalShortcuts';
 import { PersistentAudioPlayer } from './PersistentAudioPlayer';
-import { Badge } from './weiui';
+import { Badge, Button } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
 import { formatBytes, formatPercent } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { getActiveDownloadItems, getActiveTaskItems } from '../lib/api';
+import { useDesktopServerControl } from '../lib/useDesktopServerControl';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -44,6 +45,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function TopStatusBar() {
   const healthQuery = useHealthQuery();
   const runtimeQuery = useRuntimeQuery();
+  const desktopServer = useDesktopServerControl();
   const { t } = useI18n();
   const connected = healthQuery.isSuccess;
   const runtime = runtimeQuery.data;
@@ -68,19 +70,40 @@ function TopStatusBar() {
               <CheckCircle2 className="mr-1 size-3" />
               {t('status.backendOnline')}
             </Badge>
+          ) : desktopServer.isDesktop && desktopServer.isStarting ? (
+            <Badge tone="warning">
+              <PlugZap className="mr-1 size-3" />
+              {t('status.startingBackend')}
+            </Badge>
           ) : (
-            <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
-              <Badge tone="danger">
-                <CloudOff className="mr-1 size-3" />
-                {t('status.backendOffline')}
-              </Badge>
-            </Link>
+            <>
+              <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+                <Badge tone="danger">
+                  <CloudOff className="mr-1 size-3" />
+                  {t('status.backendOffline')}
+                </Badge>
+              </Link>
+              {desktopServer.isDesktop && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => desktopServer.startServer()}
+                  disabled={desktopServer.isStarting}
+                  title={t('status.startBackend')}
+                >
+                  <PlugZap className="size-3.5" />
+                  {desktopServer.isStarting ? t('status.startingBackend') : t('status.startBackend')}
+                </Button>
+              )}
+            </>
           )}
           {runtime && (
             <>
-              <Badge tone={runtime.ffmpeg_available ? 'success' : 'warning'}>
-                {runtime.ffmpeg_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
-              </Badge>
+              <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+                <Badge tone={runtime.ffmpeg_available && runtime.ffprobe_available ? 'success' : 'warning'}>
+                  {runtime.ffmpeg_available && runtime.ffprobe_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
+                </Badge>
+              </Link>
               <Badge tone={runtime.torch_cuda_available || runtime.torch_mps_available ? 'accent' : 'neutral'}>
                 <Cpu className="mr-1 size-3" />
                 {runtime.torch_cuda_available ? 'CUDA' : runtime.torch_mps_available ? 'MPS' : 'CPU'}

@@ -170,6 +170,8 @@ class ASRSettingsResponse(BaseModel):
     output_formats: list[str]
     max_concurrent_local_tasks: int
     max_concurrent_provider_tasks: int
+    ffmpeg_path: str | None = None
+    ffprobe_path: str | None = None
     updated_at: datetime | None = None
 
 
@@ -185,6 +187,8 @@ class ASRSettingsUpdate(BaseModel):
     output_formats: list[str] | None = None
     max_concurrent_local_tasks: int | None = Field(None, ge=1, le=4)
     max_concurrent_provider_tasks: int | None = Field(None, ge=1, le=8)
+    ffmpeg_path: str | None = None
+    ffprobe_path: str | None = None
 
 
 class TaskRetranscribeRequest(BaseModel):
@@ -259,6 +263,14 @@ class RuntimeStatusResponse(BaseModel):
     platform: str
     ffmpeg_available: bool
     ffprobe_available: bool
+    ffmpeg_path: str | None = None
+    ffprobe_path: str | None = None
+    ffmpeg_source: Literal["manual", "bundled", "system", "missing"] = "missing"
+    ffprobe_source: Literal["manual", "bundled", "system", "missing"] = "missing"
+    ffmpeg_version: str | None = None
+    ffprobe_version: str | None = None
+    ffmpeg_error: str | None = None
+    ffprobe_error: str | None = None
     torch_available: bool
     torch_cuda_available: bool
     torch_mps_available: bool

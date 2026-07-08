@@ -40,6 +40,8 @@ def to_response(row: ASRSettings) -> ASRSettingsResponse:
         output_formats=output_formats,
         max_concurrent_local_tasks=row.max_concurrent_local_tasks,
         max_concurrent_provider_tasks=row.max_concurrent_provider_tasks,
+        ffmpeg_path=row.ffmpeg_path,
+        ffprobe_path=row.ffprobe_path,
         updated_at=row.updated_at,
     )
 
@@ -53,6 +55,8 @@ def update_settings(db: Session, patch: dict[str, Any]) -> ASRSettingsResponse:
     for key, value in patch.items():
         if key == "output_formats":
             row.output_formats_json = json.dumps(value, ensure_ascii=False)
+        elif key in {"ffmpeg_path", "ffprobe_path"}:
+            setattr(row, key, value or None)
         elif hasattr(row, key) and value is not None:
             setattr(row, key, value)
     row.updated_at = datetime.now(UTC)
