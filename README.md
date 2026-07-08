@@ -236,4 +236,4 @@ Qwen3-ASR 依赖 Transformers 对应模型类支持。如果当前 Python 依赖
 
 ## 许可证
 
-当前仓库还没有许可证文件。正式开源发布前，请补充 `LICENSE`，明确项目的使用、修改和分发方式。
+ASRbox 使用 MIT License。详见 [LICENSE](LICENSE)。

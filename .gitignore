@@ -1,7 +1,7 @@
 AGENTS.md
 claude.md
 .codebase-memory/
-docs/
+docs/voicebox拆解/
 .venv/
 __pycache__/
 .pytest_cache/
