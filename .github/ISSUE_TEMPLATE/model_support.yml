@@ -1,0 +1,41 @@
+name: Model support request
+description: Request support or fixes for an ASR model.
+title: "model: "
+labels: ["model"]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Model name
+      placeholder: Qwen3-ASR 1.7B
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Model source
+      description: Hugging Face, ModelScope, GitHub, or official page.
+      placeholder: https://huggingface.co/...
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Language, audio type, expected speed/quality, hardware.
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: Model license
+      placeholder: Apache-2.0, MIT, custom research license, unknown
+  - type: textarea
+    id: logs
+    attributes:
+      label: Failure logs or compatibility notes
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
