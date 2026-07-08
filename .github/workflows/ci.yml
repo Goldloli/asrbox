@@ -57,7 +57,17 @@ jobs:
       - name: Build Web UI
         run: npm run build:web
 
+      - name: Validate vendored ffmpeg
+        run: |
+          test -x third_party/ffmpeg/darwin-arm64/ffmpeg
+          test -x third_party/ffmpeg/darwin-arm64/ffprobe
+          third_party/ffmpeg/darwin-arm64/ffmpeg -version
+          third_party/ffmpeg/darwin-arm64/ffprobe -version
+
       - name: Backend tests
+        env:
+          ASRBOX_FFMPEG_PATH: ${{ github.workspace }}/third_party/ffmpeg/darwin-arm64/ffmpeg
+          ASRBOX_FFPROBE_PATH: ${{ github.workspace }}/third_party/ffmpeg/darwin-arm64/ffprobe
         run: npm run test:backend
 
       - name: Cargo check
