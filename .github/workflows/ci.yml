@@ -70,6 +70,9 @@ jobs:
           ASRBOX_FFPROBE_PATH: ${{ github.workspace }}/third_party/ffmpeg/darwin-arm64/ffprobe
         run: npm run test:backend
 
+      - name: Prepare Tauri sidecar placeholder
+        run: bun run setup:dev
+
       - name: Cargo check
         working-directory: tauri/src-tauri
         run: cargo check
