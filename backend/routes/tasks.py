@@ -27,6 +27,12 @@ async def active_tasks(db: Session = Depends(get_db)):
     return ActiveTasksResponse(**task_service.active_tasks(db))
 
 
+@router.delete("")
+async def delete_all_tasks(db: Session = Depends(get_db)):
+    deleted = task_service.delete_all_tasks(db)
+    return {"deleted": deleted}
+
+
 @router.get("/{task_id}")
 async def get_task(task_id: str, db: Session = Depends(get_db)):
     task = task_service.get_task(db, task_id)

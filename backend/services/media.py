@@ -7,13 +7,15 @@ import subprocess
 from pathlib import Path
 
 from backend.services.errors import ASRboxError
+from backend.services.ffmpeg_tools import resolve_tools
 
 SUPPORTED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 
 
 def probe_media(path: Path) -> dict:
+    ffprobe = resolve_tools(check_version=False)["ffprobe"]
     command = [
-        "ffprobe",
+        ffprobe.path or "ffprobe",
         "-v",
         "error",
         "-print_format",
@@ -22,6 +24,8 @@ def probe_media(path: Path) -> dict:
         "-show_streams",
         str(path),
     ]
+    if not ffprobe.available:
+        raise ASRboxError("FFPROBE_FAILED", f"ffprobe is required to inspect media files: {ffprobe.error or 'not found'}", stage="preprocessing", command=" ".join(command))
     try:
         completed = subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
     except FileNotFoundError as exc:
@@ -63,8 +67,9 @@ def prepare_media_for_asr(path: Path) -> tuple[Path, dict]:
         return path, metadata
 
     target = path.with_suffix(".wav")
+    ffmpeg = resolve_tools(check_version=False)["ffmpeg"]
     command = [
-        "ffmpeg",
+        ffmpeg.path or "ffmpeg",
         "-i",
         str(path),
         "-vn",
@@ -77,6 +82,8 @@ def prepare_media_for_asr(path: Path) -> tuple[Path, dict]:
         "-y",
         str(target),
     ]
+    if not ffmpeg.available:
+        raise ASRboxError("FFMPEG_FAILED", f"ffmpeg is required to extract audio from media files: {ffmpeg.error or 'not found'}", stage="preprocessing", command=" ".join(command))
     try:
         subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
     except FileNotFoundError as exc:
@@ -95,7 +102,10 @@ def prepare_media_for_asr(path: Path) -> tuple[Path, dict]:
 
 
 def analyze_audio_quality(path: Path) -> dict:
-    command = ["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"]
+    ffmpeg = resolve_tools(check_version=False)["ffmpeg"]
+    if not ffmpeg.available:
+        return {"warnings": [f"ffmpeg is not available for volume analysis: {ffmpeg.error or 'not found'}"]}
+    command = [ffmpeg.path or "ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"]
     try:
         completed = subprocess.run(command, capture_output=True, check=False, encoding="utf-8", errors="replace")
     except FileNotFoundError:
@@ -154,6 +164,7 @@ def split_audio_chunks(
 ) -> list[tuple[Path, int, int]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     chunks: list[tuple[Path, int, int]] = []
+    ffmpeg = resolve_tools(check_version=False)["ffmpeg"]
     start_ms = 0
     index = 1
     step_ms = max(1, window_ms - overlap_ms)
@@ -161,7 +172,7 @@ def split_audio_chunks(
         end_ms = min(duration_ms, start_ms + window_ms)
         target = output_dir / f"chunk-{index:04}.wav"
         command = [
-            "ffmpeg",
+            ffmpeg.path or "ffmpeg",
             "-ss",
             f"{start_ms / 1000:.3f}",
             "-t",
@@ -177,6 +188,8 @@ def split_audio_chunks(
             "-y",
             str(target),
         ]
+        if not ffmpeg.available:
+            raise ASRboxError("FFMPEG_FAILED", f"ffmpeg is required to split long media files: {ffmpeg.error or 'not found'}", stage="chunking", command=" ".join(command))
         try:
             subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
         except FileNotFoundError as exc:

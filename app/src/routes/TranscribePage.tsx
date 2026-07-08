@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, RefreshCw, Settings, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, PlugZap, RefreshCw, Settings, ShieldAlert, Trash2 } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -9,6 +9,7 @@ import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select,
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { StatusPill } from '../components/StatusPill';
+import { ConfirmAction } from '../components/ConfirmAction';
 import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import {
@@ -18,6 +19,7 @@ import {
   postprocessOptions,
   type TranscriptionLanguage,
 } from '../lib/transcriptionOptions';
+import { useDesktopServerControl } from '../lib/useDesktopServerControl';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 
@@ -25,6 +27,7 @@ export function TranscribePage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const toast = useToast();
+  const desktopServer = useDesktopServerControl();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [backend, setBackend] = useState('local');
@@ -33,6 +36,7 @@ export function TranscribePage() {
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<TranscriptionPreflight | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const readinessQuery = useReadinessQuery();
   const tasksQuery = useTasksQuery();
@@ -66,6 +70,16 @@ export function TranscribePage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
     queryClient.invalidateQueries({ queryKey: queryKeys.activeTasks });
   };
+
+  const selectFiles = (nextFiles: File[]) => {
+    setFiles(nextFiles);
+    setPreflight(null);
+  };
+
+  const droppedMediaFiles = (fileList: FileList) => Array.from(fileList).filter((file) => {
+    if (file.type.startsWith('audio/') || file.type.startsWith('video/')) return true;
+    return /\.(aac|aif|aiff|flac|m4a|mkv|mov|mp3|mp4|ogg|opus|wav|webm|wma)$/i.test(file.name);
+  });
 
   const preflightMutation = useMutation({
     mutationFn: async () => {
@@ -107,13 +121,41 @@ export function TranscribePage() {
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
 
+  const clearTasksMutation = useMutation({
+    mutationFn: () => apiClient.clearTasks(),
+    onSuccess: (result) => {
+      setSelectedTaskId(null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activeTasks });
+      toast.success(t('toast.tasksCleared'), `${result.deleted} ${t('tasks.batchItems')}`);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+
   const readinessIssues = [
     ...(readinessQuery.data?.issues ?? []),
     ...(readinessQuery.data?.warnings ?? []),
     ...(readinessQuery.data?.missing_models ?? []).map((model) => `Missing model: ${model}`),
   ];
   const firstRunChecklist = [
-    { key: 'backend', label: t('onboarding.connectBackend'), done: readinessQuery.isSuccess },
+    {
+      key: 'backend',
+      label: t('onboarding.connectBackend'),
+      done: readinessQuery.isSuccess,
+      action: desktopServer.isDesktop ? (
+        <Button variant="ghost" size="sm" onClick={() => desktopServer.startServer()} disabled={desktopServer.isStarting}>
+          <PlugZap className="size-4" />
+          {desktopServer.isStarting ? t('status.startingBackend') : t('status.startBackend')}
+        </Button>
+      ) : (
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/settings" search={{ tab: 'storage' }}>
+            <Settings className="size-4" />
+            {t('settings.title')}
+          </Link>
+        </Button>
+      ),
+    },
     {
       key: 'model',
       label: t('onboarding.downloadModel'),
@@ -168,16 +210,46 @@ export function TranscribePage() {
           }
         />
         <div className="grid gap-3 p-4 sm:gap-4 sm:p-5">
-          <label className="grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6">
+          <label
+            className={cn(
+              'grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6',
+              dragActive && 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]',
+            )}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'copy';
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setDragActive(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setDragActive(false);
+              const nextFiles = droppedMediaFiles(event.dataTransfer.files);
+              if (nextFiles.length > 0) selectFiles(nextFiles);
+            }}
+          >
             <div className="grid justify-items-center gap-3">
               <div className="grid size-10 place-items-center rounded-xl border app-control text-app-accent sm:size-12">
                 {files.length > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
               </div>
               <div>
                 <p className="text-sm font-medium text-app">
-                  {files.length ? `${files.length} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
+                  {dragActive ? t('transcribe.dropFiles') : files.length ? `${files.length} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
                 </p>
-                <p className="mt-1 text-xs text-app-muted">{files[0]?.name ?? t('transcribe.fileHint')}</p>
+                <p className="mt-1 text-xs text-app-muted">{dragActive ? t('transcribe.dropHint') : files[0]?.name ?? t('transcribe.fileHint')}</p>
               </div>
             </div>
             <input
@@ -187,8 +259,7 @@ export function TranscribePage() {
               accept="audio/*,video/*"
               multiple
               onChange={(event) => {
-                setFiles(Array.from(event.target.files ?? []));
-                setPreflight(null);
+                selectFiles(Array.from(event.target.files ?? []));
               }}
             />
           </label>
@@ -277,11 +348,24 @@ export function TranscribePage() {
           {tasks.length > 0 && <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
-              {tasks.length > recentTasks.length && (
-                <Button asChild variant="ghost" size="sm">
-                  <Link to="/tasks">{t('transcribe.viewAllTasks')}</Link>
-                </Button>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {tasks.length > recentTasks.length && (
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to="/tasks">{t('transcribe.viewAllTasks')}</Link>
+                  </Button>
+                )}
+                <ConfirmAction
+                  title={t('confirm.clearTasksTitle')}
+                  description={t('confirm.clearTasksDescription')}
+                  confirmLabel={t('tasks.clearAll')}
+                  onConfirm={() => clearTasksMutation.mutate()}
+                >
+                  <Button variant="danger" size="sm" disabled={clearTasksMutation.isPending}>
+                    <Trash2 className="size-4" />
+                    {t('tasks.clearAll')}
+                  </Button>
+                </ConfirmAction>
+              </div>
             </div>
             <div className="grid max-h-[36vh] gap-2 overflow-auto pr-1">
               {recentTasks.map((task) => (

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { friendlyErrorMessage } from '../lib/errorMessages';
 
 type ToastTone = 'success' | 'error' | 'info';
 
@@ -21,8 +22,7 @@ type ToastApi = {
 const ToastContext = createContext<ToastApi | null>(null);
 
 export function toastErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error);
+  return friendlyErrorMessage(error);
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {

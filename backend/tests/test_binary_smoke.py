@@ -21,6 +21,9 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
     if not binary.exists():
         subprocess.run([sys.executable, str(root / "backend" / "build_binary.py")], check=True, cwd=root)
     assert binary.exists()
+    if binary.is_dir():
+        binary = binary / ("asrbox-server.exe" if os.name == "nt" else "asrbox-server")
+    assert binary.is_file()
 
     port = int(os.environ.get("ASRBOX_BINARY_SMOKE_PORT", "17594"))
     data_dir = tempfile.mkdtemp(prefix="asrbox-binary-smoke-")

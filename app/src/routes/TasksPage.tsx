@@ -51,6 +51,7 @@ export function TasksPage() {
   const [newCollectionName, setNewCollectionName] = useState('');
   const [recentExports, setRecentExports] = useState<RecentExport[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [clearingTasks, setClearingTasks] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const tasksQuery = useTasksQuery();
@@ -167,6 +168,21 @@ export function TasksPage() {
     if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) setSelectedTaskId(null);
   }, [selectedTaskId, tasks]);
 
+  const clearAllTasks = async () => {
+    setClearingTasks(true);
+    try {
+      const result = await apiClient.clearTasks();
+      setSelectedTaskId(null);
+      setSelectedTaskIds([]);
+      refresh();
+      toast.success(t('toast.tasksCleared'), `${result.deleted} ${t('tasks.batchItems')}`);
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    } finally {
+      setClearingTasks(false);
+    }
+  };
+
   const toggleTaskSelection = (taskId: string) => {
     setSelectedTaskIds((current) => (
       current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]
@@ -211,8 +227,9 @@ export function TasksPage() {
 
   const exportSelectedTasks = async (format: string) => {
     try {
-      await Promise.all(selectedCompletedTasks.map((task) => downloadTaskFormat(task, format)));
-      toast.info(t('tasks.batchExportStarted'), `${selectedCompletedTasks.length} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
+      const saved = await Promise.all(selectedCompletedTasks.map((task) => downloadTaskFormat(task, format)));
+      const savedCount = saved.filter(Boolean).length;
+      if (savedCount > 0) toast.info(t('tasks.batchExportStarted'), `${savedCount} ${t('tasks.batchItems')} · ${format.toUpperCase()}`);
     } catch (error) {
       toast.error(t('toast.actionFailed'), toastErrorMessage(error));
     }
@@ -226,8 +243,10 @@ export function TasksPage() {
   };
 
   const downloadTaskFormat = async (task: TranscriptionTask, format: string) => {
-    await downloadUrl(apiClient.exportTaskUrl(task.id, format), `${task.filename}.${format}`);
+    const savedPath = await downloadUrl(apiClient.exportTaskUrl(task.id, format), `${task.filename}.${format}`);
+    if (!savedPath) return false;
     recordRecentExport(task, format);
+    return true;
   };
 
   const clearFilters = () => {
@@ -304,6 +323,17 @@ export function TasksPage() {
                 <CheckSquare className="size-4" />
                 {selectionMode ? t('common.cancel') : t('tasks.selectMode')}
               </Button>
+              <ConfirmAction
+                title={t('confirm.clearTasksTitle')}
+                description={t('confirm.clearTasksDescription')}
+                confirmLabel={t('tasks.clearAll')}
+                onConfirm={clearAllTasks}
+              >
+                <Button size="sm" variant="danger" disabled={tasks.length === 0 || clearingTasks}>
+                  <Trash2 className="size-4" />
+                  {t('tasks.clearAll')}
+                </Button>
+              </ConfirmAction>
             </div>
           }
         />
@@ -608,7 +638,9 @@ export function TasksPage() {
                         variant="secondary"
                         onClick={() => {
                           downloadTaskFormat(selectedTask, format)
-                            .then(() => toast.info(t('toast.downloadStarted'), format.toUpperCase()))
+                            .then((saved) => {
+                              if (saved) toast.info(t('toast.downloadStarted'), format.toUpperCase());
+                            })
                             .catch((error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)));
                         }}
                       >

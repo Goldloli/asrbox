@@ -2,9 +2,11 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, type AppEvent } from './api';
 import { queryKeys } from './queries';
+import { useServerStore } from '../stores/serverStore';
 
 export function useAppEvents() {
   const queryClient = useQueryClient();
+  const serverUrl = useServerStore((state) => state.serverUrl);
 
   useEffect(() => {
     let source: EventSource;
@@ -37,5 +39,5 @@ export function useAppEvents() {
     };
 
     return () => source.close();
-  }, [queryClient]);
+  }, [queryClient, serverUrl]);
 }

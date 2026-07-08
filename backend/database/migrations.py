@@ -77,6 +77,18 @@ def run_migrations(engine, session_factory) -> None:
             lambda: _add_columns(engine, inspector, tables, [("transcription_tasks", "batch_id", "VARCHAR")]),
         ),
         ("20260703_003_storage_path_normalization", lambda: _normalize_storage_paths(engine, tables)),
+        (
+            "20260707_001_ffmpeg_paths",
+            lambda: _add_columns(
+                engine,
+                inspector,
+                tables,
+                [
+                    ("asr_settings", "ffmpeg_path", "TEXT"),
+                    ("asr_settings", "ffprobe_path", "TEXT"),
+                ],
+            ),
+        ),
     ]
 
     db = session_factory()

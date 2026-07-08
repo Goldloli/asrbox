@@ -4,10 +4,17 @@ export interface DesktopCapabilities {
   runtime: DesktopRuntime;
   canOpenFileLocation: boolean;
   canPickExportDirectory: boolean;
+  canPickExecutableFile: boolean;
   canRevealLogs: boolean;
+  canSaveTextFile: boolean;
+  startServer(): Promise<string | null>;
+  stopServer(): Promise<void>;
+  restartServer(): Promise<string | null>;
   openFileLocation(path?: string): Promise<void>;
   pickExportDirectory(): Promise<string | null>;
+  pickExecutableFile(): Promise<string | null>;
   revealLogs(): Promise<void>;
+  saveTextFile(filename: string, contents: string, directory?: string | null): Promise<string | null>;
 }
 
 type TauriWindow = Window & {
@@ -45,8 +52,31 @@ export const desktopCapabilities: DesktopCapabilities = {
   get canPickExportDirectory() {
     return isTauriRuntime();
   },
+  get canPickExecutableFile() {
+    return isTauriRuntime();
+  },
   get canRevealLogs() {
     return isTauriRuntime();
+  },
+  get canSaveTextFile() {
+    return isTauriRuntime();
+  },
+  async startServer() {
+    const result = tauriInvoke('start_server');
+    if (!result) return null;
+    const value = await result;
+    return typeof value === 'string' ? value : null;
+  },
+  async stopServer() {
+    const result = tauriInvoke('stop_server');
+    if (!result) return unavailable();
+    await result;
+  },
+  async restartServer() {
+    const result = tauriInvoke('restart_server');
+    if (!result) return null;
+    const value = await result;
+    return typeof value === 'string' ? value : null;
   },
   async openFileLocation(path?: string) {
     const result = tauriInvoke('open_file_location', { path });
@@ -59,9 +89,21 @@ export const desktopCapabilities: DesktopCapabilities = {
     const value = await result;
     return typeof value === 'string' ? value : null;
   },
+  async pickExecutableFile() {
+    const result = tauriInvoke('pick_executable_file');
+    if (!result) return unavailable();
+    const value = await result;
+    return typeof value === 'string' ? value : null;
+  },
   async revealLogs() {
     const result = tauriInvoke('reveal_logs');
     if (!result) return unavailable();
     await result;
+  },
+  async saveTextFile(filename: string, contents: string, directory?: string | null) {
+    const result = tauriInvoke('save_text_file', { filename, contents, directory });
+    if (!result) return unavailable();
+    const value = await result;
+    return typeof value === 'string' ? value : null;
   },
 };

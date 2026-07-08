@@ -10,16 +10,38 @@
     "frontendDist": "../../web/dist"
   },
   "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    },
     "windows": [
       {
         "title": "ASRbox",
         "width": 1280,
-        "height": 820
+        "height": 820,
+        "center": true,
+        "minWidth": 960,
+        "minHeight": 640,
+        "dragDropEnabled": false
       }
     ]
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "resources": ["binaries/asrbox-server", "binaries/ffmpeg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "shell": {
+      "open": ".*"
+    }
   }
 }

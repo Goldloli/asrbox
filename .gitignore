@@ -7,7 +7,12 @@ __pycache__/
 .pytest_cache/
 node_modules/
 dist/
+build/
+*.spec
 data/
 frontend-audit-screenshots/95-gate/
 .DS_Store
 测试音视频/
+tauri/src-tauri/binaries/
+tauri/src-tauri/gen/
+tauri/src-tauri/target/
