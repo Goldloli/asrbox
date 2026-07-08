@@ -1,135 +1,178 @@
-![ASRbox demo](assets/asrbox-demo.gif)
+![ASRbox 演示](assets/asrbox-demo.gif)
 
 # ASRbox
 
-ASRbox is a local-first transcription workbench. It provides a web UI and a macOS desktop app for turning audio or video files into transcripts and subtitle exports, with support for local ASR models and online provider workflows.
+中文 | [English](README.en.md)
 
-The desktop app is built with Tauri. On startup it launches or reuses a local ASRbox backend, bundles ffmpeg/ffprobe for media inspection, and keeps the familiar Web UI as the main product surface.
+ASRbox 是一个本地优先的音视频转写工作台。它提供 Web UI 和 macOS 桌面客户端，可以把音频、视频文件转成文本、字幕和结构化导出结果，支持本地 ASR 模型和在线 ASR 平台。
 
-## Features
+桌面端基于 Tauri 构建。用户打开应用后，ASRbox 会自动启动或复用本地后端，内置 ffmpeg / ffprobe 用于媒体预检和音频提取，并复用同一套 Web UI 作为主要交互界面。
 
-- Local audio and video transcription workflow.
-- Batch file selection and drag-and-drop upload.
-- Preflight checks for media duration, stream availability, and chunking.
-- Local model workflow with model download status and runtime diagnostics.
-- Online provider configuration for compatible ASR services.
-- Transcript viewer with search, replacement, edit, copy, and audio playback.
-- Subtitle and document exports: TXT, SRT, VTT, ASS, JSON, and Markdown.
-- Configurable desktop download location for exported files.
-- Task center, task history, task cleanup, retry, retranscription, and clear-list actions.
-- macOS desktop packaging with bundled backend sidecar and bundled ffmpeg tools.
+## 功能特性
 
-## Project Status
+- 本地音频、视频转写工作流。
+- 支持单文件选择、批量选择和拖拽上传。
+- 预检媒体格式、音频流、时长和分段策略。
+- 支持本地模型下载、运行状态和诊断信息。
+- 支持配置在线 ASR 平台。
+- 转写结果查看、搜索、替换、编辑、复制和音频播放。
+- 支持 TXT、SRT、VTT、ASS、JSON、Markdown 导出。
+- 桌面端可在设置中配置导出文件下载位置。
+- 任务中心、历史任务、重试、重新转写、后处理、清理和清空任务列表。
+- macOS 桌面包内置后端 sidecar 和 ffmpeg 工具。
 
-ASRbox is currently in early desktop MVP development. The macOS build is the primary supported desktop target at this stage. Windows and Linux packaging paths are kept in mind, but they are not the current release gate.
+## 项目状态
 
-Not included yet:
+ASRbox 目前处于桌面 MVP 阶段。当前优先支持 macOS Apple Silicon 桌面包；Windows 和 Linux 会保留配置方向，但暂不作为第一阶段发布目标。
 
-- Code signing and notarization.
-- Auto update.
-- System tray or background daemon mode.
-- Windows/Linux release artifacts.
+暂未包含：
 
-## Architecture
+- 代码签名和 macOS notarization。
+- 自动更新。
+- 系统托盘和后台常驻。
+- Windows / Linux 发布产物。
+
+## GitHub About 描述
+
+中文：
+
+> ASRbox 是一个本地优先的音视频转写工作台，支持本地 ASR 模型、在线平台、字幕导出和 Tauri 桌面端，适合私有化转写与字幕整理。
+
+English:
+
+> ASRbox is a local-first audio/video transcription workbench with local ASR models, online providers, subtitle exports, and a Tauri desktop app.
+
+推荐 Topics：
+
+```text
+asr, transcription, subtitles, speech-to-text, tauri, fastapi, react, whisper, ffmpeg
+```
+
+## 架构
 
 ```text
 ASRbox
-|-- app/                 React application source shared by web and desktop
-|-- web/                 Vite web entry and static assets
-|-- backend/             FastAPI backend, ASR orchestration, exports, storage
-|-- tauri/               Tauri desktop shell and Rust sidecar lifecycle code
-|-- scripts/             Build helpers for backend binary and dev sidecar
-|-- third_party/ffmpeg/  Vendored ffmpeg/ffprobe binaries and notes
-`-- assets/              README and project assets
+|-- app/                 React 应用源码，Web 和桌面端复用
+|-- web/                 Vite Web 入口和静态资源
+|-- backend/             FastAPI 后端、ASR 调度、导出和存储
+|-- tauri/               Tauri 桌面壳和 Rust sidecar 生命周期管理
+|-- scripts/             后端二进制和开发 sidecar 构建脚本
+|-- third_party/ffmpeg/  内置 ffmpeg / ffprobe 二进制和说明
+`-- assets/              README 和项目展示资源
 ```
 
-Runtime shape:
+运行形态：
 
 ```text
-Tauri app
-  ├─ loads Web UI
-  ├─ starts bundled asrbox-server on 127.0.0.1:17494
-  ├─ injects bundled ffmpeg/ffprobe paths
-  └─ saves desktop exports to the configured download directory
+Tauri 桌面端
+  |-- 加载 Web UI
+  |-- 在 127.0.0.1:17494 启动内置 asrbox-server
+  |-- 注入内置 ffmpeg / ffprobe 路径
+  `-- 将导出文件保存到用户配置的下载目录
 
 Web UI
-  └─ connects to an existing backend URL and does not auto-start a backend
+  `-- 连接已有后端地址，不自动启动本地后端
 ```
 
-## Requirements
+## 环境要求
 
-- macOS on Apple Silicon for the current packaged desktop target.
-- Bun 1.3.x.
-- Python 3.11+ recommended.
-- Rust stable and the Tauri build toolchain.
-- A Python virtual environment at `.venv`.
-- ffmpeg/ffprobe for development, or the vendored macOS binaries under `third_party/ffmpeg/darwin-arm64/`.
+- macOS Apple Silicon，用于当前桌面发布包。
+- Bun 1.3.x。
+- Python 3.11+，推荐使用项目 `.venv`。
+- Rust stable 和 Tauri 构建工具链。
+- 开发环境需要 ffmpeg / ffprobe，或使用 `third_party/ffmpeg/darwin-arm64/` 下的内置二进制。
 
-Install frontend dependencies:
+安装前端依赖：
 
 ```bash
 bun install
 ```
 
-Install backend dependencies:
+安装后端依赖：
 
 ```bash
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Development
+## 本地开发
 
-Run the backend:
+启动后端：
 
 ```bash
 npm run dev:server
 ```
 
-Run the Web UI:
+启动 Web UI：
 
 ```bash
 npm run dev:web
 ```
 
-Run the desktop app in development:
+启动桌面端开发模式：
 
 ```bash
 npm run dev:desktop
 ```
 
-The desktop development command creates a dev sidecar placeholder when needed and then starts Tauri. In debug builds, the desktop shell prefers `.venv/bin/python -m backend.server` so the backend can be iterated without rebuilding the frozen binary.
+桌面端开发模式会在需要时生成开发期 sidecar 占位文件。debug 构建优先使用 `.venv/bin/python -m backend.server` 启动后端，方便后端迭代时不必每次冻结二进制。
 
-## Desktop Build
+## 桌面端构建
 
-Build the macOS desktop app and DMG:
+构建 macOS `.app` 和 `.dmg`：
 
 ```bash
 npm run build:desktop
 ```
 
-The build does three important things:
+构建流程会：
 
-1. Freezes the backend into an `asrbox-server` sidecar.
-2. Copies the platform ffmpeg/ffprobe binaries into Tauri resources.
-3. Produces the `.app` and `.dmg` under `tauri/src-tauri/target/release/bundle/`.
+1. 使用 PyInstaller 冻结后端为 `asrbox-server` sidecar。
+2. 复制当前平台的 ffmpeg / ffprobe 到 Tauri resources。
+3. 在 `tauri/src-tauri/target/release/bundle/` 生成 `.app` 和 `.dmg`。
 
-Expected DMG path on Apple Silicon:
+Apple Silicon 预期 DMG 路径：
 
 ```text
 tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0_aarch64.dmg
 ```
 
-## Tests
+## GitHub Releases
 
-Core checks:
+项目包含 MVP Release CI：
+
+```text
+.github/workflows/release.yml
+```
+
+触发方式：
+
+- 推送 tag：
+
+```bash
+git tag v0.1.0
+git push origin main --tags
+```
+
+- 或在 GitHub Actions 页面手动运行 `Release` workflow，并输入 tag，例如 `v0.1.0`。
+
+当前 CI 会在 macOS runner 上构建 Apple Silicon DMG，生成 GitHub Release，并上传：
+
+- `ASRbox_*.dmg`
+- `SHA256SUMS.txt`
+
+注意：当前发布包尚未签名和公证，macOS 首次打开时可能会提示无法验证开发者。这是未签名 MVP 包的正常现象。
+
+## 测试
+
+基础检查：
 
 ```bash
 npm run typecheck
 npm run build:web
 ```
 
-Backend tests:
+后端测试：
 
 ```bash
 npm run test:backend
@@ -138,7 +181,7 @@ npm run test:backend:server
 npm run test:backend:binary-smoke
 ```
 
-Tauri checks:
+Tauri 检查：
 
 ```bash
 cd tauri/src-tauri
@@ -146,67 +189,67 @@ cargo check
 cargo test
 ```
 
-Before publishing a desktop artifact, also verify:
+发布桌面产物前建议人工验证：
 
-- Double-click launch from the generated `.app`.
-- Backend starts automatically without a manually running server.
-- `http://127.0.0.1:17494/health` reports ASRbox health after launch.
-- ffmpeg and ffprobe show as available in runtime diagnostics.
-- MP4 preflight succeeds.
-- TXT/SRT/VTT/ASS/JSON/MD exports save to the configured download location.
-- Closing the desktop app releases port `17494`.
+- 双击 `.app` 可以启动。
+- 未手动启动后端时，桌面端会自动启动本地后端。
+- 启动后 `http://127.0.0.1:17494/health` 返回 ASRbox 健康状态。
+- 运行时诊断显示 ffmpeg 和 ffprobe 可用。
+- MP4 预检成功。
+- TXT / SRT / VTT / ASS / JSON / MD 可以导出到设置中的下载位置。
+- 关闭桌面端后释放端口 `17494`。
 
-## Configuration
+## 配置
 
-Desktop-only preferences are stored in the Web UI local storage and Tauri app data directories.
+桌面端偏好会保存到 Web UI local storage 和 Tauri app data 目录。
 
-Useful locations:
+常用位置：
 
-- Backend data: Tauri app data directory in desktop builds.
-- Default exports: `~/Downloads/ASRbox Exports`.
-- Custom exports: set in `Settings -> General -> Download location`.
-- Local model files: backend data directory under `models/`.
-- Diagnostics and generated files: backend data directory.
+- 后端数据：桌面端使用 Tauri app data 目录。
+- 默认导出：`~/Downloads/ASRbox Exports`。
+- 自定义导出：在 `设置 -> 通用 -> 下载位置` 中配置。
+- 本地模型：后端数据目录下的 `models/`。
+- 诊断和生成文件：后端数据目录。
 
-Environment variables used by the backend:
+后端环境变量：
 
-- `ASRBOX_DATA_DIR`: backend data root.
-- `ASRBOX_FFMPEG_PATH`: explicit ffmpeg binary path.
-- `ASRBOX_FFPROBE_PATH`: explicit ffprobe binary path.
+- `ASRBOX_DATA_DIR`：后端数据根目录。
+- `ASRBOX_FFMPEG_PATH`：显式指定 ffmpeg 路径。
+- `ASRBOX_FFPROBE_PATH`：显式指定 ffprobe 路径。
 
-## Troubleshooting
+## 常见问题
 
-### Backend is offline
+### 后端离线
 
-- In desktop mode, click `Start backend` once to retry the sidecar.
-- Check whether another process is using port `17494`.
-- Restart the app if the previous backend process did not exit cleanly.
+- 桌面端可点击 `启动后端` 重试。
+- 检查是否有其他进程占用 `17494` 端口。
+- 如果上一次后端没有正常退出，可以重启应用。
 
-### ffmpeg is missing
+### ffmpeg 缺失
 
-- Desktop builds should use bundled ffmpeg/ffprobe automatically.
-- In development, install ffmpeg locally or provide binaries under `third_party/ffmpeg/darwin-arm64/`.
-- Open `Settings -> Storage and diagnostics` to inspect detected tool paths and versions.
+- 桌面发布包会自动使用内置 ffmpeg / ffprobe。
+- 开发环境可安装系统 ffmpeg，或使用 `third_party/ffmpeg/darwin-arm64/` 下的二进制。
+- 可在 `设置 -> 存储与诊断` 查看检测到的工具路径和版本。
 
-### Downloads do not appear
+### 导出文件找不到
 
-- Check `Settings -> General -> Download location`.
-- If no custom location is set, ASRbox writes exports to `~/Downloads/ASRbox Exports`.
-- If a file already exists, ASRbox appends a numeric suffix instead of overwriting it.
+- 检查 `设置 -> 通用 -> 下载位置`。
+- 如果没有设置自定义位置，ASRbox 会导出到 `~/Downloads/ASRbox Exports`。
+- 如果目标文件已经存在，ASRbox 会自动追加数字后缀，不会覆盖旧文件。
 
-### Qwen3-ASR fails to load
+### Qwen3-ASR 加载失败
 
-The Qwen3-ASR integration depends on Transformers support for the model class. If the installed Transformers version does not include the required module, the backend will report a model load error. Update the backend Python dependencies before treating it as a frontend issue.
+Qwen3-ASR 依赖 Transformers 对应模型类支持。如果当前 Python 依赖中的 Transformers 不包含相关模块，后端会报告模型加载错误。请先更新后端依赖，再判断是否是前端问题。
 
-## Contributing
+## 贡献
 
-Keep changes small and testable:
+建议保持改动小而可验证：
 
-1. Open an issue or describe the behavior change.
-2. Add or update tests for backend behavior when possible.
-3. Run typecheck and the relevant backend/Tauri checks.
-4. Keep desktop packaging changes isolated from unrelated Web UI refactors.
+1. 先描述行为变化或创建 issue。
+2. 后端行为尽量补测试。
+3. 提交前运行 typecheck 和相关后端 / Tauri 检查。
+4. 桌面打包改动尽量和 Web UI 重构分开。
 
-## License
+## 许可证
 
-No license file is included yet. Add a `LICENSE` file before public release so contributors and users know how the project can be used, modified, and redistributed.
+当前仓库还没有许可证文件。正式开源发布前，请补充 `LICENSE`，明确项目的使用、修改和分发方式。
