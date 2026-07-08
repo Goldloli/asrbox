@@ -32,22 +32,6 @@ ASRbox 目前处于桌面 MVP 阶段。当前优先支持 macOS Apple Silicon �
 - 系统托盘和后台常驻。
 - Windows / Linux 发布产物。
 
-## GitHub About 描述
-
-中文：
-
-> ASRbox 是一个本地优先的音视频转写工作台，支持本地 ASR 模型、在线平台、字幕导出和 Tauri 桌面端，适合私有化转写与字幕整理。
-
-English:
-
-> ASRbox is a local-first audio/video transcription workbench with local ASR models, online providers, subtitle exports, and a Tauri desktop app.
-
-推荐 Topics：
-
-```text
-asr, transcription, subtitles, speech-to-text, tauri, fastapi, react, whisper, ffmpeg
-```
-
 ## 架构
 
 ```text
