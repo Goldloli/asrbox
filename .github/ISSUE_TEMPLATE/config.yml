@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/Goldloli/asrbox/security
+    about: Please report security issues privately.
+  - name: Releases
+    url: https://github.com/Goldloli/asrbox/releases
+    about: Download published ASRbox desktop builds.

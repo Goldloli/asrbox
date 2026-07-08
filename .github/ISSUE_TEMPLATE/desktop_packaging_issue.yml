@@ -1,0 +1,49 @@
+name: Desktop packaging issue
+description: Report macOS app, DMG, sidecar, or bundled tool problems.
+title: "desktop: "
+labels: ["bug", "desktop"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: ASRbox version
+      placeholder: v0.1.0-rc.1
+    validations:
+      required: true
+  - type: dropdown
+    id: launch
+    attributes:
+      label: Failure area
+      options:
+        - App does not open
+        - Backend does not start
+        - ffmpeg/ffprobe unavailable
+        - DMG install problem
+        - macOS permission or quarantine warning
+        - Export path problem
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and hardware
+      placeholder: macOS 15.7, Apple Silicon
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Include screenshots, `/health` response, or relevant logs if available.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes

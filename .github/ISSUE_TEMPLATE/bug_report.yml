@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible ASRbox problem.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include enough detail for maintainers to reproduce it.
+  - type: input
+    id: version
+    attributes:
+      label: ASRbox version
+      description: Release tag, commit hash, or "main".
+      placeholder: v0.1.0-rc.1
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - macOS desktop app
+        - Web UI with local backend
+        - Backend API only
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List exact actions and inputs.
+      placeholder: |
+        1. Open ASRbox
+        2. Choose file ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant logs, screenshots, or error text.
+      render: text
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.7 Apple Silicon
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
