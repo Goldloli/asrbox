@@ -43,4 +43,11 @@ function createPlaceholder(baseName) {
   console.log(`Created development sidecar placeholder: ${name}`);
 }
 
+function ensureResourceDirectory(baseName) {
+  const path = join(binariesDir, baseName);
+  mkdirSync(path, { recursive: true });
+  writeFileSync(join(path, '.gitkeep'), '');
+}
+
 createPlaceholder('asrbox-server');
+ensureResourceDirectory('asrbox-server');
