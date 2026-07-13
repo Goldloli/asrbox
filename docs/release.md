@@ -20,18 +20,37 @@ Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containin
 ## Before Tagging
 
 1. Update `CHANGELOG.md` and both README files.
-2. Confirm `THIRD_PARTY_NOTICES.md` is current.
-3. Verify `third_party/ffmpeg/SOURCE.md`, licenses, configuration, and checksums.
-4. Confirm no media, transcripts, model weights, caches, app data, `.venv`, `node_modules`, build output, or credentials are staged.
-5. Run:
+2. Create `docs/releases/<tag>.md`, for example `docs/releases/v0.1.0-beta.2.md`. Start from the previous version, then update the GIF URL, downloads, highlights, verification, limitations, and changelog comparison.
+3. Confirm `THIRD_PARTY_NOTICES.md` is current.
+4. Verify `third_party/ffmpeg/SOURCE.md`, licenses, configuration, and checksums.
+5. Confirm no media, transcripts, model weights, caches, app data, `.venv`, `.env*`, `node_modules`, build output, or credentials are staged.
+6. Run:
 
 ```bash
 npm run check:open-source
 npm run audit:dependencies
 ```
 
-6. For model-runtime changes, record the real models and media characteristics tested. Do not publish private filenames or content.
-7. Confirm `main` is clean, pushed, and matches `origin/main`.
+7. For model-runtime changes, record the real models and media characteristics tested. Do not publish private filenames or content.
+8. Confirm `main` is clean, pushed, and matches `origin/main`.
+
+## Release Notes
+
+The Release workflow requires a versioned Markdown file at:
+
+```text
+docs/releases/<tag>.md
+```
+
+`softprops/action-gh-release` publishes that file as the GitHub Release body. The workflow fails before building if the file is missing, so every version must have deliberate notes instead of only an automatically generated changelog.
+
+Use an absolute, tag-pinned raw GitHub URL for screenshots or GIFs so the media remains tied to the released source:
+
+```markdown
+![ASRbox demo](https://raw.githubusercontent.com/Goldloli/asrbox/<tag>/assets/asrbox-demo.gif)
+```
+
+Keep the notes useful to a downloader: supported platform, direct DMG/checksum links, installation warning, highlights, verification evidence, known limitations, data location, and the full comparison link.
 
 ## Create the Release
 
