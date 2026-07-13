@@ -7,7 +7,8 @@ Thanks for helping improve ASRbox. This project is a local-first ASR workbench w
 ```bash
 bun install
 python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pip install pip==25.3
+.venv/bin/pip install -r requirements-dev.lock
 ```
 
 Run the app in development:
@@ -32,6 +33,9 @@ Before opening a PR:
 npm run typecheck
 npm run build:web
 npm run test:backend
+npm run check:versions
+npm run test:release-tools
+npm run verify:third-party
 cd tauri/src-tauri && cargo check && cargo test
 ```
 
@@ -54,3 +58,7 @@ Do not commit:
 ## Third-Party Dependencies
 
 If a change adds or vendors a dependency, update `THIRD_PARTY_NOTICES.md` and mention any license impact in the PR.
+
+Python dependency changes belong in the relevant `requirements-*.in` file and
+must be followed by an updated macOS Apple Silicon / Python 3.13 lock snapshot.
+Do not edit only `requirements.txt`.

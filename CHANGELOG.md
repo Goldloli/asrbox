@@ -6,11 +6,33 @@ The format follows Keep a Changelog, and versions use Semantic Versioning while 
 
 ## [Unreleased]
 
+## [0.1.0-beta.1] - 2026-07-13
+
 ### Added
 
-- Open source governance files and contribution workflow.
-- Pull request and issue templates.
-- Normal CI for push and pull request checks.
+- Per-launch token protection for the desktop loopback API.
+- Bounded streaming uploads and batch limits.
+- Exact Python runtime, development, and build lock snapshots.
+- FFmpeg GPLv3 license, checksums, source records, and release source archive.
+- Version/tag and release-asset gates.
+
+### Changed
+
+- Positioned the MVP as a macOS Apple Silicon public beta.
+- Tightened Tauri CSP, capabilities, shell scope, and backend CORS.
+- Updated frontend build dependencies and restored a clean vulnerability audit.
+
+### Fixed
+
+- Invalid local-model and online-provider transcription requests are rejected
+  before uploads are saved.
+- Production tasks no longer return placeholder transcripts for invalid backend
+  selections.
+
+### Security
+
+- Documented that provider credentials are plaintext in the local SQLite
+  database and included in backups.
 
 ## [0.1.0-rc.1] - 2026-07-08
 
@@ -26,5 +48,6 @@ The format follows Keep a Changelog, and versions use Semantic Versioning while 
 - macOS package is not signed or notarized.
 - Windows and Linux packages are not published yet.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-rc.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...HEAD
+[0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1
 [0.1.0-rc.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.1

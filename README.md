@@ -23,7 +23,7 @@ ASRbox 是一个本地优先的音视频转写工作台。它提供 Web UI 和 m
 
 ## 项目状态
 
-ASRbox 目前处于桌面 MVP 阶段。当前优先支持 macOS Apple Silicon 桌面包；Windows 和 Linux 会保留配置方向，但暂不作为第一阶段发布目标。
+ASRbox `0.1.0-beta.1` 是可供试用和反馈的公开 Beta，而不是稳定版。当前只把 macOS Apple Silicon 桌面包作为发布目标；重要文件请保留原始副本，升级前建议先在设置中创建备份。
 
 暂未包含：
 
@@ -31,6 +31,7 @@ ASRbox 目前处于桌面 MVP 阶段。当前优先支持 macOS Apple Silicon �
 - 自动更新。
 - 系统托盘和后台常驻。
 - Windows / Linux 发布产物。
+- Provider 密钥的系统钥匙串加密；当前密钥保存在本机 SQLite 数据库中。
 
 ## 架构
 
@@ -61,8 +62,8 @@ Web UI
 ## 环境要求
 
 - macOS Apple Silicon，用于当前桌面发布包。
-- Bun 1.3.x。
-- Python 3.11+，推荐使用项目 `.venv`。
+- Bun 1.3.8。
+- Python 3.13；当前锁文件面向 macOS Apple Silicon / Python 3.13。
 - Rust stable 和 Tauri 构建工具链。
 - 开发环境需要 ffmpeg / ffprobe，或使用 `third_party/ffmpeg/darwin-arm64/` 下的内置二进制。
 
@@ -76,7 +77,8 @@ bun install
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pip install pip==25.3
+.venv/bin/pip install -r requirements-dev.lock
 ```
 
 ## 本地开发
@@ -109,6 +111,12 @@ npm run dev:desktop
 npm run build:desktop
 ```
 
+构建前安装精确构建依赖：
+
+```bash
+.venv/bin/pip install -r requirements-build.lock
+```
+
 构建流程会：
 
 1. 使用 PyInstaller 冻结后端为 `asrbox-server` sidecar。
@@ -118,7 +126,7 @@ npm run build:desktop
 Apple Silicon 预期 DMG 路径：
 
 ```text
-tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0_aarch64.dmg
+tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
 ```
 
 ## GitHub Releases
@@ -134,18 +142,19 @@ tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0_aarch64.dmg
 - 推送 tag：
 
 ```bash
-git tag v0.1.0
+git tag v0.1.0-beta.1
 git push origin main --tags
 ```
 
-- 或在 GitHub Actions 页面手动运行 `Release` workflow，并输入 tag，例如 `v0.1.0`。
+- 或在 GitHub Actions 页面手动运行 `Release` workflow，并输入与项目版本完全一致的 tag，例如 `v0.1.0-beta.1`。
 
 当前 CI 会在 macOS runner 上构建 Apple Silicon DMG，生成 GitHub Release，并上传：
 
 - `ASRbox_*.dmg`
+- `ASRbox-ffmpeg-source-8.1.2.tar.gz`
 - `SHA256SUMS.txt`
 
-注意：当前发布包尚未签名和公证，macOS 首次打开时可能会提示无法验证开发者。这是未签名 MVP 包的正常现象。
+注意：当前发布包尚未签名和公证。请只从本项目 GitHub Releases 下载并先核对 `SHA256SUMS.txt`；macOS 首次打开时需要右键应用并选择“打开”。如果校验和不匹配，不要运行该文件。
 
 ## 测试
 
@@ -154,6 +163,9 @@ git push origin main --tags
 ```bash
 npm run typecheck
 npm run build:web
+npm run check:versions
+npm run test:release-tools
+npm run verify:third-party
 ```
 
 后端测试：
@@ -200,6 +212,14 @@ cargo test
 - `ASRBOX_DATA_DIR`：后端数据根目录。
 - `ASRBOX_FFMPEG_PATH`：显式指定 ffmpeg 路径。
 - `ASRBOX_FFPROBE_PATH`：显式指定 ffprobe 路径。
+- `ASRBOX_API_TOKEN`：为手动启动的后端启用 Bearer 令牌；桌面端每次启动会自动生成内存令牌。
+- `ASRBOX_MAX_UPLOAD_BYTES`：单文件字节上限，默认 20 GiB。
+- `ASRBOX_MAX_BATCH_FILES`：单批文件数上限，默认 32。
+- `ASRBOX_MAX_BATCH_TOTAL_BYTES`：单批总字节上限，默认 40 GiB。
+
+桌面端默认数据目录为 `~/Library/Application Support/com.goldloli.asrbox/`。Provider API 密钥当前以明文保存在其中的 `asrbox.db`，备份文件也包含该数据库；不要把数据目录或备份发送给不可信对象。在线 Provider 模式会把媒体或提取出的音频发送到所配置的第三方服务，具体范围取决于 Provider。
+
+卸载应用本身不会删除数据。彻底移除时，先在应用内删除不再需要的任务和模型，退出 ASRbox，再删除 `/Applications/ASRbox.app`、`~/Library/Application Support/com.goldloli.asrbox/`，以及不再需要的 `~/Downloads/ASRbox Exports/`。详见[隐私与数据说明](docs/privacy.md)。
 
 ## 项目文档
 
