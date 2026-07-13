@@ -1664,6 +1664,8 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert "asrbox-server" in command
     assert "accelerate" in command
     assert "mlx_whisper" in command
+    assert command[command.index("--collect-data") + 1] == "funasr"
+    assert command[command.index("--copy-metadata") + 1] == "torchcodec"
 
     args = parse_args(["--host", "127.0.0.1", "--port", "17495", "--parent-pid", "123", "--keep-running-sentinel", "/tmp/asrbox.keep"])
     assert args.host == "127.0.0.1"

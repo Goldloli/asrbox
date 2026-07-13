@@ -33,22 +33,21 @@ def funasr_available() -> bool:
     return module_import_error("funasr") is None
 
 
-def qwen3_asr_available() -> bool:
+def qwen3_asr_import_error() -> str | None:
     try:
-        import transformers
-        from transformers import AutoModelForMultimodalLM, AutoProcessor
+        from transformers.models.auto.modeling_auto import AutoModelForMultimodalLM
+        from transformers.models.auto.processing_auto import AutoProcessor
+        from transformers.models.qwen3_asr.modeling_qwen3_asr import Qwen3ASRForConditionalGeneration
 
-        has_auto_classes = AutoModelForMultimodalLM is not None and AutoProcessor is not None
-        has_qwen_class = hasattr(transformers, "Qwen3ASRForConditionalGeneration")
-        try:
-            from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+        if all((AutoModelForMultimodalLM, AutoProcessor, Qwen3ASRForConditionalGeneration)):
+            return None
+        return "required transformers classes are unavailable"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
 
-            has_qwen_config = "qwen3_asr" in CONFIG_MAPPING_NAMES
-        except Exception:
-            has_qwen_config = False
-        return has_auto_classes and (has_qwen_class or has_qwen_config)
-    except Exception:
-        return False
+
+def qwen3_asr_available() -> bool:
+    return qwen3_asr_import_error() is None
 
 
 def detect_runtime() -> dict[str, Any]:
@@ -96,8 +95,10 @@ def detect_runtime() -> dict[str, Any]:
         warnings.append(f"torchaudio import failed: {torchaudio_import_error}")
     if module_available("funasr") and not torchaudio_runtime_available:
         warnings.append("funasr requires torchaudio, but torchaudio is unavailable")
-    if module_available("transformers") and not qwen3_asr_available():
-        warnings.append("transformers is installed but Qwen3-ASR architecture support is unavailable")
+    qwen3_asr_error = qwen3_asr_import_error() if module_available("transformers") else "transformers is not installed"
+    qwen3_asr_runtime_available = qwen3_asr_error is None
+    if module_available("transformers") and qwen3_asr_error is not None:
+        warnings.append(f"Qwen3-ASR import failed: {qwen3_asr_error}")
 
     return {
         "python_version": sys.version.split()[0],
@@ -127,7 +128,7 @@ def detect_runtime() -> dict[str, Any]:
         "diarization_ready": diarization_ready,
         "mlx_available": module_available("mlx"),
         "mlx_whisper_available": module_available("mlx_whisper"),
-        "qwen3_asr_available": qwen3_asr_available(),
-        "transformers_qwen3_asr_available": qwen3_asr_available(),
+        "qwen3_asr_available": qwen3_asr_runtime_available,
+        "transformers_qwen3_asr_available": qwen3_asr_runtime_available,
         "warnings": warnings,
     }
