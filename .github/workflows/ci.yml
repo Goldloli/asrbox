@@ -80,8 +80,14 @@ jobs:
 
       - name: Cargo check
         working-directory: tauri/src-tauri
-        run: cargo check
+        run: cargo check --locked
 
       - name: Cargo test
         working-directory: tauri/src-tauri
-        run: cargo test
+        run: cargo test --locked
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium
+
+      - name: Browser smoke test
+        run: npm run test:e2e:smoke

@@ -165,8 +165,12 @@ npm run typecheck
 npm run build:web
 npm run check:versions
 npm run test:release-tools
+npm run audit:dependencies
 npm run verify:third-party
+npm run test:e2e:smoke
 ```
+
+提交或发布前可运行本地统一门禁：`npm run check:open-source`。联网漏洞审计因依赖 npm 服务而单独运行，并在 CI/Release 中强制执行。
 
 后端测试：
 
