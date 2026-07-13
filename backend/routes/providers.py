@@ -11,6 +11,7 @@ from backend.database import get_db
 from backend.models import ProviderCreate, ProviderListResponse, ProviderResponse, ProviderTranscriptionTestResponse, ProviderUpdate
 from backend.providers.base import ProviderError
 from backend.services import providers as provider_service
+from backend.services.uploads import UploadLimitExceeded, save_upload, validate_upload_metadata
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
@@ -50,12 +51,14 @@ async def test_provider(provider_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{provider_id}/test-transcription", response_model=ProviderTranscriptionTestResponse)
 async def test_provider_transcription(provider_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        validate_upload_metadata([file], batch=False)
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     suffix = Path(file.filename or "audio").suffix or ".audio"
     path = config.get_uploads_dir() / f"provider-test-{uuid.uuid4()}{suffix}"
     try:
-        with path.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                output.write(chunk)
+        save_upload(file.file, path)
         result = provider_service.transcribe_with_provider(db, provider_id, str(path), {"provider_id": provider_id})
         return ProviderTranscriptionTestResponse(
             ok=True,
@@ -66,6 +69,8 @@ async def test_provider_transcription(provider_id: str, file: UploadFile = File(
             segments_count=len(result.segments),
             response_preview=result.raw_result_summary,
         )
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except ProviderError as exc:
         return ProviderTranscriptionTestResponse(
             ok=False,

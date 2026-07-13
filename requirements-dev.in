@@ -1,0 +1,6 @@
+-r requirements-runtime.in
+
+httpx2
+pytest
+pip<26
+pip-tools

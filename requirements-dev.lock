@@ -1,0 +1,12 @@
+-r requirements-runtime.lock
+
+build==1.5.1
+httpcore2==2.5.0
+httpx2==2.5.0
+iniconfig==2.3.0
+pip==25.3
+pip-tools==7.5.2
+pluggy==1.6.0
+pyproject-hooks==1.2.0
+pytest==9.1.1
+wheel==0.47.0

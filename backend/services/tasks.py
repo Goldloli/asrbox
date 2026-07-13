@@ -32,12 +32,12 @@ from backend.services import versions as version_service
 from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
-from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
+from backend.services.transcribe import transcribe_with_local_model
+from backend.services.uploads import save_upload
 from backend.utils.events import event_bus
 from backend.utils.transcript_text import normalize_transcript_text
 from backend.utils.transcript_text import transcript_text_from_segments
 
-CHUNK_SIZE = 1024 * 1024
 LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
 LONG_AUDIO_THRESHOLD_MS = 30 * 60 * 1000
 CHUNK_WINDOW_MS = 10 * 60 * 1000
@@ -323,8 +323,7 @@ def create_task_from_file(
     task_id = str(uuid.uuid4())
     suffix = Path(filename).suffix or ".audio"
     audio_path = config.get_uploads_dir() / f"{task_id}{suffix}"
-    with audio_path.open("wb") as output:
-        shutil.copyfileobj(file_obj, output, length=CHUNK_SIZE)
+    save_upload(file_obj, audio_path)
     return _create_task_row(
         db,
         filename=filename,
@@ -464,7 +463,7 @@ def _transcribe_path_for_row(db: Session, row: TranscriptionTask, audio_path: Pa
         return _transcribe_provider_path(db, row, audio_path)
     if row.source == "local" and row.model_name:
         return _transcribe_local_path(db, row, audio_path)
-    return transcribe_placeholder(row.filename, row.model_name, row.provider_id, row.language)
+    raise ASRboxError("INVALID_TRANSCRIPTION_BACKEND", f"Invalid transcription backend: {row.source}", stage="transcribing")
 
 
 def _transcribe_chunks(db: Session, row: TranscriptionTask, normalized_path: Path):
@@ -605,7 +604,7 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         elif row.source == "local" and row.model_name:
             result = _transcribe_with_local_model(db, row)
         else:
-            result = transcribe_placeholder(row.filename, row.model_name, row.provider_id, row.language)
+            raise ASRboxError("INVALID_TRANSCRIPTION_BACKEND", f"Invalid transcription backend: {row.source}", stage="transcribing")
         db.refresh(row)
         if row.status == "cancelled" or task_runtime.is_cancelled(row.id):
             return
@@ -615,6 +614,12 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             options["raw_result_summary"] = result.raw_result_summary
         settings = settings_service.get_settings(db)
         segments = result.segments
+        if (
+            len(segments) == 1
+            and row.duration_ms
+            and segments[0].end <= segments[0].start
+        ):
+            segments = [segments[0].model_copy(update={"end": row.duration_ms / 1000})]
         if options.get("diarization", settings.diarization):
             token = options.get("diarization_token")
             if not token:

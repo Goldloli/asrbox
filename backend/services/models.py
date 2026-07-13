@@ -22,12 +22,40 @@ from backend.utils.progress import get_progress_manager
 
 _active_downloads: set[str] = set()
 _cancelled_downloads: set[str] = set()
+_paused_downloads: set[str] = set()
 _download_errors: dict[str, str] = {}
 _state_lock = threading.Lock()
 _download_queue: queue.Queue[ASRModelConfig] = queue.Queue()
 _download_worker_started = False
 _migration_progress: dict[str, Any] = {"status": "idle", "progress": 0, "current": 0, "total": 0, "message": None, "errors": []}
 DOWNLOAD_PROGRESS_POLL_SECONDS = 0.5
+HF_DUPLICATE_WEIGHT_IGNORE_PATTERNS = ["pytorch_model*.bin", "*.fp32.*", "*.fp32-*"]
+
+
+class DownloadStopped(RuntimeError):
+    pass
+
+
+def _download_checkpoint(model_name: str) -> None:
+    while True:
+        with _state_lock:
+            if model_name in _cancelled_downloads:
+                raise DownloadStopped("Download stopped")
+            paused = model_name in _paused_downloads
+        if not paused:
+            return
+        state = get_progress_manager().get_progress(model_name) or {}
+        get_progress_manager().update_progress(
+            model_name,
+            int(state.get("current") or 0),
+            int(state.get("total") or 0),
+            filename=state.get("filename"),
+            status="paused",
+            source=state.get("source"),
+            repo_id=state.get("repo_id"),
+            fallback_from=state.get("fallback_from"),
+        )
+        threading.Event().wait(0.05)
 
 WEIGHT_EXTENSIONS = (
     ".safetensors",
@@ -46,7 +74,10 @@ def _model_dir(model_name: str) -> Path:
 
 
 def _has_incomplete_files(model_dir: Path) -> bool:
-    return model_dir.exists() and any(model_dir.rglob("*.incomplete"))
+    return model_dir.exists() and any(
+        ".cache" not in path.relative_to(model_dir).parts
+        for path in model_dir.rglob("*.incomplete")
+    )
 
 
 def _has_weight_files(model_dir: Path) -> bool:
@@ -184,6 +215,10 @@ def _start_directory_progress_tracker(model_config: ASRModelConfig, model_dir: P
 
     def poll() -> None:
         while not stop_event.wait(DOWNLOAD_PROGRESS_POLL_SECONDS):
+            with _state_lock:
+                if model_config.model_name in _cancelled_downloads:
+                    return
+                paused = model_config.model_name in _paused_downloads
             current = _directory_size(model_dir)
             if current <= 0:
                 continue
@@ -192,7 +227,7 @@ def _start_directory_progress_tracker(model_config: ASRModelConfig, model_dir: P
                 min(current, estimated_total - 1),
                 estimated_total,
                 filename="Downloading files...",
-                status="downloading",
+                status="paused" if paused else "downloading",
             )
 
     thread = threading.Thread(target=poll, daemon=True)
@@ -353,11 +388,16 @@ def _download_huggingface_snapshot(model_config: ASRModelConfig, model_dir: Path
 
     from huggingface_hub import snapshot_download
 
-    with track_hf_download(model_config.model_name, get_progress_manager()):
+    with track_hf_download(
+        model_config.model_name,
+        get_progress_manager(),
+        checkpoint=lambda: _download_checkpoint(model_config.model_name),
+    ):
         return snapshot_download(
             repo_id=model_config.repo_id,
             local_dir=str(model_dir),
             allow_patterns=model_config.allow_patterns,
+            ignore_patterns=HF_DUPLICATE_WEIGHT_IGNORE_PATTERNS,
         )
 
 
@@ -374,7 +414,12 @@ def _download_modelscope_snapshot(model_config: ASRModelConfig, model_dir: Path)
         filename="Connecting to ModelScope...",
         status="downloading",
     )
-    return snapshot_download(model_id=model_config.repo_id, cache_dir=str(model_dir))
+    with track_hf_download(
+        model_config.model_name,
+        get_progress_manager(),
+        checkpoint=lambda: _download_checkpoint(model_config.model_name),
+    ):
+        return snapshot_download(model_id=model_config.repo_id, cache_dir=str(model_dir))
 
 
 def _run_download(model_config: ASRModelConfig) -> None:
@@ -384,10 +429,7 @@ def _run_download(model_config: ASRModelConfig) -> None:
     stop_progress = threading.Event()
     progress_thread: threading.Thread | None = None
     try:
-        with _state_lock:
-            if model_name in _cancelled_downloads:
-                progress.update_progress(model_name, 0, 0, status="cancelled", error="Download cancelled")
-                return
+        _download_checkpoint(model_name)
         model_dir.mkdir(parents=True, exist_ok=True)
         progress_thread = _start_directory_progress_tracker(model_config, model_dir, stop_progress)
         candidates = _source_candidates(model_config)
@@ -395,6 +437,7 @@ def _run_download(model_config: ASRModelConfig) -> None:
         snapshot_path = ""
         installed_config = model_config
         for index, candidate in enumerate(candidates):
+            _download_checkpoint(model_name)
             candidate_config = replace(model_config, source=candidate.source, repo_id=candidate.repo_id)
             progress.update_progress(
                 model_name,
@@ -431,6 +474,8 @@ def _run_download(model_config: ASRModelConfig) -> None:
                     continue
                 raise RuntimeError("; ".join(errors)) from exc
 
+        _download_checkpoint(model_name)
+
         if not _has_weight_files(model_dir):
             raise RuntimeError("Model download finished but no model weight files were found")
         if _has_incomplete_files(model_dir):
@@ -447,6 +492,11 @@ def _run_download(model_config: ASRModelConfig) -> None:
         if progress_thread:
             progress_thread.join(timeout=1)
         progress.mark_complete(model_name)
+    except DownloadStopped:
+        stop_progress.set()
+        if progress_thread:
+            progress_thread.join(timeout=1)
+        progress.update_progress(model_name, 0, 0, status="cancelled", error="Download stopped")
     except Exception as exc:
         stop_progress.set()
         if progress_thread:
@@ -462,6 +512,7 @@ def _run_download(model_config: ASRModelConfig) -> None:
         with _state_lock:
             _active_downloads.discard(model_name)
             _cancelled_downloads.discard(model_name)
+            _paused_downloads.discard(model_name)
 
 
 def _download_worker() -> None:
@@ -496,6 +547,7 @@ def download_model(model_name: str) -> str:
             return f"Model {model_name} download already running"
         _active_downloads.add(model_name)
         _cancelled_downloads.discard(model_name)
+        _paused_downloads.discard(model_name)
         _download_errors.pop(model_name, None)
 
     progress = get_progress_manager()
@@ -533,6 +585,7 @@ def delete_model(model_name: str) -> None:
     with _state_lock:
         _active_downloads.discard(model_name)
         _cancelled_downloads.discard(model_name)
+        _paused_downloads.discard(model_name)
         _download_errors.pop(model_name, None)
     get_progress_manager().clear_progress(model_name)
 
@@ -553,6 +606,7 @@ def cancel_download(model_name: str) -> bool:
         if model_name not in _active_downloads:
             return False
         _cancelled_downloads.add(model_name)
+        _paused_downloads.discard(model_name)
     get_progress_manager().update_progress(
         model_name,
         0,
@@ -561,6 +615,48 @@ def cancel_download(model_name: str) -> bool:
         error="Download cancellation requested",
     )
     return True
+
+
+def pause_download(model_name: str) -> bool:
+    with _state_lock:
+        if model_name not in _active_downloads or model_name in _cancelled_downloads:
+            return False
+        _paused_downloads.add(model_name)
+    state = get_progress_manager().get_progress(model_name) or {}
+    get_progress_manager().update_progress(
+        model_name,
+        int(state.get("current") or 0),
+        int(state.get("total") or 0),
+        filename=state.get("filename"),
+        status="paused",
+        source=state.get("source"),
+        repo_id=state.get("repo_id"),
+        fallback_from=state.get("fallback_from"),
+    )
+    return True
+
+
+def resume_download(model_name: str) -> bool:
+    with _state_lock:
+        if model_name not in _active_downloads or model_name not in _paused_downloads:
+            return False
+        _paused_downloads.discard(model_name)
+    state = get_progress_manager().get_progress(model_name) or {}
+    get_progress_manager().update_progress(
+        model_name,
+        int(state.get("current") or 0),
+        int(state.get("total") or 0),
+        filename=state.get("filename"),
+        status="downloading",
+        source=state.get("source"),
+        repo_id=state.get("repo_id"),
+        fallback_from=state.get("fallback_from"),
+    )
+    return True
+
+
+def retry_download(model_name: str) -> str:
+    return download_model(model_name)
 
 
 def storage_summary() -> dict[str, Any]:
@@ -575,6 +671,7 @@ def storage_summary() -> dict[str, Any]:
                 "model_name": item.model_name,
                 "path": str(model_dir),
                 "exists": model_dir.exists(),
+                "size_bytes": size_bytes,
                 "size_on_disk_mb": round(size_bytes / (1024 * 1024), 2),
                 "downloaded": is_model_downloaded(item.model_name),
             }
@@ -582,10 +679,16 @@ def storage_summary() -> dict[str, Any]:
     try:
         usage = shutil.disk_usage(config.get_models_dir())
         free_disk_bytes = usage.free
+        total_disk_bytes = usage.total
     except OSError:
         free_disk_bytes = None
+        total_disk_bytes = None
     return {
+        "models_dir": str(config.get_models_dir()),
         "models": items,
+        "used_bytes": total,
+        "free_bytes": free_disk_bytes,
+        "total_bytes": total_disk_bytes,
         "total_size_mb": round(total / (1024 * 1024), 2),
         "free_disk_bytes": free_disk_bytes,
     }

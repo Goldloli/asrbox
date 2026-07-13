@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Database, DownloadCloud, RefreshCw } from 'lucide-react';
+import { BarChart3, Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
 import { apiClient, getActiveDownloadItems } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
@@ -43,11 +43,35 @@ export function ModelsPage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
-  const cancel = useMutation({
-    mutationFn: (modelName: string) => apiClient.cancelModelDownload(modelName),
+  const pause = useMutation({
+    mutationFn: (modelName: string) => apiClient.pauseModelDownload(modelName),
     onSuccess: () => {
       refresh();
-      toast.info(t('toast.modelDownloadCancelled'));
+      toast.info(t('toast.modelDownloadPaused'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const resume = useMutation({
+    mutationFn: (modelName: string) => apiClient.resumeModelDownload(modelName),
+    onSuccess: () => {
+      refresh();
+      toast.info(t('toast.modelDownloadResumed'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const stop = useMutation({
+    mutationFn: (modelName: string) => apiClient.stopModelDownload(modelName),
+    onSuccess: () => {
+      refresh();
+      toast.info(t('toast.modelDownloadStopped'));
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+  const retry = useMutation({
+    mutationFn: (modelName: string) => apiClient.retryModelDownload(modelName),
+    onSuccess: (_, modelName) => {
+      refresh();
+      toast.success(t('toast.modelDownloadRetried'), modelName);
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
@@ -148,7 +172,10 @@ export function ModelsPage() {
                       bestFor={modelBestFor(model, locale)}
                       onTogglePin={() => togglePinnedModel(model.model_name)}
                       onDownload={() => download.mutate(model.model_name)}
-                      onCancel={() => cancel.mutate(model.model_name)}
+                      onPause={() => pause.mutate(model.model_name)}
+                      onResume={() => resume.mutate(model.model_name)}
+                      onStop={() => stop.mutate(model.model_name)}
+                      onRetry={() => retry.mutate(model.model_name)}
                       onUnload={() => unload.mutate(model.model_name)}
                       onDelete={() => remove.mutate(model.model_name)}
                     />
@@ -254,6 +281,20 @@ export function ModelsPage() {
                 </div>
                 <Progress value={download.progress} />
                 <p className="truncate text-xs text-app-muted">{download.filename ?? download.source ?? t('status.modelDownload')}</p>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => (download.status === 'paused' ? resume : pause).mutate(download.model_name)}
+                  >
+                    {download.status === 'paused' ? <Play className="size-4" /> : <Pause className="size-4" />}
+                    {download.status === 'paused' ? t('common.resume') : t('common.pause')}
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => stop.mutate(download.model_name)}>
+                    <Square className="size-4" />
+                    {t('common.stop')}
+                  </Button>
+                </div>
               </div>
             ))}
             {downloads.length === 0 && (
@@ -281,7 +322,7 @@ export function ModelsPage() {
               <StorageMetric label={t('models.total')} value={formatBytes(storageQuery.data?.total_bytes)} />
               <StorageMetric label={t('models.items')} value={String(storageQuery.data?.models?.length ?? 0)} />
             </div>
-            <div className="grid max-h-80 gap-2 overflow-auto pr-1">
+            <div className="grid max-h-80 auto-rows-max content-start gap-2 overflow-auto pr-1">
               {(storageQuery.data?.models ?? []).map((item) => (
                 <div key={item.model_name} className="flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-lg border app-control px-3 py-2">
                   <div className="min-w-0">

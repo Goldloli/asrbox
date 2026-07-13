@@ -9,8 +9,10 @@ ASRbox depends on open source projects and optional model ecosystems. This file 
 - Location: `third_party/ffmpeg/darwin-arm64/`
 - Purpose: media inspection, audio extraction, and desktop out-of-box MP4 support.
 - Source: Martin Riedl's FFmpeg Build Server.
-- Current note: see `third_party/ffmpeg/README.md`.
-- License risk: FFmpeg license terms depend on build configuration. Confirm redistribution requirements before each public release.
+- Version/build: `8.1.2`, with `--enable-gpl` and `--enable-version3`.
+- License: GPLv3; full text at `third_party/ffmpeg/LICENSE.GPLv3`.
+- Binary checksums: `third_party/ffmpeg/checksums.sha256`.
+- Corresponding source/build record: `third_party/ffmpeg/SOURCE.md`.
 
 ## Runtime and Application Frameworks
 
@@ -54,6 +56,6 @@ Before adding a model to the catalog or bundling a model:
 Before a public release:
 
 - Confirm this file mentions every newly vendored binary or major dependency.
-- Confirm `third_party/ffmpeg/README.md` matches the bundled ffmpeg/ffprobe version.
+- Run `npm run verify:third-party` and attach the generated FFmpeg source archive to every binary release.
 - Confirm model documentation does not imply redistribution rights that ASRbox does not have.
 - Confirm release artifacts do not include model weights, test media, caches, `.venv`, or `node_modules`.

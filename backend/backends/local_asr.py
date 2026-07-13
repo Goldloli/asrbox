@@ -135,7 +135,10 @@ class TransformersWhisperBackend:
         if language and language != "auto":
             generate_kwargs["language"] = language
 
-        result = pipeline(str(Path(audio_path)), return_timestamps=True, generate_kwargs=generate_kwargs)
+        from transformers.audio_utils import load_audio
+
+        audio = load_audio(str(Path(audio_path)), sampling_rate=16000, backend="librosa")
+        result = pipeline(audio, return_timestamps=True, generate_kwargs=generate_kwargs)
         text = str(result.get("text") or "").strip()
         segments = _segments_from_chunks(result.get("chunks") or [], text)
         return TranscriptionResult(
@@ -363,7 +366,10 @@ class Qwen3ASRBackend:
             self._models[model_config.model_name] = model
 
         language = _qwen_language(options.get("language"))
-        request_kwargs = {"audio": str(Path(audio_path))}
+        from transformers.audio_utils import load_audio
+
+        audio = load_audio(str(Path(audio_path)), sampling_rate=16000, backend="librosa")
+        request_kwargs = {"audio": audio}
         if language:
             request_kwargs["language"] = language
         inputs = processor.apply_transcription_request(**request_kwargs)

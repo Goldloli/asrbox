@@ -126,6 +126,33 @@ async def cancel_download(model_name: str):
     return {"message": f"Model {model_name} download cancelled" if cancelled else f"Model {model_name} is not downloading"}
 
 
+@router.post("/{model_name}/pause-download")
+async def pause_download(model_name: str):
+    paused = model_service.pause_download(model_name)
+    return {"message": f"Model {model_name} download paused" if paused else f"Model {model_name} is not downloading"}
+
+
+@router.post("/{model_name}/resume-download")
+async def resume_download(model_name: str):
+    resumed = model_service.resume_download(model_name)
+    return {"message": f"Model {model_name} download resumed" if resumed else f"Model {model_name} is not paused"}
+
+
+@router.post("/{model_name}/stop-download")
+async def stop_download(model_name: str):
+    stopped = model_service.cancel_download(model_name)
+    return {"message": f"Model {model_name} download stopped" if stopped else f"Model {model_name} is not downloading"}
+
+
+@router.post("/{model_name}/retry-download")
+async def retry_download(model_name: str):
+    try:
+        message = model_service.retry_download(model_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"message": message}
+
+
 @router.post("/{model_name}/redownload")
 async def redownload_model(model_name: str):
     try:

@@ -1,19 +1,23 @@
 # Suggested GitHub Labels
 
-Use labels to make issues and pull requests easy to triage.
-
-| Label | Purpose |
+| Label | Use |
 | --- | --- |
 | `bug` | Reproducible incorrect behavior |
 | `enhancement` | New or improved product behavior |
-| `desktop` | Tauri app, DMG, sidecar, bundled resources |
-| `frontend` | React Web UI |
-| `backend` | FastAPI backend, task runtime, storage |
-| `model` | Local ASR model support or compatibility |
-| `provider` | Online ASR provider integration |
-| `ffmpeg` | ffmpeg/ffprobe detection or bundling |
-| `release` | Release workflow, packaging, changelog |
-| `security` | Security-sensitive reports or fixes |
-| `documentation` | README, docs, comments, examples |
-| `good first issue` | Small, well-scoped contribution |
-| `needs reproduction` | Maintainer cannot reproduce yet |
+| `desktop` | Tauri shell, sidecar lifecycle, DMG, signing, or macOS integration |
+| `frontend` | React UI, routing, state, accessibility, or localization |
+| `backend` | FastAPI, task runtime, database, API, or exports |
+| `model` | Local model registry, loading, compatibility, or inference |
+| `model-download` | Download source, progress, pause/resume/stop/retry, or cache behavior |
+| `provider` | Online ASR provider protocol or credentials |
+| `media-runtime` | ffmpeg, ffprobe, audio decoding, codecs, or chunking |
+| `storage` | App data, model sizes, cleanup, backup, restore, or export paths |
+| `release` | Versioning, CI, packaging, checksums, signing, or GitHub Releases |
+| `security` | Security-sensitive work; private vulnerabilities must not use public issues |
+| `privacy` | Local/online data boundary, credentials, retention, or deletion |
+| `documentation` | README, guides, API contract, examples, or release notes |
+| `good first issue` | Small, well-scoped change with clear acceptance criteria |
+| `needs reproduction` | More environment details or a minimal reproduction is required |
+| `upstream` | Behavior likely caused by a model, runtime, or provider dependency |
+
+Apply one type label (`bug` or `enhancement`) plus the smallest useful subsystem labels. Avoid labeling every issue with every affected layer.

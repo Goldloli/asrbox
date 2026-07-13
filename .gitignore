@@ -11,6 +11,8 @@ build/
 *.spec
 data/
 frontend-audit-screenshots/95-gate/
+playwright-report/
+test-results/
 .DS_Store
 测试音视频/
 tauri/src-tauri/binaries/

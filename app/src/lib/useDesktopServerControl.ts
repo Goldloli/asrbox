@@ -21,9 +21,10 @@ function emitDesktopStartState() {
 function startDesktopServer(t: ReturnType<typeof useI18n>['t']) {
   if (!desktopStartPromise) {
     desktopStartPromise = (async () => {
-      const serverUrl = await desktopCapabilities.startServer();
-      if (!serverUrl) throw new Error(t('status.backendDesktopUnavailable'));
-      useServerStore.getState().setServerUrl(serverUrl);
+      const connection = await desktopCapabilities.startServer();
+      if (!connection) throw new Error(t('status.backendDesktopUnavailable'));
+      const serverUrl = connection.url;
+      useServerStore.getState().setServerConnection(serverUrl, connection.apiToken);
       const health = await apiClient.getHealth();
       if (health.status !== 'healthy' || health.backend_type !== 'web-first') {
         throw new Error(t('status.backendDesktopUnavailable'));
