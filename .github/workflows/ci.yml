@@ -61,11 +61,7 @@ jobs:
         run: npm run build:web
 
       - name: Validate vendored ffmpeg
-        run: |
-          test -x third_party/ffmpeg/darwin-arm64/ffmpeg
-          test -x third_party/ffmpeg/darwin-arm64/ffprobe
-          third_party/ffmpeg/darwin-arm64/ffmpeg -version
-          third_party/ffmpeg/darwin-arm64/ffprobe -version
+        run: npm run verify:third-party
 
       - name: Backend tests
         env:
