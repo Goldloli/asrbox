@@ -305,6 +305,8 @@ class ApiClient {
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers);
+    const apiToken = useServerStore.getState().apiToken;
+    if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`);
     if (init?.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
@@ -318,9 +320,13 @@ class ApiClient {
   }
 
   private async formRequest<T>(path: string, form: FormData): Promise<T> {
+    const headers = new Headers();
+    const apiToken = useServerStore.getState().apiToken;
+    if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`);
     const response = await fetch(`${this.baseUrl()}${path}`, {
       method: 'POST',
       body: form,
+      headers,
     });
     if (!response.ok) throw await parseError(response);
     return response.json() as Promise<T>;
@@ -447,15 +453,15 @@ class ApiClient {
   }
 
   exportTaskUrl(id: string, format: string) {
-    return `${this.baseUrl()}/tasks/${id}/export/${format}`;
+    return this.browserResourceUrl(`/tasks/${id}/export/${format}`);
   }
 
   taskAudioUrl(id: string) {
-    return `${this.baseUrl()}/tasks/${id}/audio`;
+    return this.browserResourceUrl(`/tasks/${id}/audio`);
   }
 
   eventsUrl() {
-    return `${this.baseUrl()}/events`;
+    return this.browserResourceUrl('/events');
   }
 
   listModels() {
@@ -536,7 +542,14 @@ class ApiClient {
   }
 
   runtimeDiagnosticBundleUrl() {
-    return `${this.baseUrl()}/runtime/diagnostic-bundle.zip`;
+    return this.browserResourceUrl('/runtime/diagnostic-bundle.zip');
+  }
+
+  private browserResourceUrl(path: string) {
+    const url = new URL(`${this.baseUrl()}${path}`);
+    const apiToken = useServerStore.getState().apiToken;
+    if (apiToken) url.searchParams.set('api_token', apiToken);
+    return url.toString();
   }
 }
 

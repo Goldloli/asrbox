@@ -13,6 +13,13 @@ const SERVER_URL: &str = "http://127.0.0.1:17494";
 
 struct ServerState {
     child: Mutex<Option<CommandChild>>,
+    api_token: String,
+}
+
+#[derive(serde::Serialize)]
+struct ServerConnection {
+    url: String,
+    api_token: String,
 }
 
 fn main() {
@@ -22,6 +29,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .manage(ServerState {
             child: Mutex::new(None),
+            api_token: generate_api_token(),
         })
         .invoke_handler(tauri::generate_handler![
             start_server,
@@ -62,17 +70,18 @@ fn main() {
 async fn start_server(
     app: tauri::AppHandle,
     state: State<'_, ServerState>,
-) -> Result<String, String> {
+) -> Result<ServerConnection, String> {
+    let api_token = state.api_token.clone();
     if state.child.lock().map_err(|e| e.to_string())?.is_some() {
         if !check_health().await? {
             let server_exited = AtomicBool::new(false);
             wait_for_health(&server_exited).await?;
         }
-        return Ok(SERVER_URL.to_string());
+        return Ok(server_connection(api_token));
     }
 
     if check_health().await? {
-        return Ok(SERVER_URL.to_string());
+        return Ok(server_connection(api_token));
     }
     if port_is_open() {
         return Err(format!(
@@ -104,7 +113,8 @@ async fn start_server(
         "--parent-pid",
         &parent_pid,
     ];
-    let server_envs = ffmpeg_env(&app);
+    let mut server_envs = ffmpeg_env(&app);
+    server_envs.push(("ASRBOX_API_TOKEN".to_string(), api_token.clone()));
 
     #[cfg(debug_assertions)]
     let spawn_result = {
@@ -225,7 +235,7 @@ async fn start_server(
         }
         return Err(error);
     }
-    Ok(SERVER_URL.to_string())
+    Ok(server_connection(api_token))
 }
 
 #[tauri::command]
@@ -241,7 +251,7 @@ async fn stop_server(app: tauri::AppHandle, state: State<'_, ServerState>) -> Re
 async fn restart_server(
     app: tauri::AppHandle,
     state: State<'_, ServerState>,
-) -> Result<String, String> {
+) -> Result<ServerConnection, String> {
     let _ = stop_server(app.clone(), state.clone()).await;
     start_server(app, state).await
 }
@@ -492,8 +502,10 @@ async fn shutdown_server(app: &tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
     let client = reqwest::Client::new();
+    let token = app.state::<ServerState>().api_token.clone();
     let _ = client
         .post(format!("{SERVER_URL}/shutdown"))
+        .bearer_auth(token)
         .send()
         .await
         .map_err(|e| format!("Failed to request ASRbox shutdown: {e}"))?;
@@ -503,6 +515,20 @@ async fn shutdown_server(app: &tauri::AppHandle) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+fn generate_api_token() -> String {
+    rand::random::<[u8; 32]>()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn server_connection(api_token: String) -> ServerConnection {
+    ServerConnection {
+        url: SERVER_URL.to_string(),
+        api_token,
+    }
 }
 
 fn emit_server_log(app: &tauri::AppHandle, stream: &str, line: Vec<u8>) {
