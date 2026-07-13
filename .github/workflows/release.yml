@@ -35,7 +35,10 @@ jobs:
           INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
           node scripts/check-versions.mjs --tag "$INPUT_TAG"
+          RELEASE_NOTES_PATH="docs/releases/${INPUT_TAG}.md"
+          test -f "$RELEASE_NOTES_PATH" || { echo "Missing release notes: $RELEASE_NOTES_PATH"; exit 1; }
           printf 'RELEASE_TAG=%s\n' "$INPUT_TAG" >> "$GITHUB_ENV"
+          printf 'RELEASE_NOTES_PATH=%s\n' "$RELEASE_NOTES_PATH" >> "$GITHUB_ENV"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -119,7 +122,7 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: ASRbox ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
+          body_path: ${{ env.RELEASE_NOTES_PATH }}
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           files: |
             release-assets/*.dmg
