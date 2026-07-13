@@ -32,7 +32,7 @@ from backend.services import versions as version_service
 from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
-from backend.services.transcribe import transcribe_placeholder, transcribe_with_local_model
+from backend.services.transcribe import transcribe_with_local_model
 from backend.utils.events import event_bus
 from backend.utils.transcript_text import normalize_transcript_text
 from backend.utils.transcript_text import transcript_text_from_segments
@@ -464,7 +464,7 @@ def _transcribe_path_for_row(db: Session, row: TranscriptionTask, audio_path: Pa
         return _transcribe_provider_path(db, row, audio_path)
     if row.source == "local" and row.model_name:
         return _transcribe_local_path(db, row, audio_path)
-    return transcribe_placeholder(row.filename, row.model_name, row.provider_id, row.language)
+    raise ASRboxError("INVALID_TRANSCRIPTION_BACKEND", f"Invalid transcription backend: {row.source}", stage="transcribing")
 
 
 def _transcribe_chunks(db: Session, row: TranscriptionTask, normalized_path: Path):
@@ -605,7 +605,7 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         elif row.source == "local" and row.model_name:
             result = _transcribe_with_local_model(db, row)
         else:
-            result = transcribe_placeholder(row.filename, row.model_name, row.provider_id, row.language)
+            raise ASRboxError("INVALID_TRANSCRIPTION_BACKEND", f"Invalid transcription backend: {row.source}", stage="transcribing")
         db.refresh(row)
         if row.status == "cancelled" or task_runtime.is_cancelled(row.id):
             return
