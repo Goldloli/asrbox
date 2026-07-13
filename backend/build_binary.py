@@ -45,7 +45,7 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "--clean",
         "--collect-data",
         "funasr",
-        "--copy-metadata",
+        "--exclude-module",
         "torchcodec",
         "--runtime-hook",
         str(root / "pyi_rth_numpy_torch.py"),

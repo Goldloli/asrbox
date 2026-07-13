@@ -7,11 +7,13 @@ from typing import Callable, Iterator
 
 
 ProgressCallback = Callable[[int, int, str | None], None]
+DownloadCheckpoint = Callable[[], None]
 
 
 class HFProgressTracker:
-    def __init__(self, progress_callback: ProgressCallback) -> None:
+    def __init__(self, progress_callback: ProgressCallback, checkpoint: DownloadCheckpoint | None = None) -> None:
         self.progress_callback = progress_callback
+        self.checkpoint = checkpoint
         self._lock = threading.Lock()
         self._originals: list[tuple[object, str, object]] = []
         self._file_sizes: dict[str, int] = {}
@@ -27,6 +29,8 @@ class HFProgressTracker:
                 self._asrbox_filename = desc.split(":")[0].strip() or "download"
 
             def update(self, n=1):
+                if tracker.checkpoint:
+                    tracker.checkpoint()
                 result = super().update(n)
                 filename = self._asrbox_filename
                 current = int(getattr(self, "n", 0) or 0)
@@ -62,7 +66,7 @@ class HFProgressTracker:
                 self._originals.append((tqdm_module.auto, "tqdm", original_auto))
 
             for module_name, module in list(sys.modules.items()):
-                if "huggingface" not in module_name and not module_name.startswith("tqdm"):
+                if "huggingface" not in module_name and "modelscope" not in module_name and not module_name.startswith("tqdm"):
                     continue
                 for attr_name in ("tqdm", "base_tqdm"):
                     if not hasattr(module, attr_name):
@@ -84,7 +88,7 @@ class HFProgressTracker:
 
 
 @contextmanager
-def track_hf_download(model_name: str, progress_manager) -> Iterator[None]:
+def track_hf_download(model_name: str, progress_manager, checkpoint: DownloadCheckpoint | None = None) -> Iterator[None]:
     def callback(current: int, total: int, filename: str | None) -> None:
         progress_manager.update_progress(
             model_name,
@@ -94,6 +98,6 @@ def track_hf_download(model_name: str, progress_manager) -> Iterator[None]:
             status="downloading",
         )
 
-    tracker = HFProgressTracker(callback)
+    tracker = HFProgressTracker(callback, checkpoint)
     with tracker.patch_download():
         yield

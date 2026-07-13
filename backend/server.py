@@ -59,6 +59,7 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.data_dir:
         os.environ["ASRBOX_DATA_DIR"] = str(Path(args.data_dir).expanduser().resolve())
+    os.environ["HF_HUB_DISABLE_XET"] = "1"
     sentinel = Path(args.keep_running_sentinel).expanduser().resolve() if args.keep_running_sentinel else None
     _start_parent_watchdog(args.parent_pid, sentinel)
     uvicorn.run("backend.app:app", host=args.host, port=args.port, log_level="info")
