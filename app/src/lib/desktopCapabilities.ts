@@ -1,5 +1,10 @@
 export type DesktopRuntime = 'web' | 'tauri';
 
+export interface DesktopServerConnection {
+  url: string;
+  apiToken: string;
+}
+
 export interface DesktopCapabilities {
   runtime: DesktopRuntime;
   canOpenFileLocation: boolean;
@@ -7,9 +12,9 @@ export interface DesktopCapabilities {
   canPickExecutableFile: boolean;
   canRevealLogs: boolean;
   canSaveTextFile: boolean;
-  startServer(): Promise<string | null>;
+  startServer(): Promise<DesktopServerConnection | null>;
   stopServer(): Promise<void>;
-  restartServer(): Promise<string | null>;
+  restartServer(): Promise<DesktopServerConnection | null>;
   openFileLocation(path?: string): Promise<void>;
   pickExportDirectory(): Promise<string | null>;
   pickExecutableFile(): Promise<string | null>;
@@ -42,6 +47,13 @@ async function unavailable(): Promise<never> {
   throw new Error('Desktop capability is unavailable in the web runtime.');
 }
 
+function serverConnection(value: unknown): DesktopServerConnection | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as { url?: unknown; api_token?: unknown };
+  if (typeof candidate.url !== 'string' || typeof candidate.api_token !== 'string') return null;
+  return { url: candidate.url, apiToken: candidate.api_token };
+}
+
 export const desktopCapabilities: DesktopCapabilities = {
   get runtime() {
     return isTauriRuntime() ? 'tauri' : 'web';
@@ -64,8 +76,7 @@ export const desktopCapabilities: DesktopCapabilities = {
   async startServer() {
     const result = tauriInvoke('start_server');
     if (!result) return null;
-    const value = await result;
-    return typeof value === 'string' ? value : null;
+    return serverConnection(await result);
   },
   async stopServer() {
     const result = tauriInvoke('stop_server');
@@ -75,8 +86,7 @@ export const desktopCapabilities: DesktopCapabilities = {
   async restartServer() {
     const result = tauriInvoke('restart_server');
     if (!result) return null;
-    const value = await result;
-    return typeof value === 'string' ? value : null;
+    return serverConnection(await result);
   },
   async openFileLocation(path?: string) {
     const result = tauriInvoke('open_file_location', { path });

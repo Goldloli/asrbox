@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
+import secrets
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend import __version__
 from backend.database import init_db
@@ -43,6 +46,20 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def require_loopback_token(request: Request, call_next):
+        expected = os.environ.get("ASRBOX_API_TOKEN")
+        if not expected or request.method == "OPTIONS" or request.url.path in {"/", "/health"}:
+            return await call_next(request)
+        authorization = request.headers.get("authorization", "")
+        supplied = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
+        if not supplied:
+            supplied = request.query_params.get("api_token", "")
+        if not supplied or not secrets.compare_digest(supplied, expected):
+            return JSONResponse({"detail": "ASRbox API authentication required"}, status_code=401)
+        return await call_next(request)
+
     register_routers(app)
     _mount_frontend(app)
     return app
