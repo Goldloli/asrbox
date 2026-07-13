@@ -49,13 +49,13 @@ def test_health_allows_tauri_origin(tmp_path: Path) -> None:
     assert response.headers["access-control-allow-origin"] == "tauri://localhost"
 
 
-def test_health_allows_null_origin_for_packaged_webview(tmp_path: Path) -> None:
+def test_health_rejects_opaque_null_origin(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
     response = client.get("/health", headers={"Origin": "null"})
 
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "null"
+    assert "access-control-allow-origin" not in response.headers
 
 
 @pytest.mark.parametrize(
