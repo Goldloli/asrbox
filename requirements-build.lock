@@ -1,0 +1,6 @@
+-r requirements-runtime.lock
+
+altgraph==0.17.5
+macholib==1.16.4
+pyinstaller==6.21.0
+pyinstaller-hooks-contrib==2026.6

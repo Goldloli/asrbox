@@ -51,8 +51,8 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -r requirements.txt
+          .venv/bin/python -m pip install pip==25.3
+          .venv/bin/python -m pip install -r requirements-dev.lock
 
       - name: Typecheck
         run: npm run typecheck

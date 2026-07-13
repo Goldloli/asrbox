@@ -25,7 +25,8 @@ case "$PLATFORM" in
 esac
 
 if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
-  .venv/bin/python -m pip install pyinstaller
+  echo "PyInstaller is missing. Install build dependencies with: .venv/bin/pip install -r requirements-build.lock" >&2
+  exit 1
 fi
 
 .venv/bin/python backend/build_binary.py
