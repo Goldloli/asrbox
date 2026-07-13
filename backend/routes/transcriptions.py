@@ -23,6 +23,30 @@ from backend.services.platform import detect_runtime
 router = APIRouter(prefix="/transcriptions", tags=["transcriptions"])
 
 
+def _validate_transcription_selection(
+    db: Session,
+    *,
+    backend: str,
+    model_name: str | None,
+    provider_id: str | None,
+) -> None:
+    if backend not in {"local", "provider"}:
+        raise HTTPException(status_code=422, detail=f"Unsupported transcription backend: {backend}")
+    if backend == "local":
+        if not model_name:
+            raise HTTPException(status_code=422, detail="Local transcription requires a model")
+        if model_service.get_model_config(model_name) is None:
+            raise HTTPException(status_code=422, detail=f"Unknown local model: {model_name}")
+        return
+    if not provider_id:
+        raise HTTPException(status_code=422, detail="Provider transcription requires a provider")
+    provider = db.query(ASRProvider).filter(ASRProvider.id == provider_id).first()
+    if provider is None:
+        raise HTTPException(status_code=422, detail=f"Provider is not configured: {provider_id}")
+    if not provider.enabled:
+        raise HTTPException(status_code=422, detail=f"Provider is disabled: {provider_id}")
+
+
 def _parse_output_formats(output_formats: str | None) -> list[str]:
     parsed_formats = ["txt", "srt"]
     if output_formats:
@@ -209,6 +233,12 @@ def create_transcription(
     traditional_to_simplified: bool | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    _validate_transcription_selection(
+        db,
+        backend=backend,
+        model_name=model_name,
+        provider_id=provider_id,
+    )
     options = _postprocess_options(
         vad=vad,
         word_timestamps=word_timestamps,
@@ -242,6 +272,12 @@ def create_batch_transcriptions(
     traditional_to_simplified: bool | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    _validate_transcription_selection(
+        db,
+        backend=backend,
+        model_name=model_name,
+        provider_id=provider_id,
+    )
     options = _postprocess_options(
         vad=vad,
         word_timestamps=word_timestamps,

@@ -7,6 +7,7 @@ import time
 import zipfile
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.models import TranscriptSegment, TranscriptionResult
@@ -55,6 +56,59 @@ def test_health_allows_null_origin_for_packaged_webview(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "null"
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_detail"),
+    [
+        ({"backend": "demo"}, "Unsupported transcription backend"),
+        ({"backend": "local"}, "Local transcription requires a model"),
+        ({"backend": "local", "model_name": "missing-model"}, "Unknown local model"),
+        ({"backend": "provider"}, "Provider transcription requires a provider"),
+        ({"backend": "provider", "provider_id": "missing-provider"}, "Provider is not configured"),
+    ],
+)
+def test_transcription_rejects_invalid_backend_selection_before_saving_upload(
+    tmp_path: Path,
+    data: dict[str, str],
+    expected_detail: str,
+) -> None:
+    client = make_client(tmp_path)
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("invalid.wav", b"audio", "audio/wav")},
+        data=data,
+    )
+
+    assert response.status_code == 422
+    assert expected_detail in response.json()["detail"]
+    assert client.get("/tasks").json()["total"] == 0
+    assert list((tmp_path / "uploads").glob("*")) == []
+
+
+def test_transcription_rejects_disabled_provider_before_saving_upload(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    provider = client.post(
+        "/providers",
+        json={
+            "name": "Disabled provider",
+            "provider_type": "custom",
+            "base_url": "https://asr.example.test",
+            "enabled": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("invalid.wav", b"audio", "audio/wav")},
+        data={"backend": "provider", "provider_id": provider["id"]},
+    )
+
+    assert response.status_code == 422
+    assert "Provider is disabled" in response.json()["detail"]
+    assert client.get("/tasks").json()["total"] == 0
+    assert list((tmp_path / "uploads").glob("*")) == []
 
 
 def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Path) -> None:
