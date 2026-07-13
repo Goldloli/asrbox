@@ -1,23 +1,36 @@
 # Repository About
 
-## 中文描述
+## Chinese Description
 
-ASRbox 是一个本地优先的音视频转写工作台，支持本地 ASR 模型、在线平台、字幕导出和 Tauri 桌面端，适合私有化转写与字幕整理。
+本地优先的音视频转写与字幕工作台，支持 14 个本地 ASR 模型、在线 Provider、可控模型下载、字幕编辑与 Tauri macOS 桌面端。
 
 ## English Description
 
-ASRbox is a local-first audio/video transcription workbench with local ASR models, online providers, subtitle exports, and a Tauri desktop app.
+Local-first audio/video transcription and subtitle workbench with 14 local ASR models, online providers, controllable model downloads, editing, and a Tauri macOS app.
+
+## Website
+
+Use the repository or latest GitHub Release URL until a project website exists:
+
+```text
+https://github.com/Goldloli/asrbox
+```
 
 ## Suggested Topics
 
 ```text
 asr
+speech-to-text
 transcription
 subtitles
-speech-to-text
+whisper
+faster-whisper
+qwen3-asr
+mlx
 tauri
 fastapi
 react
-whisper
 ffmpeg
+macos
+apple-silicon
 ```
