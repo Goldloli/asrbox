@@ -2,6 +2,8 @@
 
 ASRbox currently publishes macOS Apple Silicon prereleases. Windows, Linux, Intel macOS, code signing, notarization, and automatic updates are not part of `0.1.0-beta.1`.
 
+Current release: [`v0.1.0-beta.1`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
+
 ## Version Sources
 
 These values must match:

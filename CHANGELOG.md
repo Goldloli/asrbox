@@ -4,7 +4,7 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
-## [0.1.0-beta.1] - 2026-07-13 (source version; release pending)
+## [0.1.0-beta.1] - 2026-07-13
 
 ### Added
 
@@ -62,6 +62,6 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-rc.1...HEAD
-[0.1.0-beta.1]: https://github.com/Goldloli/asrbox/compare/v0.1.0-rc.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...HEAD
+[0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1
 [0.1.0-rc.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.1
