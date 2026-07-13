@@ -18,6 +18,9 @@ third_party/ffmpeg/
 |-- darwin-arm64/
 |   |-- ffmpeg
 |   `-- ffprobe
+|-- LICENSE.GPLv3
+|-- SOURCE.md
+|-- checksums.sha256
 `-- README.md
 ```
 
@@ -27,6 +30,10 @@ When replacing binaries:
 2. Verify `ffmpeg -version` and `ffprobe -version` work locally.
 3. Confirm both files are executable.
 4. Update the version, source, URL, and review date in this file.
-5. Run `npm run build:desktop` and confirm the binaries are bundled under `ASRbox.app/Contents/Resources/binaries/ffmpeg/`.
+5. Update `checksums.sha256` and `SOURCE.md`.
+6. Run `npm run verify:third-party`.
+7. Run `npm run build:desktop` and confirm the binaries and compliance files are bundled under `ASRbox.app/Contents/Resources/binaries/ffmpeg/`.
 
-FFmpeg licensing depends on the build configuration. Keep this file updated when replacing binaries, and verify redistribution requirements before public release. See `THIRD_PARTY_NOTICES.md` for the project-level notice.
+This build enables GPLv3 components. Keep the license and corresponding source
+materials updated when replacing binaries. See `SOURCE.md` and
+`THIRD_PARTY_NOTICES.md`.

@@ -16,6 +16,7 @@
     "build:desktop": "./scripts/build-server.sh && bun run --cwd tauri build",
     "audit:frontend": "node scripts/frontend-quality-audit.mjs",
     "audit:dependencies": "bun audit",
+    "verify:third-party": "./scripts/verify-third-party.sh",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",
     "test:backend:real-models": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",
