@@ -98,4 +98,6 @@ Documentation verification will include:
 
 ## Delivery
 
-Documentation changes will be committed with the pending model-management fixes on the existing `codex/open-source-mvp-hardening` branch. After all verification gates pass, the branch will be merged into local `main`, the merged state will be verified, and `main` will be pushed to GitHub. No release tag or GitHub Release will be created as part of this request.
+Documentation changes will be committed with the pending model-management fixes on the existing `codex/open-source-mvp-hardening` branch. After all verification gates pass, the branch will be merged into local `main`, the merged state will be verified, and `main` will be pushed to GitHub.
+
+Release amendment (2026-07-13): after the initial merge, the user explicitly authorized creation of the annotated `v0.1.0-beta.1` tag and public GitHub Release. Delivery therefore also includes monitoring the Release workflow and independently verifying the published DMG, FFmpeg source archive, and `SHA256SUMS.txt`.

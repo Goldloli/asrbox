@@ -35,7 +35,7 @@ Keep the original copy of important media. Create a backup in Settings before up
 
 ## Download and first launch
 
-See [GitHub Releases](https://github.com/Goldloli/asrbox/releases) for published packages. Repository source can be newer than the latest Release; if a `0.1.0-beta.1` DMG is not published, build it from source using the instructions below.
+Get `v0.1.0-beta.1` from its [GitHub Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1), or [download the Apple Silicon DMG directly](https://github.com/Goldloli/asrbox/releases/download/v0.1.0-beta.1/ASRbox_0.1.0-beta.1_aarch64.dmg). Repository source can be newer than the latest Release.
 
 The current DMG is unsigned and not notarized. On first launch:
 
@@ -148,7 +148,7 @@ Expected Apple Silicon DMG path:
 tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
 ```
 
-The Release workflow requires a `v*` tag that exactly matches the application version. It produces the DMG, an FFmpeg source archive, and `SHA256SUMS.txt`. See the [release process](docs/release.md). Merging code does not create a tag or GitHub Release.
+The `v0.1.0-beta.1` tag triggers the Release workflow and produces the DMG, an FFmpeg source archive, and `SHA256SUMS.txt`. See the [release process](docs/release.md).
 
 ## Verification
 

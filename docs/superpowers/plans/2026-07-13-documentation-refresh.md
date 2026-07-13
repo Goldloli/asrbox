@@ -323,4 +323,46 @@ git fetch origin main
 test "$(git rev-parse main)" = "$(git rev-parse origin/main)"
 ```
 
-Expected: GitHub `main` contains the verified model-management fixes and rewritten documentation. Do not create a release tag or GitHub Release.
+Expected: GitHub `main` contains the verified model-management fixes and rewritten documentation.
+
+### Task 7: Publish and Verify v0.1.0-beta.1
+
+**Files:**
+
+- Modify: `README.md`
+- Modify: `README.en.md`
+- Modify: `CHANGELOG.md`
+- Modify: `docs/release.md`
+- Modify: `docs/superpowers/specs/2026-07-13-documentation-refresh-design.md`
+- Modify: `docs/superpowers/plans/2026-07-13-documentation-refresh.md`
+- Verify: GitHub Release assets
+
+- [ ] **Step 1: Commit and push the authorized release-documentation amendment**
+
+Run:
+
+```bash
+git add README.md README.en.md CHANGELOG.md docs/release.md docs/superpowers/specs/2026-07-13-documentation-refresh-design.md docs/superpowers/plans/2026-07-13-documentation-refresh.md
+git diff --cached --check
+git commit -m "docs: publish beta release links"
+git push origin main
+```
+
+Expected: `origin/main` contains the release links and authorization amendment.
+
+- [ ] **Step 2: Create and push the annotated version tag**
+
+Run:
+
+```bash
+git tag -a v0.1.0-beta.1 -m "ASRbox v0.1.0-beta.1"
+git push origin v0.1.0-beta.1
+```
+
+Expected: the remote tag resolves to the release-documentation commit on `main` and triggers the Release workflow.
+
+- [ ] **Step 3: Monitor and verify the public Release**
+
+Use GitHub Actions to monitor the tag-triggered Release workflow to completion. Download all published assets, run the repository release-asset verifier, verify every SHA-256 line, run `hdiutil verify` on the DMG, and inspect the FFmpeg source archive.
+
+Expected: the GitHub Release is a prerelease with a valid DMG, `ASRbox-ffmpeg-source-8.1.2.tar.gz`, and `SHA256SUMS.txt` available for public download.

@@ -35,7 +35,7 @@ ASRbox 是一个本地优先的音视频转写工作台。它把音频或视频�
 
 ## 下载与首次启动
 
-GitHub 当前已发布的安装包请查看 [Releases](https://github.com/Goldloli/asrbox/releases)。仓库源码版本可能领先于最新 Release；`0.1.0-beta.1` 的 DMG 未发布时，可按“构建与发布”从源码构建。
+`v0.1.0-beta.1` 安装包可从 [GitHub Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) 获取，也可以[直接下载 Apple Silicon DMG](https://github.com/Goldloli/asrbox/releases/download/v0.1.0-beta.1/ASRbox_0.1.0-beta.1_aarch64.dmg)。仓库源码可能领先于最新 Release。
 
 当前 DMG 未签名且未公证。首次打开时：
 
@@ -148,7 +148,7 @@ Apple Silicon DMG 输出位置：
 tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
 ```
 
-Release workflow 需要与应用版本一致的 `v*` tag，并生成 DMG、FFmpeg 源码归档和 `SHA256SUMS.txt`。详细步骤见[发布流程](docs/release.md)。合并代码不会自动创建 tag 或 GitHub Release。
+`v0.1.0-beta.1` 通过与应用版本一致的 tag 触发 Release workflow，生成 DMG、FFmpeg 源码归档和 `SHA256SUMS.txt`。详细步骤见[发布流程](docs/release.md)。
 
 ## 验证
 
