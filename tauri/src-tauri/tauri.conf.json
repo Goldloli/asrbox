@@ -12,7 +12,7 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:17494 http://127.0.0.1:5173; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' http://127.0.0.1:17494 blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'none'",
       "capabilities": ["default"]
     },
     "windows": [
@@ -41,7 +41,7 @@
   },
   "plugins": {
     "shell": {
-      "open": ".*"
+      "open": "^(file://|https?://|/).*$"
     }
   }
 }
