@@ -1,4 +1,4 @@
-import { DownloadCloud, HardDrive, Info, Star, Trash2, XCircle } from 'lucide-react';
+import { DownloadCloud, HardDrive, Info, Pause, Play, RefreshCw, Square, Star, Trash2 } from 'lucide-react';
 import { type ModelProgress, type ModelStatus } from '../../lib/api';
 import { formatBytes, formatPercent } from '../../lib/format';
 import { isRecommendedModel, modelCategory } from '../../lib/modelCatalog';
@@ -41,7 +41,10 @@ export function ModelListRow({
   bestFor,
   onTogglePin,
   onDownload,
-  onCancel,
+  onPause,
+  onResume,
+  onStop,
+  onRetry,
   onUnload,
   onDelete,
 }: {
@@ -52,13 +55,19 @@ export function ModelListRow({
   bestFor: string;
   onTogglePin: () => void;
   onDownload: () => void;
-  onCancel: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onRetry: () => void;
   onUnload: () => void;
   onDelete: () => void;
 }) {
   const { t } = useI18n();
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
   const error = progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error;
+  const isActive = model.downloading || Boolean(progress);
+  const isPaused = progress?.status === 'paused';
+  const hasDownloadError = Boolean(progress?.error || model.download_error);
 
   return (
     <article className="grid gap-2 rounded-lg border app-control px-3 py-3">
@@ -141,19 +150,22 @@ export function ModelListRow({
               </div>
             </DialogContent>
           </Dialog>
-          {model.downloading ? (
-            <ConfirmAction
-              title={t('confirm.cancelTitle')}
-              description={t('confirm.cancelModelDescription')}
-              confirmLabel={t('common.cancel')}
-              tone="secondary"
-              onConfirm={onCancel}
-            >
-              <Button variant="secondary" size="sm">
-                <XCircle className="size-4" />
-                {t('common.cancel')}
+          {isActive ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={isPaused ? onResume : onPause}>
+                {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                {isPaused ? t('common.resume') : t('common.pause')}
               </Button>
-            </ConfirmAction>
+              <Button variant="danger" size="sm" onClick={onStop}>
+                <Square className="size-4" />
+                {t('common.stop')}
+              </Button>
+            </>
+          ) : hasDownloadError ? (
+            <Button variant="secondary" size="sm" onClick={onRetry}>
+              <RefreshCw className="size-4" />
+              {t('common.retry')}
+            </Button>
           ) : (
             <Button variant="secondary" size="sm" onClick={onDownload}>
               <DownloadCloud className="size-4" />
@@ -162,7 +174,7 @@ export function ModelListRow({
           )}
         </div>
       </div>
-      {(model.downloading || progress) && (
+      {isActive && (
         <div className="grid gap-1">
           <div className="flex justify-between gap-3 text-xs text-app-muted">
             <span className="truncate">{progress?.filename ?? progress?.status ?? t('common.downloading')}</span>

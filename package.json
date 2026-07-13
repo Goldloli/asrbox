@@ -1,6 +1,6 @@
 {
   "name": "asrbox",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "private": true,
   "workspaces": [
     "app",
@@ -15,6 +15,13 @@
     "build:web": "cd web && vite build",
     "build:desktop": "./scripts/build-server.sh && bun run --cwd tauri build",
     "audit:frontend": "node scripts/frontend-quality-audit.mjs",
+    "audit:dependencies": "./scripts/audit-dependencies.sh",
+    "verify:third-party": "./scripts/verify-third-party.sh",
+    "check:versions": "node scripts/check-versions.mjs",
+    "test:release-tools": "node --test scripts/check-versions.test.mjs",
+    "verify:release-assets": "./scripts/verify-release-assets.sh",
+    "test:e2e:smoke": "playwright test app/e2e/public-beta-smoke.spec.ts",
+    "check:open-source": "./scripts/check-open-source-readiness.sh",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",
     "test:backend:real-models": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",
@@ -32,6 +39,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^20.0.0",
+    "esbuild": "^0.28.1",
     "typescript": "^5.6.0"
   },
   "packageManager": "bun@1.3.8"

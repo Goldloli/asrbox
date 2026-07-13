@@ -25,7 +25,8 @@ case "$PLATFORM" in
 esac
 
 if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
-  .venv/bin/python -m pip install pyinstaller
+  echo "PyInstaller is missing. Install build dependencies with: .venv/bin/pip install -r requirements-build.lock" >&2
+  exit 1
 fi
 
 .venv/bin/python backend/build_binary.py
@@ -44,6 +45,10 @@ if [ -n "$FFMPEG_VENDOR" ]; then
   "$FFMPEG_VENDOR/$FFPROBE_NAME" -version >/dev/null
   cp "$FFMPEG_VENDOR/$FFMPEG_NAME" tauri/src-tauri/binaries/ffmpeg/$FFMPEG_NAME
   cp "$FFMPEG_VENDOR/$FFPROBE_NAME" tauri/src-tauri/binaries/ffmpeg/$FFPROBE_NAME
+  cp third_party/ffmpeg/LICENSE.GPLv3 tauri/src-tauri/binaries/ffmpeg/
+  cp third_party/ffmpeg/SOURCE.md tauri/src-tauri/binaries/ffmpeg/
+  cp third_party/ffmpeg/README.md tauri/src-tauri/binaries/ffmpeg/
+  cp third_party/ffmpeg/checksums.sha256 tauri/src-tauri/binaries/ffmpeg/
   chmod +x tauri/src-tauri/binaries/ffmpeg/$FFMPEG_NAME tauri/src-tauri/binaries/ffmpeg/$FFPROBE_NAME
 else
   echo "No vendored ffmpeg configured for ${PLATFORM}; desktop media tools will fall back to PATH." >&2

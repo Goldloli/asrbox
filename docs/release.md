@@ -1,61 +1,94 @@
 # Release Process
 
-ASRbox publishes macOS Apple Silicon DMG builds through GitHub Releases.
+ASRbox currently publishes macOS Apple Silicon prereleases. Windows, Linux, Intel macOS, code signing, notarization, and automatic updates are not part of `0.1.0-beta.1`.
 
-## Release Types
+## Version Sources
 
-- Release candidate: `v0.1.0-rc.1`
-- Patch release: `v0.1.1`
-- Minor release: `v0.2.0`
+These values must match:
 
-Tags containing `-` are marked as prereleases by the Release workflow.
+- `package.json`
+- `app/package.json`
+- `backend/__init__.py`
+- `tauri/src-tauri/Cargo.toml`
+- `tauri/src-tauri/tauri.conf.json`
+- User-visible app version where checked by `scripts/check-versions.mjs`
 
-## Checklist
+Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
 
-Before tagging:
+## Before Tagging
 
-```bash
-npm run typecheck
-npm run build:web
-npm run test:backend
-cd tauri/src-tauri && cargo check && cargo test
-```
-
-Then:
-
-1. Update `CHANGELOG.md`.
+1. Update `CHANGELOG.md` and both README files.
 2. Confirm `THIRD_PARTY_NOTICES.md` is current.
-3. Confirm `third_party/ffmpeg/README.md` matches bundled binaries.
-4. Confirm no test media, model weights, caches, `.venv`, or `node_modules` are staged.
-5. Commit and push `main`.
-6. Create and push a tag.
+3. Verify `third_party/ffmpeg/SOURCE.md`, licenses, configuration, and checksums.
+4. Confirm no media, transcripts, model weights, caches, app data, `.venv`, `node_modules`, build output, or credentials are staged.
+5. Run:
 
 ```bash
-git tag v0.1.0
-git push origin main --tags
+npm run check:open-source
+npm run audit:dependencies
 ```
 
-## GitHub Actions
+6. For model-runtime changes, record the real models and media characteristics tested. Do not publish private filenames or content.
+7. Confirm `main` is clean, pushed, and matches `origin/main`.
 
-The `Release` workflow will:
+## Create the Release
 
-- Install Bun, Python, and Rust.
-- Install frontend and backend dependencies.
-- Verify vendored ffmpeg/ffprobe.
-- Build the Web UI.
-- Freeze the backend sidecar.
-- Build the Tauri DMG.
-- Upload `ASRbox_*.dmg` and `SHA256SUMS.txt`.
+For version `0.1.0-beta.1`:
 
-## After Release
+```bash
+git tag -a v0.1.0-beta.1 -m "ASRbox v0.1.0-beta.1"
+git push origin v0.1.0-beta.1
+```
 
-- Open the GitHub Release page.
-- Confirm DMG and checksum assets are present.
-- Download the DMG and smoke test app launch.
-- Confirm `/health` works after desktop launch.
-- Confirm ffmpeg is available in runtime diagnostics.
-- Confirm a simple media file can be preflighted and exported.
+Alternatively, run the Release workflow manually and enter `v0.1.0-beta.1`. Manual dispatch still requires the tag text to match the source version.
 
-## Known MVP Limitation
+Merging `main` alone does not create a release. Do not tag until the intended commit is on GitHub and all gates are green.
 
-Current macOS builds are not signed or notarized. Users may see macOS security warnings until signing and notarization are added.
+## Workflow Output
+
+The Release workflow builds and publishes:
+
+```text
+ASRbox_0.1.0-beta.1_aarch64.dmg
+ASRbox-ffmpeg-source-8.1.2.tar.gz
+SHA256SUMS.txt
+```
+
+The DMG contains the Tauri app, frozen FastAPI sidecar, and ffmpeg/ffprobe. It does not contain ASR model weights.
+
+Local build output is normally:
+
+```text
+tauri/src-tauri/target/release/bundle/macos/ASRbox.app
+tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
+```
+
+## Post-Build Verification
+
+Before publishing or immediately after downloading the Release assets:
+
+1. Verify `SHA256SUMS.txt` against the DMG and FFmpeg source archive.
+2. Run `hdiutil verify` on the DMG.
+3. Copy the app to a clean location and confirm the expected unsigned-app warning.
+4. Launch with no manually running backend and wait for backend health.
+5. Confirm runtime diagnostics find bundled ffmpeg and ffprobe.
+6. Preflight a real MP4.
+7. Download a small model, exercise pause/resume/stop/retry, and complete a transcription.
+8. Export TXT, SRT, VTT, ASS, JSON, and Markdown.
+9. Quit and confirm the backend releases port `17494`.
+
+## Release Page Notes
+
+Release notes must state:
+
+- macOS Apple Silicon only.
+- Prerelease status.
+- Unsigned and unnotarized package.
+- Checksum verification instructions.
+- Models download separately and can require substantial disk and memory.
+- Data persists after deleting the app.
+- Known security/privacy limitations, especially plaintext provider keys.
+
+## Rollback
+
+Do not move or overwrite an existing tag. If an artifact is wrong, mark the Release as affected, remove unsafe assets if necessary, fix the source, increment the prerelease version, and publish a new tag.

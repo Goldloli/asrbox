@@ -4,246 +4,196 @@
 
 [中文](README.md) | English
 
-ASRbox is a local-first transcription workbench. It provides a web UI and a macOS desktop app for turning audio or video files into transcripts and subtitle exports, with support for local ASR models and online provider workflows.
+ASRbox is a local-first audio and video transcription workbench. It converts media into editable text and subtitles with 14 local ASR models, optional online ASR providers, task recovery, transcript history, and multiple export formats.
 
-The desktop app is built with Tauri. On startup it launches or reuses a local ASRbox backend, bundles ffmpeg/ffprobe for media inspection, and keeps the familiar Web UI as the main product surface.
+## Public beta status
 
-## Features
+The current source version is `0.1.0-beta.1`. It is ready for evaluation, testing, and feedback, but it is not a stable release.
 
-- Local audio and video transcription workflow.
-- Batch file selection and drag-and-drop upload.
-- Preflight checks for media duration, stream availability, and chunking.
-- Local model workflow with model download status and runtime diagnostics.
-- Online provider configuration for compatible ASR services.
-- Transcript viewer with search, replacement, edit, copy, and audio playback.
-- Subtitle and document exports: TXT, SRT, VTT, ASS, JSON, and Markdown.
-- Configurable desktop download location for exported files.
-- Task center, task history, task cleanup, retry, retranscription, and clear-list actions.
-- macOS desktop packaging with bundled backend sidecar and bundled ffmpeg tools.
+| Area | Current status |
+| --- | --- |
+| Desktop release target | macOS Apple Silicon |
+| Desktop stack | Tauri 2 with a bundled FastAPI sidecar |
+| Local models | 14 on-demand downloads; not included in the DMG |
+| Media tools | ffmpeg and ffprobe bundled with the desktop package |
+| Code signing / notarization | Not available yet |
+| Windows / Linux packages | Not available yet |
+| Automatic updates | Not available yet |
 
-## Project Status
+Keep the original copy of important media. Create a backup in Settings before upgrading. Provider credentials are stored in the local SQLite database and are not protected by macOS Keychain yet.
 
-ASRbox is currently in early desktop MVP development. The macOS build is the primary supported desktop target at this stage. Windows and Linux packaging paths are kept in mind, but they are not the current release gate.
+## What it can do
 
-Not included yet:
+- Select, batch-select, or drag audio and video files, then preflight format, audio streams, duration, and chunking.
+- Transcribe locally with Whisper, Faster Whisper, MLX Whisper, SenseVoice, and Qwen3-ASR.
+- Manage model downloads with pause, resume, stop, and retry controls.
+- Configure online ASR providers; online mode sends media or audio to the selected third party.
+- View, search, replace, edit, copy, and play transcription results.
+- Preserve transcription, retranscription, edit, restore, and post-processing versions.
+- Export TXT, SRT, VTT, ASS, JSON, and Markdown.
+- Inspect task logs, diagnostics, quality data, model compatibility, and storage usage.
 
-- Code signing and notarization.
-- Auto update.
-- System tray or background daemon mode.
-- Windows/Linux release artifacts.
+## Download and first launch
+
+See [GitHub Releases](https://github.com/Goldloli/asrbox/releases) for published packages. Repository source can be newer than the latest Release; if a `0.1.0-beta.1` DMG is not published, build it from source using the instructions below.
+
+The current DMG is unsigned and not notarized. On first launch:
+
+1. Move `ASRbox.app` to Applications.
+2. Right-click the app and choose Open, or allow it in macOS System Settings → Privacy & Security.
+3. Wait while the desktop app starts the local backend. Create a task only after the UI reports that the backend is online.
+4. Open Models and download one local model.
+
+Download packages only from this project's Releases and verify `SHA256SUMS.txt`. Do not run an artifact whose checksum does not match.
+
+## First transcription
+
+1. Download a model from Models. On Apple Silicon, start with `mlx-whisper-turbo`; for a smaller functional check, use `faster-whisper-base`.
+2. Select an audio or video file in New Task.
+3. Choose Local Model and an installed model, then set language, timestamps, and chunking as needed.
+4. Submit the task and inspect progress, logs, and results on the task page.
+5. Review the text and export SRT, VTT, ASS, TXT, JSON, or Markdown.
+
+Larger models usually need more disk space, memory, and cold-start time. All 14 models completed real-video transcription in the maintainer's Apple Silicon test environment. This is compatibility evidence, not a guarantee for every machine, file, or upstream model revision.
+
+## Local models
+
+ASRbox currently registers 14 local models:
+
+- Transformers Whisper: `whisper-base`, `whisper-small`, `whisper-medium`, `whisper-large-v3`, `whisper-large-v3-turbo`
+- Faster Whisper: `faster-whisper-base`, `faster-whisper-small`, `faster-whisper-medium`, `faster-whisper-large-v3`, `faster-whisper-large-v3-turbo`
+- Apple MLX: `mlx-whisper-turbo`
+- FunASR: `sensevoice-small`
+- Qwen3-ASR: `qwen3-asr-0.6b`, `qwen3-asr-1.7b`
+
+Models are downloaded on demand from Hugging Face or ModelScope into the ASRbox data directory. Pause affects the current app process; stop ends the task while retaining reusable downloaded files; retry reuses the existing directory; deleting a model removes its ASRbox-managed model directory.
+
+See the [model guide](docs/models.md) for selection guidance, estimated sizes, sources, and license notes.
+
+## Where data is stored
+
+The default macOS desktop data root is:
+
+```text
+~/Library/Application Support/com.goldloli.asrbox/
+```
+
+Important contents:
+
+```text
+asrbox.db                 Tasks, settings, versions, and provider configuration
+models/<model-name>/      Final model files and model download caches
+uploads/                  Media managed by ASRbox
+audio/                    Extracted or normalized audio
+cache/                    Task cache
+exports/                  Backend exports and diagnostic files
+backups/                  Backups created in the app
+```
+
+Desktop saves go to `~/Downloads/ASRbox Exports/` by default. Change this under Settings → General → Download location. Models do not live in the repository, `.app`, or DMG. Removing the application does not remove the data directory or downloaded models.
+
+The development backend uses the repository's `data/` directory by default; override it with `ASRBOX_DATA_DIR`. See [privacy and local data](docs/privacy.md) for the full data boundary and uninstall steps.
 
 ## Architecture
 
 ```text
-ASRbox
-|-- app/                 React application source shared by web and desktop
-|-- web/                 Vite web entry and static assets
-|-- backend/             FastAPI backend, ASR orchestration, exports, storage
-|-- tauri/               Tauri desktop shell and Rust sidecar lifecycle code
-|-- scripts/             Build helpers for backend binary and dev sidecar
-|-- third_party/ffmpeg/  Vendored ffmpeg/ffprobe binaries and notes
-`-- assets/              README and project assets
+app/                 React components, routes, state, and shared UI
+web/                 Vite Web entry point
+backend/             FastAPI API, task scheduler, ASR backends, storage, and exports
+tauri/               Tauri shell, sidecar lifecycle, and system integration
+scripts/             Build, version, audit, and release gates
+third_party/ffmpeg/  Bundled ffmpeg/ffprobe and compliance material
 ```
 
-Runtime shape:
-
-```text
-Tauri app
-  ├─ loads Web UI
-  ├─ starts bundled asrbox-server on 127.0.0.1:17494
-  ├─ injects bundled ffmpeg/ffprobe paths
-  └─ saves desktop exports to the configured download directory
-
-Web UI
-  └─ connects to an existing backend URL and does not auto-start a backend
-```
-
-## Requirements
-
-- macOS on Apple Silicon for the current packaged desktop target.
-- Bun 1.3.x.
-- Python 3.11+ recommended.
-- Rust stable and the Tauri build toolchain.
-- A Python virtual environment at `.venv`.
-- ffmpeg/ffprobe for development, or the vendored macOS binaries under `third_party/ffmpeg/darwin-arm64/`.
-
-Install frontend dependencies:
-
-```bash
-bun install
-```
-
-Install backend dependencies:
-
-```bash
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
+The desktop app starts the bundled `asrbox-server` on `127.0.0.1:17494`, creates an in-memory API token for each launch, and passes the Tauri app data directory to the backend. The Web UI connects to an existing backend and does not start one. Exposing a development backend to a LAN or the public internet is unsupported.
 
 ## Development
 
-Run the backend:
+Requirements: macOS Apple Silicon, Bun `1.3.8`, Python `3.13`, and stable Rust. The current Python lock snapshots target macOS Apple Silicon and Python 3.13.
+
+```bash
+bun install
+python -m venv .venv
+.venv/bin/python -m pip install pip==25.3
+.venv/bin/pip install -r requirements-dev.lock
+```
+
+Run the backend and Web UI separately:
 
 ```bash
 npm run dev:server
-```
-
-Run the Web UI:
-
-```bash
 npm run dev:web
 ```
 
-Run the desktop app in development:
+Run desktop development mode:
 
 ```bash
 npm run dev:desktop
 ```
 
-The desktop development command creates a dev sidecar placeholder when needed and then starts Tauri. In debug builds, the desktop shell prefers `.venv/bin/python -m backend.server` so the backend can be iterated without rebuilding the frozen binary.
+Development needs ffmpeg and ffprobe. Install a system build or use the binaries in `third_party/ffmpeg/darwin-arm64/`.
 
-## Desktop Build
+## Build and release
 
-Build the macOS desktop app and DMG:
+Install frozen-backend dependencies and build the `.app` and DMG:
 
 ```bash
+.venv/bin/pip install -r requirements-build.lock
 npm run build:desktop
 ```
 
-The build does three important things:
-
-1. Freezes the backend into an `asrbox-server` sidecar.
-2. Copies the platform ffmpeg/ffprobe binaries into Tauri resources.
-3. Produces the `.app` and `.dmg` under `tauri/src-tauri/target/release/bundle/`.
-
-Expected DMG path on Apple Silicon:
+Expected Apple Silicon DMG path:
 
 ```text
-tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0_aarch64.dmg
+tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
 ```
 
-## GitHub Releases
+The Release workflow requires a `v*` tag that exactly matches the application version. It produces the DMG, an FFmpeg source archive, and `SHA256SUMS.txt`. See the [release process](docs/release.md). Merging code does not create a tag or GitHub Release.
 
-ASRbox includes an MVP Release CI workflow:
+## Verification
 
-```text
-.github/workflows/release.yml
-```
-
-Trigger it by pushing a tag:
+Run the repository gate before submitting changes:
 
 ```bash
-git tag v0.1.0
-git push origin main --tags
+npm run check:open-source
 ```
 
-You can also run the `Release` workflow manually from GitHub Actions and enter a tag such as `v0.1.0`.
-
-The current workflow builds the macOS Apple Silicon DMG on a macOS runner, creates a GitHub Release, and uploads:
-
-- `ASRbox_*.dmg`
-- `SHA256SUMS.txt`
-
-Note: the MVP package is not signed or notarized yet. macOS may warn that the developer cannot be verified when the app is opened for the first time.
-
-## Tests
-
-Core checks:
+It checks locked dependencies, Python packages, version consistency, release tools, third-party compliance, TypeScript, the Web build, backend tests, Cargo, and browser smoke coverage. The network dependency audit is enforced by CI and Release and can also be run directly:
 
 ```bash
-npm run typecheck
-npm run build:web
+npm run audit:dependencies
 ```
 
-Backend tests:
+Real-model tests need predownloaded models and legally supplied test media, so they are not part of default CI:
 
 ```bash
-npm run test:backend
-npm run test:backend:contract
-npm run test:backend:server
-npm run test:backend:binary-smoke
+ASRBOX_REAL_MEDIA_DIR="/path/to/media" npm run test:backend:real-models:full
 ```
 
-Tauri checks:
+## Documentation
 
-```bash
-cd tauri/src-tauri
-cargo check
-cargo test
-```
-
-Before publishing a desktop artifact, also verify:
-
-- Double-click launch from the generated `.app`.
-- Backend starts automatically without a manually running server.
-- `http://127.0.0.1:17494/health` reports ASRbox health after launch.
-- ffmpeg and ffprobe show as available in runtime diagnostics.
-- MP4 preflight succeeds.
-- TXT/SRT/VTT/ASS/JSON/MD exports save to the configured download location.
-- Closing the desktop app releases port `17494`.
-
-## Configuration
-
-Desktop-only preferences are stored in the Web UI local storage and Tauri app data directories.
-
-Useful locations:
-
-- Backend data: Tauri app data directory in desktop builds.
-- Default exports: `~/Downloads/ASRbox Exports`.
-- Custom exports: set in `Settings -> General -> Download location`.
-- Local model files: backend data directory under `models/`.
-- Diagnostics and generated files: backend data directory.
-
-Environment variables used by the backend:
-
-- `ASRBOX_DATA_DIR`: backend data root.
-- `ASRBOX_FFMPEG_PATH`: explicit ffmpeg binary path.
-- `ASRBOX_FFPROBE_PATH`: explicit ffprobe binary path.
-
-## Project Docs
-
-- [Contributing guide](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-- [Privacy notes](docs/privacy.md)
 - [Model guide](docs/models.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Privacy and local data](docs/privacy.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Continuous integration](docs/ci.md)
 - [Release process](docs/release.md)
-- [CI notes](docs/ci.md)
+- [Backend API stability boundary](backend/API_FREEZE.md)
+- [Backend maturity report](backend/MATURITY_REPORT.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Changelog](CHANGELOG.md)
 
-## Troubleshooting
+## Security and privacy
 
-### Backend is offline
+Local-model mode processes media on the machine. Online-provider mode sends media, extracted audio, text, or metadata to the configured third party. Provider API keys are currently stored in plaintext in local `asrbox.db` and are included in application backups.
 
-- In desktop mode, click `Start backend` once to retry the sidecar.
-- Check whether another process is using port `17494`.
-- Restart the app if the previous backend process did not exit cleanly.
-
-### ffmpeg is missing
-
-- Desktop builds should use bundled ffmpeg/ffprobe automatically.
-- In development, install ffmpeg locally or provide binaries under `third_party/ffmpeg/darwin-arm64/`.
-- Open `Settings -> Storage and diagnostics` to inspect detected tool paths and versions.
-
-### Downloads do not appear
-
-- Check `Settings -> General -> Download location`.
-- If no custom location is set, ASRbox writes exports to `~/Downloads/ASRbox Exports`.
-- If a file already exists, ASRbox appends a numeric suffix instead of overwriting it.
-
-### Qwen3-ASR fails to load
-
-The Qwen3-ASR integration depends on Transformers support for the model class. If the installed Transformers version does not include the required module, the backend will report a model load error. Update the backend Python dependencies before treating it as a frontend issue.
+The desktop backend listens only on loopback and uses a per-launch token. This does not protect against malicious software running as the same macOS user and is not disk encryption. Report sensitive vulnerabilities privately using the [security policy](SECURITY.md).
 
 ## Contributing
 
-Keep changes small and testable:
-
-1. Open an issue or describe the behavior change.
-2. Add or update tests for backend behavior when possible.
-3. Run typecheck and the relevant backend/Tauri checks.
-4. Keep desktop packaging changes isolated from unrelated Web UI refactors.
+Reproducible issues and small, verifiable changes are welcome. Changes to backend behavior, model downloads, desktop packaging, storage, or exports should include relevant automated tests and manual verification notes. Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting.
 
 ## License
 
-ASRbox is released under the MIT License. See [LICENSE](LICENSE).
+ASRbox source code is available under the [MIT License](LICENSE). Bundled FFmpeg, models, runtimes, and other third-party components remain under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Model weights are not redistributed in the ASRbox repository or DMG.

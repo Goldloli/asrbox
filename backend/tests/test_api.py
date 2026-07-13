@@ -7,6 +7,7 @@ import time
 import zipfile
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.models import TranscriptSegment, TranscriptionResult
@@ -48,13 +49,66 @@ def test_health_allows_tauri_origin(tmp_path: Path) -> None:
     assert response.headers["access-control-allow-origin"] == "tauri://localhost"
 
 
-def test_health_allows_null_origin_for_packaged_webview(tmp_path: Path) -> None:
+def test_health_rejects_opaque_null_origin(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
     response = client.get("/health", headers={"Origin": "null"})
 
     assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "null"
+    assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_detail"),
+    [
+        ({"backend": "demo"}, "Unsupported transcription backend"),
+        ({"backend": "local"}, "Local transcription requires a model"),
+        ({"backend": "local", "model_name": "missing-model"}, "Unknown local model"),
+        ({"backend": "provider"}, "Provider transcription requires a provider"),
+        ({"backend": "provider", "provider_id": "missing-provider"}, "Provider is not configured"),
+    ],
+)
+def test_transcription_rejects_invalid_backend_selection_before_saving_upload(
+    tmp_path: Path,
+    data: dict[str, str],
+    expected_detail: str,
+) -> None:
+    client = make_client(tmp_path)
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("invalid.wav", b"audio", "audio/wav")},
+        data=data,
+    )
+
+    assert response.status_code == 422
+    assert expected_detail in response.json()["detail"]
+    assert client.get("/tasks").json()["total"] == 0
+    assert list((tmp_path / "uploads").glob("*")) == []
+
+
+def test_transcription_rejects_disabled_provider_before_saving_upload(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    provider = client.post(
+        "/providers",
+        json={
+            "name": "Disabled provider",
+            "provider_type": "custom",
+            "base_url": "https://asr.example.test",
+            "enabled": False,
+        },
+    ).json()
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("invalid.wav", b"audio", "audio/wav")},
+        data={"backend": "provider", "provider_id": provider["id"]},
+    )
+
+    assert response.status_code == 422
+    assert "Provider is disabled" in response.json()["detail"]
+    assert client.get("/tasks").json()["total"] == 0
+    assert list((tmp_path / "uploads").glob("*")) == []
 
 
 def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Path) -> None:
@@ -183,6 +237,40 @@ def test_huggingface_model_download_uses_snapshot_and_marks_downloaded(tmp_path:
     second = client.post("/models/download", json={"model_name": "whisper-base"})
     assert second.status_code == 200
     assert len(calls) == 1
+
+
+def test_huggingface_download_ignores_duplicate_weight_variants(tmp_path: Path, monkeypatch) -> None:
+    from backend.backends.registry import get_model_config
+    from backend.services import models as model_service
+    import huggingface_hub
+
+    captured: dict[str, object] = {}
+
+    def fake_snapshot_download(**kwargs) -> str:
+        captured.update(kwargs)
+        return str(tmp_path)
+
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot_download)
+    model = get_model_config("whisper-large-v3")
+    assert model is not None
+
+    model_service._download_huggingface_snapshot(model, tmp_path)
+
+    assert "pytorch_model*.bin" in captured["ignore_patterns"]
+    assert "*.fp32.*" in captured["ignore_patterns"]
+    assert "*.fp32-*" in captured["ignore_patterns"]
+
+
+def test_huggingface_cache_incomplete_does_not_invalidate_finished_model(tmp_path: Path) -> None:
+    model_dir = create_downloaded_model(tmp_path, "whisper-base")
+    cache_dir = model_dir / ".cache" / "huggingface" / "download"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "unused-weight.incomplete").write_bytes(b"partial")
+    client = make_client(tmp_path)
+
+    status = next(model for model in client.get("/models/status").json()["models"] if model["model_name"] == "whisper-base")
+
+    assert status["downloaded"] is True
 
 
 def test_modelscope_model_download_uses_modelscope_snapshot(tmp_path: Path, monkeypatch) -> None:
@@ -492,6 +580,35 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
     versions = client.get(f"/tasks/{task_id}/versions")
     assert versions.status_code == 200
     assert versions.json()[0]["version_type"] == "transcribe"
+
+
+def test_transcription_without_timestamps_spans_audio_duration(tmp_path: Path, monkeypatch) -> None:
+    text = "真实字幕内容" * 30
+
+    monkeypatch.setattr(
+        "backend.services.tasks.transcribe_with_local_model",
+        lambda model_name, audio_path, options: TranscriptionResult(
+            text=text,
+            model_name=model_name,
+            segments=[TranscriptSegment(id=1, start=0.0, end=0.0, text=text)],
+        ),
+    )
+    monkeypatch.setattr(
+        "backend.services.tasks.prepare_media_for_asr",
+        lambda path: (path, {"duration_ms": 201_000}),
+    )
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("sample.wav", b"fake audio bytes", "audio/wav")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    )
+
+    assert response.status_code == 200
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
+    assert task["segments"][-1]["end"] == 201.0
 
 
 def test_clear_tasks_deletes_task_list(tmp_path: Path, monkeypatch) -> None:
@@ -872,6 +989,33 @@ def test_faster_whisper_backend_maps_segments_and_words(tmp_path: Path, monkeypa
     assert result.words == [{"start": 0.1, "end": 0.3, "word": "你", "probability": 0.9}]
 
 
+def test_transformers_whisper_backend_decodes_audio_without_torchcodec(monkeypatch) -> None:
+    from backend.backends.local_asr import TransformersWhisperBackend
+    from backend.backends.registry import get_model_config
+
+    calls: list[tuple[str, object]] = []
+    audio_samples = object()
+
+    def fake_load_audio(audio, sampling_rate, backend):
+        calls.append(("load_audio", (audio, sampling_rate, backend)))
+        return audio_samples
+
+    def fake_pipeline(audio, **kwargs):
+        calls.append(("pipeline", (audio, kwargs)))
+        return {"text": "你好", "chunks": [{"text": "你好", "timestamp": (0.0, 1.0)}]}
+
+    monkeypatch.setattr("transformers.audio_utils.load_audio", fake_load_audio)
+    backend = TransformersWhisperBackend()
+    backend._pipelines["whisper-base"] = fake_pipeline
+
+    result = backend.transcribe("audio.wav", get_model_config("whisper-base"), {"language": "zh"})
+
+    assert result.text == "你好"
+    assert calls[0] == ("load_audio", ("audio.wav", 16000, "librosa"))
+    assert calls[1][0] == "pipeline"
+    assert calls[1][1][0] is audio_samples
+
+
 def test_funasr_backend_cleans_sensevoice_tags_and_maps_segments(monkeypatch) -> None:
     from backend.backends.local_asr import FunASRBackend
     from backend.backends.registry import get_model_config
@@ -916,6 +1060,11 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
     monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
 
     calls: list[tuple[str, dict]] = []
+    audio_samples = object()
+
+    def fake_load_audio(audio, sampling_rate, backend):
+        calls.append(("load_audio", {"audio": audio, "sampling_rate": sampling_rate, "backend": backend}))
+        return audio_samples
 
     class FakeInputs(dict):
         def __init__(self):
@@ -959,10 +1108,12 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
 
             return Output()
 
-    monkeypatch.setattr("transformers.AutoProcessor", FakeProcessor)
-    monkeypatch.setattr("transformers.AutoModelForMultimodalLM", FakeModel, raising=False)
+    monkeypatch.setattr("transformers.audio_utils.load_audio", fake_load_audio)
 
-    result = Qwen3ASRBackend().transcribe(
+    backend = Qwen3ASRBackend()
+    backend._processors["qwen3-asr-0.6b"] = FakeProcessor()
+    backend._models["qwen3-asr-0.6b"] = FakeModel()
+    result = backend.transcribe(
         "audio.wav",
         get_model_config("qwen3-asr-0.6b"),
         {"language": "zh"},
@@ -971,7 +1122,10 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
     assert result.text == "你好 Qwen"
     assert result.language == "Chinese"
     assert result.segments[0].text == "你好 Qwen"
-    assert ("request", {"audio": "audio.wav", "language": "zh"}) in calls
+    assert ("load_audio", {"audio": "audio.wav", "sampling_rate": 16000, "backend": "librosa"}) in calls
+    request = next(kwargs for name, kwargs in calls if name == "request")
+    assert request["audio"] is audio_samples
+    assert request["language"] == "zh"
 
 
 def test_local_queue_limits_concurrency_and_cancelled_queued_task_does_not_run(tmp_path: Path, monkeypatch) -> None:
@@ -1312,11 +1466,103 @@ def test_model_storage_cleanup_and_cancel_download(tmp_path: Path, monkeypatch) 
 
     storage = client.get("/models/storage")
     assert storage.status_code == 200
-    assert any(item["model_name"] == "whisper-small" for item in storage.json()["models"])
+    storage_body = storage.json()
+    assert storage_body["models_dir"] == str(tmp_path / "models")
+    assert storage_body["used_bytes"] > 0
+    assert storage_body["free_bytes"] > 0
+    assert storage_body["total_bytes"] >= storage_body["free_bytes"]
+    assert any(item["model_name"] == "whisper-small" and item["size_bytes"] > 0 for item in storage_body["models"])
 
     cleanup = client.post("/models/cleanup-incomplete")
     assert cleanup.status_code == 200
     assert "whisper-small" in cleanup.json()["removed"]
+
+
+def test_model_download_can_pause_resume_and_stop(tmp_path: Path, monkeypatch) -> None:
+    from backend.services import models as model_service
+
+    ticks: list[int] = []
+    started = threading.Event()
+
+    def fake_download(config, model_dir: Path) -> str:
+        model_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint = getattr(model_service, "_download_checkpoint", lambda _name: None)
+        started.set()
+        for index in range(500):
+            checkpoint(config.model_name)
+            ticks.append(index)
+            time.sleep(0.002)
+        (model_dir / "model.bin").write_bytes(b"weights")
+        return str(model_dir)
+
+    monkeypatch.setattr("backend.services.models._download_huggingface_snapshot", fake_download)
+    client = make_client(tmp_path)
+    model_name = "faster-whisper-base"
+
+    assert client.post("/models/download", json={"model_name": model_name}).status_code == 200
+    assert started.wait(timeout=1)
+
+    paused = client.post(f"/models/{model_name}/pause-download")
+    assert paused.status_code == 200
+    deadline = time.time() + 1
+    while time.time() < deadline:
+        active = client.get("/models/active-downloads").json()
+        state = next((item for item in active if item["model_name"] == model_name), None)
+        if state and state["status"] == "paused":
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("download did not enter paused state")
+
+    paused_at = len(ticks)
+    time.sleep(0.05)
+    assert len(ticks) <= paused_at + 1
+
+    resumed = client.post(f"/models/{model_name}/resume-download")
+    assert resumed.status_code == 200
+    deadline = time.time() + 1
+    while len(ticks) <= paused_at and time.time() < deadline:
+        time.sleep(0.01)
+    assert len(ticks) > paused_at
+
+    stopped = client.post(f"/models/{model_name}/stop-download")
+    assert stopped.status_code == 200
+    deadline = time.time() + 1
+    while time.time() < deadline and any(
+        item["model_name"] == model_name for item in client.get("/models/active-downloads").json()
+    ):
+        time.sleep(0.01)
+    assert not any(item["model_name"] == model_name for item in client.get("/models/active-downloads").json())
+    assert wait_for_model_status(client, model_name, "downloading", False)["downloaded"] is False
+
+
+def test_failed_model_download_can_retry_without_deleting_partial_files(tmp_path: Path, monkeypatch) -> None:
+    attempts = 0
+
+    def flaky_download(config, model_dir: Path) -> str:
+        nonlocal attempts
+        attempts += 1
+        model_dir.mkdir(parents=True, exist_ok=True)
+        (model_dir / "kept.partial").write_bytes(b"partial")
+        if attempts == 1:
+            raise RuntimeError("temporary network failure")
+        (model_dir / "model.bin").write_bytes(b"weights")
+        return str(model_dir)
+
+    monkeypatch.setattr("backend.services.models._download_huggingface_snapshot", flaky_download)
+    client = make_client(tmp_path)
+    model_name = "faster-whisper-medium"
+
+    assert client.post("/models/download", json={"model_name": model_name}).status_code == 200
+    wait_for_model_status(client, model_name, "download_error", "temporary network failure")
+
+    retry = client.post(f"/models/{model_name}/retry-download")
+    assert retry.status_code == 200
+    completed = wait_for_model_status(client, model_name, "downloaded", True)
+
+    assert attempts == 2
+    assert completed["download_error"] is None
+    assert (tmp_path / "models" / model_name / "kept.partial").exists()
 
 
 def test_model_migrate_can_import_from_source_directory(tmp_path: Path) -> None:
@@ -1610,6 +1856,9 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert "asrbox-server" in command
     assert "accelerate" in command
     assert "mlx_whisper" in command
+    assert command[command.index("--collect-data") + 1] == "funasr"
+    assert "--copy-metadata" not in command
+    assert command[command.index("--exclude-module") + 1] == "torchcodec"
 
     args = parse_args(["--host", "127.0.0.1", "--port", "17495", "--parent-pid", "123", "--keep-running-sentinel", "/tmp/asrbox.keep"])
     assert args.host == "127.0.0.1"
@@ -1619,3 +1868,14 @@ def test_build_binary_dry_run_and_server_args() -> None:
 
     version_args = parse_args(["--version"])
     assert version_args.version is True
+
+
+def test_server_disables_xet_for_controllable_downloads(tmp_path: Path, monkeypatch) -> None:
+    from backend import server
+
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    monkeypatch.setattr(server.uvicorn, "run", lambda *args, **kwargs: None)
+
+    server.main(["--port", "17495", "--data-dir", str(tmp_path)])
+
+    assert os.environ["HF_HUB_DISABLE_XET"] == "1"
