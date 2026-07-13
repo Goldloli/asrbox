@@ -8,8 +8,11 @@ ASRbox uses two GitHub Actions workflows.
 
 It verifies:
 
+- Frozen frontend dependency installation and vulnerability audit.
+- Application-version consistency and release-tool unit tests.
 - Frontend and Web UI TypeScript typecheck.
 - Web UI production build.
+- Vendored FFmpeg checksums, GPL configuration, license, and source record.
 - Backend test suite, excluding binary smoke tests.
 - Tauri Rust `cargo check`.
 - Tauri Rust `cargo test`.
@@ -20,9 +23,10 @@ The CI workflow intentionally does not build the desktop DMG. Full desktop packa
 
 `.github/workflows/release.yml` runs when a `v*` tag is pushed or when manually triggered from GitHub Actions.
 
-It verifies the vendored macOS ffmpeg binaries, builds the backend sidecar, builds the Tauri desktop DMG, creates a GitHub Release, and uploads:
+It requires a safe SemVer tag that exactly matches the application version, runs the CI gates, smoke-tests the frozen backend, validates release assets, creates a GitHub Release, and uploads:
 
 - `ASRbox_*.dmg`
+- `ASRbox-ffmpeg-source-8.1.2.tar.gz`
 - `SHA256SUMS.txt`
 
 ## Recommended Branch Protection

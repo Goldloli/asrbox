@@ -28,6 +28,18 @@ Security-sensitive areas include:
 - Model download and cache handling.
 - Desktop app resource bundling.
 
+## Current Security Boundaries
+
+- The supported desktop backend listens only on `127.0.0.1`.
+- Desktop requests use a random per-launch API token held in memory. Health and
+  root metadata remain unauthenticated; the token is not a substitute for an OS
+  account boundary.
+- Provider API keys are masked in API responses but currently stored as
+  plaintext in the local SQLite database and in ASRbox backups.
+- Exposing the backend to a LAN or the public internet is unsupported.
+- Public beta DMGs are not yet signed or notarized; verify the published SHA-256
+  checksum before opening them.
+
 ## Disclosure
 
 The maintainer will review reports, prepare a fix when applicable, and coordinate public disclosure after a patched release is available.

@@ -62,7 +62,7 @@
 
 ### Task 6: Reproducible Python dependencies
 
-**Files:** `requirements.in`, `requirements-dev.in`, `requirements-build.in`, `requirements.txt`, `docs/ci.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`
+**Files:** `requirements-runtime.in`, `requirements-dev.in`, `requirements-build.in`, `requirements.txt`, `docs/ci.md`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`
 
 - [ ] Record direct runtime requirements separately from test and packaging tools.
 - [ ] Generate an exact Python 3.13 lock with `pip freeze`-compatible pins, retaining the required Transformers commit.

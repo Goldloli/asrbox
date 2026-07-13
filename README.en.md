@@ -23,7 +23,7 @@ The desktop app is built with Tauri. On startup it launches or reuses a local AS
 
 ## Project Status
 
-ASRbox is currently in early desktop MVP development. The macOS build is the primary supported desktop target at this stage. Windows and Linux packaging paths are kept in mind, but they are not the current release gate.
+ASRbox `0.1.0-beta.1` is a public beta for evaluation and feedback, not a stable release. macOS on Apple Silicon is the only packaged target. Keep original copies of important media and create a backup in Settings before upgrades.
 
 Not included yet:
 
@@ -31,6 +31,7 @@ Not included yet:
 - Auto update.
 - System tray or background daemon mode.
 - Windows/Linux release artifacts.
+- System-keychain encryption for provider credentials; keys currently live in the local SQLite database.
 
 ## Architecture
 
@@ -61,8 +62,8 @@ Web UI
 ## Requirements
 
 - macOS on Apple Silicon for the current packaged desktop target.
-- Bun 1.3.x.
-- Python 3.11+ recommended.
+- Bun 1.3.8.
+- Python 3.13; the current lock files target macOS Apple Silicon and Python 3.13.
 - Rust stable and the Tauri build toolchain.
 - A Python virtual environment at `.venv`.
 - ffmpeg/ffprobe for development, or the vendored macOS binaries under `third_party/ffmpeg/darwin-arm64/`.
@@ -77,7 +78,8 @@ Install backend dependencies:
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pip install pip==25.3
+.venv/bin/pip install -r requirements-dev.lock
 ```
 
 ## Development
@@ -110,6 +112,12 @@ Build the macOS desktop app and DMG:
 npm run build:desktop
 ```
 
+Install the exact build dependencies first:
+
+```bash
+.venv/bin/pip install -r requirements-build.lock
+```
+
 The build does three important things:
 
 1. Freezes the backend into an `asrbox-server` sidecar.
@@ -119,7 +127,7 @@ The build does three important things:
 Expected DMG path on Apple Silicon:
 
 ```text
-tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0_aarch64.dmg
+tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
 ```
 
 ## GitHub Releases
@@ -133,18 +141,19 @@ ASRbox includes an MVP Release CI workflow:
 Trigger it by pushing a tag:
 
 ```bash
-git tag v0.1.0
+git tag v0.1.0-beta.1
 git push origin main --tags
 ```
 
-You can also run the `Release` workflow manually from GitHub Actions and enter a tag such as `v0.1.0`.
+You can also run the `Release` workflow manually and enter a tag that exactly matches the application version, such as `v0.1.0-beta.1`.
 
 The current workflow builds the macOS Apple Silicon DMG on a macOS runner, creates a GitHub Release, and uploads:
 
 - `ASRbox_*.dmg`
+- `ASRbox-ffmpeg-source-8.1.2.tar.gz`
 - `SHA256SUMS.txt`
 
-Note: the MVP package is not signed or notarized yet. macOS may warn that the developer cannot be verified when the app is opened for the first time.
+The beta package is not signed or notarized. Download only from this project's GitHub Releases and verify `SHA256SUMS.txt` first. On first launch, right-click the app and choose **Open**. Do not run a file whose checksum does not match.
 
 ## Tests
 
@@ -153,6 +162,9 @@ Core checks:
 ```bash
 npm run typecheck
 npm run build:web
+npm run check:versions
+npm run test:release-tools
+npm run verify:third-party
 ```
 
 Backend tests:
@@ -199,6 +211,14 @@ Environment variables used by the backend:
 - `ASRBOX_DATA_DIR`: backend data root.
 - `ASRBOX_FFMPEG_PATH`: explicit ffmpeg binary path.
 - `ASRBOX_FFPROBE_PATH`: explicit ffprobe binary path.
+- `ASRBOX_API_TOKEN`: enable Bearer-token protection for a manually started backend; the desktop app creates an in-memory token for each launch.
+- `ASRBOX_MAX_UPLOAD_BYTES`: per-file byte limit; defaults to 20 GiB.
+- `ASRBOX_MAX_BATCH_FILES`: files per batch; defaults to 32.
+- `ASRBOX_MAX_BATCH_TOTAL_BYTES`: total bytes per batch; defaults to 40 GiB.
+
+The desktop data directory is `~/Library/Application Support/com.goldloli.asrbox/`. Provider API keys are currently stored in plaintext in `asrbox.db`, and backups include that database. Do not share the data directory or backups with untrusted parties. Online-provider mode sends media or extracted audio to the configured third party; the exact data flow depends on that provider.
+
+Removing the app does not remove its data. For a complete uninstall, first delete unneeded tasks and models in the app, quit ASRbox, then remove `/Applications/ASRbox.app`, `~/Library/Application Support/com.goldloli.asrbox/`, and any unwanted files in `~/Downloads/ASRbox Exports/`. See [Privacy and data](docs/privacy.md).
 
 ## Project Docs
 
