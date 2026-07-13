@@ -614,6 +614,12 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             options["raw_result_summary"] = result.raw_result_summary
         settings = settings_service.get_settings(db)
         segments = result.segments
+        if (
+            len(segments) == 1
+            and row.duration_ms
+            and segments[0].end <= segments[0].start
+        ):
+            segments = [segments[0].model_copy(update={"end": row.duration_ms / 1000})]
         if options.get("diarization", settings.diarization):
             token = options.get("diarization_token")
             if not token:

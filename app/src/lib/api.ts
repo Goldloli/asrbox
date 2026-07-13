@@ -134,7 +134,7 @@ export interface ModelProgress {
   total: number;
   progress: number;
   filename?: string | null;
-  status: 'queued' | 'downloading' | 'extracting' | 'complete' | 'cancelled' | 'error';
+  status: 'queued' | 'downloading' | 'paused' | 'extracting' | 'complete' | 'cancelled' | 'error';
   error?: string | null;
   source?: string | null;
   repo_id?: string | null;
@@ -492,6 +492,22 @@ class ApiClient {
 
   cancelModelDownload(modelName: string) {
     return this.request<{ message: string }>(`/models/${modelName}/cancel-download`, { method: 'POST' });
+  }
+
+  pauseModelDownload(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/pause-download`, { method: 'POST' });
+  }
+
+  resumeModelDownload(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/resume-download`, { method: 'POST' });
+  }
+
+  stopModelDownload(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/stop-download`, { method: 'POST' });
+  }
+
+  retryModelDownload(modelName: string) {
+    return this.request<{ message: string }>(`/models/${modelName}/retry-download`, { method: 'POST' });
   }
 
   unloadModel(modelName: string) {

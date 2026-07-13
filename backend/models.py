@@ -350,12 +350,17 @@ class ModelStorageItem(BaseModel):
     model_name: str
     path: str
     exists: bool
+    size_bytes: int
     size_on_disk_mb: float
     downloaded: bool
 
 
 class ModelStorageResponse(BaseModel):
+    models_dir: str
     models: list[ModelStorageItem]
+    used_bytes: int
+    free_bytes: int | None = None
+    total_bytes: int | None = None
     total_size_mb: float
     free_disk_bytes: int | None = None
 
