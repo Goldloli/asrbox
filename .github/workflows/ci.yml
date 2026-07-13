@@ -45,6 +45,9 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Audit frontend dependencies
+        run: npm run audit:dependencies
+
       - name: Install backend dependencies
         run: |
           python -m venv .venv
