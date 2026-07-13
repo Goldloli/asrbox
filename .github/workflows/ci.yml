@@ -45,6 +45,12 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check application versions
+        run: npm run check:versions
+
+      - name: Test release tooling
+        run: npm run test:release-tools
+
       - name: Audit frontend dependencies
         run: npm run audit:dependencies
 
