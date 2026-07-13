@@ -1,88 +1,134 @@
 # Troubleshooting
 
-## Backend is offline
+Start with Settings → Storage and diagnostics. It shows the backend data directory, model directory, Python runtime, ffmpeg/ffprobe source, free disk space, and diagnostic-bundle action.
 
-Symptoms:
+## Backend Offline
 
-- Header shows backend offline.
-- `/health` does not respond.
-- Desktop startup reports backend failure.
+Symptoms: the header reports an offline backend, task creation is unavailable, or `/health` does not respond.
 
-Checks:
+Check:
 
 ```bash
 lsof -nP -iTCP:17494 -sTCP:LISTEN
 curl http://127.0.0.1:17494/health
 ```
 
-Fixes:
+Fix:
 
-- Close old ASRbox instances and reopen the app.
-- Stop any non-ASRbox process using port `17494`.
-- In development, run `npm run dev:server`.
+1. Quit every ASRbox instance and reopen one copy.
+2. Stop a non-ASRbox process that occupies port `17494`.
+3. In development, run `npm run dev:server` and confirm the terminal has no import error.
+4. Use the desktop “Restart backend” action if the app shell is responsive.
 
-## Desktop app starts slowly
+The supported desktop backend listens only on `127.0.0.1`. A manually exposed LAN/public backend is outside the supported configuration.
 
-The desktop app starts a local backend sidecar. Cold startup can be slower when the backend binary initializes Python and ML dependencies.
+## macOS Blocks the App
 
-Fixes:
+The public-beta DMG is not signed or notarized.
 
-- Wait for the backend online indicator.
-- Avoid launching multiple ASRbox copies at once.
-- Use smaller local models for faster first transcription.
+1. Verify the DMG against `SHA256SUMS.txt` from the same GitHub Release.
+2. Move the app to Applications.
+3. Right-click ASRbox and choose Open.
+4. If necessary, allow it in System Settings → Privacy & Security.
 
-## ffmpeg or ffprobe is missing
+Do not bypass macOS warnings for an artifact from an unknown source or with a mismatched checksum.
 
-Desktop releases should use bundled ffmpeg/ffprobe.
+## Desktop Startup Is Slow
 
-Checks:
+The frozen Python backend loads machine-learning libraries before it reports healthy. A first model transcription also has a separate model cold start.
 
-- Open Settings -> Storage and diagnostics.
-- Confirm ffmpeg and ffprobe show a bundled or system path.
+- Wait for the backend-online indicator before creating a task.
+- Do not launch multiple app copies.
+- Use `faster-whisper-base` for a quick functional check.
+- Check available RAM and disk before loading large models.
 
-Fixes:
+## ffmpeg or ffprobe Is Missing
 
-- Reinstall the latest DMG.
-- In development, ensure `third_party/ffmpeg/darwin-arm64/ffmpeg` and `ffprobe` are executable.
-- Configure manual paths in Settings if needed.
+The desktop package should resolve bundled ffmpeg and ffprobe. Development can use the vendored Apple Silicon files or a system installation.
 
-## Export file is missing
+Check Settings → Storage and diagnostics, or run:
 
-Checks:
+```bash
+third_party/ffmpeg/darwin-arm64/ffmpeg -version
+third_party/ffmpeg/darwin-arm64/ffprobe -version
+```
 
-- Open Settings -> General -> Download location.
-- If unset, check `~/Downloads/ASRbox Exports`.
+If the desktop app reports a missing tool, reinstall a complete ASRbox build. In development, set `ASRBOX_FFMPEG_PATH` and `ASRBOX_FFPROBE_PATH` to executable files or install ffmpeg on `PATH`.
 
-ASRbox appends numeric suffixes instead of overwriting existing files.
+## `MODEL_LOAD_FAILED` Mentions TorchCodec
 
-## macOS says the app cannot be verified
+Current ASRbox loads audio for Transformers Whisper and Qwen3-ASR through the Transformers `librosa` path before inference, and the frozen backend excludes TorchCodec. This avoids requiring a TorchCodec binary compatible with the installed PyTorch version.
 
-Current MVP builds are not signed or notarized.
+If a packaged app still reports “Could not load libtorchcodec”:
 
-Workaround:
+1. Confirm you are running a build containing the current `0.1.0-beta.1` source rather than an older app copy.
+2. Quit ASRbox fully, replace the old `.app`, and reopen it.
+3. For a source build, reinstall `requirements-dev.lock` and `requirements-build.lock`, then rebuild with `npm run build:desktop`.
+4. Generate a diagnostic bundle and include the ASRbox version, Python version, model id, and sanitized traceback in an issue.
 
-- Right-click the app and choose Open.
-- Or allow the app from macOS Privacy & Security settings.
+Do not solve this by installing arbitrary PyTorch/TorchCodec versions into a packaged `.app`; the frozen runtime must be rebuilt as a matched unit.
 
-Future releases should add Developer ID signing and notarization.
+## Model Download Is Stuck or Fails
 
-## Model download fails
+Check the model row and Download tasks panel for status, source, file, and error text. Also check network access, upstream availability, gated-model access, and free disk space.
 
-Checks:
+- **Pause / Resume**: use for a temporary network or bandwidth interruption.
+- **Stop**: end the worker while keeping reusable downloaded files.
+- **Retry**: start again using the existing directory.
+- **Redownload**: use only when the completed directory is incompatible or corrupt; it deletes the old model first.
+- **Clean incomplete downloads**: removes model directories without a valid marker/weights or with root-level incomplete files.
 
-- Network connection.
-- Available disk space.
-- Provider or model source availability.
-- Model license and access requirements.
+Try `faster-whisper-base` to distinguish a general network/runtime problem from a large-model problem. ModelScope and Hugging Face fallback is available only for catalog entries that define both sources.
 
-Try a smaller model first to separate model-specific issues from runtime issues.
+## Model Uses More Disk Than Expected
 
-## Qwen3-ASR fails to load
+Catalog sizes are estimates. Upstream revisions, cache metadata, interrupted files, and older duplicate weight variants can increase usage. Model Management reports actual per-model and total bytes.
 
-If the error mentions `transformers.models.qwen3_asr`, the installed Transformers version does not include the required module.
+Safe order:
 
-Fixes:
+1. Confirm no model download or transcription is running.
+2. Use compatibility verification to confirm the model is usable.
+3. Use “Clean incomplete downloads” only for entries the UI identifies as incomplete.
+4. Delete and redownload one model if its directory remains unexpectedly large.
 
-- Update backend dependencies.
-- Confirm the frozen desktop backend includes the Qwen3-ASR hidden imports.
-- Rebuild the desktop package after dependency changes.
+Manual deletion is possible under:
+
+```text
+~/Library/Application Support/com.goldloli.asrbox/models/<model-name>/
+```
+
+Manual removal is irreversible. Do not delete the whole data directory if you need tasks, settings, or backups.
+
+## Qwen3-ASR Fails to Load
+
+Qwen3-ASR needs the locked Transformers model class, processor, audio dependencies, and sufficient memory. The packaged backend also needs the corresponding hidden imports.
+
+- Confirm the model compatibility result before transcribing.
+- Reinstall the exact lock files instead of upgrading only Transformers.
+- Rebuild the frozen backend after dependency changes.
+- Try `qwen3-asr-0.6b` before `qwen3-asr-1.7b` on a memory-constrained machine.
+
+## Export File Is Missing
+
+Check Settings → General → Download location. Without a custom directory, desktop exports go to:
+
+```text
+~/Downloads/ASRbox Exports/
+```
+
+ASRbox appends a numeric suffix rather than overwriting an existing file. Backend-generated diagnostics may instead be under the app data `exports/` directory.
+
+## A Task Fails or Produces Empty/Bad Subtitles
+
+1. Open the task's Diagnostics, Logs, and Quality tabs.
+2. Confirm the selected model is downloaded and compatible.
+3. Confirm preflight found an audio stream and a non-zero duration.
+4. Retry with an explicit language or another model family.
+5. Test a short excerpt to separate model quality from long-file chunking.
+6. Preserve the original media and export any useful transcript before cleanup.
+
+Music, crowd noise, overlapping speakers, poor microphones, and unsupported languages can reduce accuracy even when the runtime is healthy.
+
+## Create a Diagnostic Bundle
+
+Use Settings → Storage and diagnostics → Diagnostic bundle. Before sharing it, inspect the archive and remove private filenames, transcript text, provider URLs, tokens, or credentials. Sensitive security reports should follow [SECURITY.md](../SECURITY.md), not a public issue.

@@ -2,44 +2,52 @@
 
 ## Supported Versions
 
-ASRbox is currently pre-1.0. Security fixes target the latest `main` branch and the latest published release.
+ASRbox is pre-1.0. Security fixes target the latest `main` branch and, when possible, the latest GitHub prerelease. Older prereleases are not guaranteed to receive backports.
 
 ## Reporting a Vulnerability
 
-Please do not open a public issue for sensitive security reports.
-
-Report vulnerabilities privately by contacting the maintainer through the GitHub profile for `Goldloli`, or by opening a private security advisory if GitHub enables advisories for this repository.
+Do not open a public issue for a sensitive report. Use a private GitHub Security Advisory if enabled for the repository, or contact the maintainer through the [Goldloli GitHub profile](https://github.com/Goldloli).
 
 Include:
 
-- A clear description of the issue.
-- Steps to reproduce.
-- Affected ASRbox version or commit.
-- Operating system and desktop/web runtime.
-- Whether local files, model downloads, provider credentials, or exported transcripts are involved.
+- Affected version or commit and whether it is a source or packaged build.
+- macOS and hardware version.
+- Reproduction steps and expected versus actual behavior.
+- Whether local files, model downloads, provider credentials, exports, backups, or the loopback API are involved.
+- A minimal proof of concept with secrets and private media removed.
 
-## Scope
+Do not send active credentials, private media, full user databases, or unredacted backups.
 
-Security-sensitive areas include:
+## Security-Relevant Scope
 
-- Local file access and export paths.
-- Backend sidecar startup and shutdown.
-- Provider API keys and online ASR integrations.
-- Model download and cache handling.
-- Desktop app resource bundling.
+- Local file ingestion, managed storage, export paths, backup and restore.
+- Desktop sidecar startup, process ownership, port handling, and API-token checks.
+- Provider endpoints and credentials.
+- Model source fallback, downloaded-file validation, caches, and deletion.
+- Bundled ffmpeg/ffprobe and frozen Python runtime contents.
+- Tauri permissions, shell opening, CSP, and desktop resources.
 
-## Current Security Boundaries
+## Current Boundaries
 
-- The supported desktop backend listens only on `127.0.0.1`.
-- Desktop requests use a random per-launch API token held in memory. Health and
-  root metadata remain unauthenticated; the token is not a substitute for an OS
-  account boundary.
-- Provider API keys are masked in API responses but currently stored as
-  plaintext in the local SQLite database and in ASRbox backups.
-- Exposing the backend to a LAN or the public internet is unsupported.
-- Public beta DMGs are not yet signed or notarized; verify the published SHA-256
-  checksum before opening them.
+- The supported desktop backend listens on `127.0.0.1:17494`.
+- Desktop API requests use a random in-memory token generated for each launch. Health and root metadata remain unauthenticated.
+- This token is not an operating-system account boundary and does not protect against software running as the same macOS user.
+- A manually started development backend is unauthenticated unless `ASRBOX_API_TOKEN` is set.
+- Exposing the backend to a LAN or public network is unsupported.
+- Provider API keys are masked in normal responses but stored as plaintext in local `asrbox.db` and included in backups.
+- Local-model mode keeps inference local, but model downloads contact Hugging Face or ModelScope.
+- Online-provider mode can send media, extracted audio, text, options, or metadata to the configured third party.
+- Public-beta DMGs are not signed or notarized. Verify the Release checksum before opening them.
+
+## Out of Scope
+
+- Vulnerabilities only reproducible after intentionally exposing the development backend to an untrusted network.
+- Upstream model or provider behavior that ASRbox does not control, unless ASRbox misrepresents or mishandles it.
+- Social engineering, denial of service requiring physical access, or reports without a reproducible security impact.
+- Security warnings caused solely by the documented absence of code signing/notarization.
+
+Out-of-scope reports can still become normal bug or documentation issues if they identify a useful improvement.
 
 ## Disclosure
 
-The maintainer will review reports, prepare a fix when applicable, and coordinate public disclosure after a patched release is available.
+The maintainer will acknowledge the report, reproduce and assess it, prepare a fix when applicable, and coordinate disclosure after a patched commit or release is available. Do not disclose the issue publicly before coordination is complete.

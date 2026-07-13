@@ -1,42 +1,84 @@
 # Continuous Integration
 
-ASRbox uses two GitHub Actions workflows.
+ASRbox uses separate GitHub Actions workflows for pull-request/main checks and release packaging.
 
-## CI
+## CI Workflow
 
-`.github/workflows/ci.yml` runs on pushes and pull requests targeting `main`.
+`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main` on a `macos-15` runner with Bun `1.3.8` and Python `3.13`.
 
-It verifies:
+It performs:
 
-- Frozen frontend dependency installation and vulnerability audit.
-- Application-version consistency and release-tool unit tests.
-- Frontend and Web UI TypeScript typecheck.
-- Web UI production build.
-- Vendored FFmpeg checksums, GPL configuration, license, and source record.
-- Backend test suite, excluding binary smoke tests.
-- Tauri Rust `cargo check`.
-- Tauri Rust `cargo test`.
-- Browser smoke coverage for backend health and the core Web UI routes.
+1. Frozen Bun dependency installation.
+2. Application-version consistency checks.
+3. Release-tool unit tests.
+4. Network dependency vulnerability audit.
+5. Locked backend development dependency installation.
+6. TypeScript typecheck.
+7. Production Web build.
+8. Bundled ffmpeg/ffprobe checksum, GPL configuration, license, and source-record verification.
+9. Backend test suite, excluding the separately invoked frozen-binary smoke test.
+10. Tauri `cargo check --locked` and `cargo test --locked`.
+11. Playwright public-beta browser smoke test.
 
-The CI workflow intentionally does not build the desktop DMG. Full desktop packaging is slower and belongs to release validation.
+CI uses the vendored Apple Silicon ffmpeg and ffprobe paths for backend tests. It does not download large ASR models or run private real-media fixtures.
 
-## Release
+## Local Repository Gate
 
-`.github/workflows/release.yml` runs when a `v*` tag is pushed or when manually triggered from GitHub Actions.
+Run the closest local equivalent before merge:
 
-It requires a safe SemVer tag that exactly matches the application version, runs the CI gates, smoke-tests the frozen backend, validates release assets, creates a GitHub Release, and uploads:
+```bash
+npm run check:open-source
+```
 
-- `ASRbox_*.dmg`
-- `ASRbox-ffmpeg-source-8.1.2.tar.gz`
-- `SHA256SUMS.txt`
+The script runs frozen Bun installation, Python package health and compilation, version/release checks, third-party verification, TypeScript, Web build, backend tests, Cargo, and browser smoke coverage.
 
-## Recommended Branch Protection
+The network dependency audit is intentionally separate locally:
 
-Before making the repository public, configure GitHub branch protection for `main`:
+```bash
+npm run audit:dependencies
+```
 
-- Require pull request reviews before merging.
+CI and Release always run that audit.
+
+## Focused Checks
+
+```bash
+npm run typecheck
+npm run build:web
+npm run test:backend
+npm run test:backend:contract
+npm run test:backend:server
+npm run test:e2e:smoke
+bunx playwright test app/e2e/models-download-controls.spec.ts
+cd tauri/src-tauri && cargo check --locked && cargo test --locked
+```
+
+Real-model, long-audio, benchmark, provider, and frozen-binary suites have dedicated package scripts. Real-model runs require predownloaded models and legally supplied media and are not a default pull-request gate.
+
+## Release Workflow
+
+`.github/workflows/release.yml` runs for a pushed `v*` tag or a manual workflow dispatch. The tag must exactly match the application version after the leading `v` is removed.
+
+In addition to the CI-class checks, Release:
+
+- Installs build-lock dependencies.
+- Freezes and packages the backend sidecar.
+- Builds the macOS Apple Silicon DMG.
+- Smoke-tests the frozen backend.
+- Creates the FFmpeg source archive required by the bundled GPL build.
+- Generates and validates `SHA256SUMS.txt`.
+- Publishes the DMG, FFmpeg source archive, and checksums to GitHub Releases.
+
+Tags containing `-` are published as prereleases.
+
+## Branch Protection
+
+Recommended `main` protection:
+
+- Require pull requests for normal contributions.
 - Require the `CI` workflow to pass.
-- Require branches to be up to date before merging.
-- Restrict force pushes.
+- Require branches to be up to date before merge.
+- Restrict force pushes and branch deletion.
+- Limit release-tag creation to maintainers.
 
-Release tags should be created only after `CHANGELOG.md` has been updated and the current `main` branch is green.
+The maintainer can perform an explicitly requested, locally verified direct merge, but `main` should still be green after the push.
