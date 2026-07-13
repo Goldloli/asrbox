@@ -93,6 +93,12 @@ jobs:
           cargo check --locked
           cargo test --locked
 
+      - name: Install Playwright Chromium
+        run: bunx playwright install chromium
+
+      - name: Browser smoke test
+        run: npm run test:e2e:smoke
+
       - name: Build desktop DMG
         run: npm run build:desktop
 

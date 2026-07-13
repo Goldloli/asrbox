@@ -16,6 +16,7 @@ It verifies:
 - Backend test suite, excluding binary smoke tests.
 - Tauri Rust `cargo check`.
 - Tauri Rust `cargo test`.
+- Browser smoke coverage for backend health and the core Web UI routes.
 
 The CI workflow intentionally does not build the desktop DMG. Full desktop packaging is slower and belongs to release validation.
 

@@ -35,7 +35,9 @@ npm run build:web
 npm run test:backend
 npm run check:versions
 npm run test:release-tools
+npm run audit:dependencies
 npm run verify:third-party
+npm run test:e2e:smoke
 cd tauri/src-tauri && cargo check && cargo test
 ```
 

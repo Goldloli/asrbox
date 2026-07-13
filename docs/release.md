@@ -22,6 +22,7 @@ npm run audit:dependencies
 npm run check:versions
 npm run test:release-tools
 npm run verify:third-party
+npm run test:e2e:smoke
 cd tauri/src-tauri && cargo check && cargo test
 ```
 
@@ -46,7 +47,7 @@ The `Release` workflow will:
 - Install Bun, Python, and Rust.
 - Install frontend and backend dependencies.
 - Verify dependency audit, version/tag consistency, vendored ffmpeg/ffprobe, and GPL source records.
-- Run backend and Rust tests.
+- Run backend, Rust, and browser smoke tests.
 - Build the Web UI.
 - Freeze the backend sidecar.
 - Smoke-test the frozen backend.

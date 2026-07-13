@@ -164,8 +164,12 @@ npm run typecheck
 npm run build:web
 npm run check:versions
 npm run test:release-tools
+npm run audit:dependencies
 npm run verify:third-party
+npm run test:e2e:smoke
 ```
+
+Run the deterministic local gate before a contribution or release: `npm run check:open-source`. The network-backed vulnerability audit remains a separate required CI/Release gate because it depends on the npm audit service.
 
 Backend tests:
 

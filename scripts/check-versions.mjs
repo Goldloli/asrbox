@@ -19,8 +19,10 @@ export async function checkVersions(root) {
 
   const cargo = await readFile(path.join(root, "tauri/src-tauri/Cargo.toml"), "utf8");
   const backend = await readFile(path.join(root, "backend/__init__.py"), "utf8");
+  const sidebar = await readFile(path.join(root, "app/src/components/Sidebar.tsx"), "utf8");
   versions.set("tauri/src-tauri/Cargo.toml", matchVersion(cargo, /^version\s*=\s*"([^"]+)"/m));
   versions.set("backend/__init__.py", matchVersion(backend, /^__version__\s*=\s*"([^"]+)"/m));
+  versions.set("app/src/components/Sidebar.tsx", matchVersion(sidebar, /^const appVersion\s*=\s*'v([^']+)'/m));
 
   const expected = versions.get("package.json");
   const mismatches = [...versions].filter(([, version]) => version !== expected);
