@@ -33,11 +33,11 @@ from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
 from backend.services.transcribe import transcribe_with_local_model
+from backend.services.uploads import save_upload
 from backend.utils.events import event_bus
 from backend.utils.transcript_text import normalize_transcript_text
 from backend.utils.transcript_text import transcript_text_from_segments
 
-CHUNK_SIZE = 1024 * 1024
 LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
 LONG_AUDIO_THRESHOLD_MS = 30 * 60 * 1000
 CHUNK_WINDOW_MS = 10 * 60 * 1000
@@ -323,8 +323,7 @@ def create_task_from_file(
     task_id = str(uuid.uuid4())
     suffix = Path(filename).suffix or ".audio"
     audio_path = config.get_uploads_dir() / f"{task_id}{suffix}"
-    with audio_path.open("wb") as output:
-        shutil.copyfileobj(file_obj, output, length=CHUNK_SIZE)
+    save_upload(file_obj, audio_path)
     return _create_task_row(
         db,
         filename=filename,

@@ -19,6 +19,7 @@ from backend.services import providers as provider_service
 from backend.services import settings as settings_service
 from backend.services import tasks as task_service
 from backend.services.platform import detect_runtime
+from backend.services.uploads import UploadLimitExceeded, save_upload, validate_upload_metadata
 
 router = APIRouter(prefix="/transcriptions", tags=["transcriptions"])
 
@@ -187,13 +188,17 @@ def transcription_preflight(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    try:
+        validate_upload_metadata([file], batch=False)
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     suffix = Path(file.filename or "audio").suffix or ".audio"
     path = config.get_uploads_dir() / f"preflight-{uuid.uuid4()}{suffix}"
     try:
-        with path.open("wb") as output:
-            while chunk := file.file.read(1024 * 1024):
-                output.write(chunk)
+        save_upload(file.file, path)
         result = preflight_media(path)
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except ASRboxError as exc:
         raise HTTPException(status_code=400, detail={"error_code": exc.code, "message": exc.message}) from exc
     finally:
@@ -239,23 +244,30 @@ def create_transcription(
         model_name=model_name,
         provider_id=provider_id,
     )
+    try:
+        validate_upload_metadata([file], batch=False)
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     options = _postprocess_options(
         vad=vad,
         word_timestamps=word_timestamps,
         postprocess_mode=postprocess_mode,
         traditional_to_simplified=traditional_to_simplified,
     )
-    return task_service.create_task_from_file(
-        db,
-        filename=file.filename or "audio",
-        file_obj=file.file,
-        backend=backend,
-        model_name=model_name,
-        provider_id=provider_id,
-        language=language,
-        output_formats=_parse_output_formats(output_formats),
-        options=options,
-    )
+    try:
+        return task_service.create_task_from_file(
+            db,
+            filename=file.filename or "audio",
+            file_obj=file.file,
+            backend=backend,
+            model_name=model_name,
+            provider_id=provider_id,
+            language=language,
+            output_formats=_parse_output_formats(output_formats),
+            options=options,
+        )
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
 
 
 @router.post("/batch", response_model=BatchTranscriptionResponse)
@@ -278,6 +290,10 @@ def create_batch_transcriptions(
         model_name=model_name,
         provider_id=provider_id,
     )
+    try:
+        validate_upload_metadata(list(files), batch=True)
+    except UploadLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     options = _postprocess_options(
         vad=vad,
         word_timestamps=word_timestamps,
