@@ -1,6 +1,6 @@
 {
   "name": "asrbox",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.1",
   "private": true,
   "workspaces": [
     "app",
@@ -17,6 +17,9 @@
     "audit:frontend": "node scripts/frontend-quality-audit.mjs",
     "audit:dependencies": "bun audit",
     "verify:third-party": "./scripts/verify-third-party.sh",
+    "check:versions": "node scripts/check-versions.mjs",
+    "test:release-tools": "node --test scripts/check-versions.test.mjs",
+    "verify:release-assets": "./scripts/verify-release-assets.sh",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",
     "test:backend:real-models": "ASRBOX_RUN_REAL_MODELS=1 .venv/bin/python -m pytest backend/real_tests -q",

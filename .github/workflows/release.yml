@@ -25,18 +25,17 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Resolve release tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "RELEASE_TAG=${{ inputs.tag }}" >> "$GITHUB_ENV"
-          else
-            echo "RELEASE_TAG=${{ github.ref_name }}" >> "$GITHUB_ENV"
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Resolve and validate release tag
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          node scripts/check-versions.mjs --tag "$INPUT_TAG"
+          printf 'RELEASE_TAG=%s\n' "$INPUT_TAG" >> "$GITHUB_ENV"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -58,11 +57,17 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Audit frontend dependencies
+        run: npm run audit:dependencies
+
+      - name: Test release tooling
+        run: npm run test:release-tools
+
       - name: Install backend dependencies
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install pip==25.3
-          .venv/bin/python -m pip install -r requirements-build.lock
+          .venv/bin/python -m pip install -r requirements-dev.lock -r requirements-build.lock
 
       - name: Verify vendored ffmpeg
         run: npm run verify:third-party
@@ -73,15 +78,34 @@ jobs:
       - name: Build Web UI
         run: npm run build:web
 
+      - name: Backend tests
+        env:
+          ASRBOX_FFMPEG_PATH: ${{ github.workspace }}/third_party/ffmpeg/darwin-arm64/ffmpeg
+          ASRBOX_FFPROBE_PATH: ${{ github.workspace }}/third_party/ffmpeg/darwin-arm64/ffprobe
+        run: npm run test:backend
+
+      - name: Prepare Tauri sidecar placeholder
+        run: bun run setup:dev
+
+      - name: Cargo checks
+        working-directory: tauri/src-tauri
+        run: |
+          cargo check --locked
+          cargo test --locked
+
       - name: Build desktop DMG
         run: npm run build:desktop
+
+      - name: Frozen backend smoke test
+        run: npm run test:backend:binary-smoke
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
           cp tauri/src-tauri/target/release/bundle/dmg/ASRbox_*.dmg release-assets/
           ./scripts/prepare-ffmpeg-source.sh release-assets
-          shasum -a 256 release-assets/*.dmg release-assets/ASRbox-ffmpeg-source-8.1.2.tar.gz > release-assets/SHA256SUMS.txt
+          (cd release-assets && shasum -a 256 ./*.dmg ASRbox-ffmpeg-source-8.1.2.tar.gz > SHA256SUMS.txt)
+          npm run verify:release-assets -- release-assets
           ls -lh release-assets
 
       - name: Publish GitHub Release
