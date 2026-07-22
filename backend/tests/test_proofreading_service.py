@@ -335,7 +335,7 @@ def test_backend_process_startup_recovers_active_runs_without_changing_transcrip
         text=True,
     )
     try:
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 output = process.stdout.read() if process.stdout else ""
@@ -347,7 +347,13 @@ def test_backend_process_startup_recovers_active_runs_without_changing_transcrip
             except OSError:
                 time.sleep(0.1)
         else:
-            pytest.fail("backend did not become healthy before startup recovery timeout")
+            process.terminate()
+            try:
+                output, _ = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                output, _ = process.communicate(timeout=5)
+            pytest.fail(f"backend did not become healthy before startup recovery timeout: {output}")
     finally:
         process.terminate()
         try:

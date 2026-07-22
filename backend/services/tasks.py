@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import shutil
+import subprocess
+import sys
 import threading
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,10 +43,13 @@ from backend.utils.events import event_bus
 from backend.utils.transcript_text import normalize_transcript_text
 from backend.utils.transcript_text import transcript_text_from_segments
 
-LOCAL_PROGRESS_INTERVAL_SECONDS = 5.0
 LONG_AUDIO_THRESHOLD_MS = 30 * 60 * 1000
 CHUNK_WINDOW_MS = 10 * 60 * 1000
 CHUNK_OVERLAP_MS = 5 * 1000
+LOCAL_CHUNK_THRESHOLD_MS = 2 * 60 * 1000
+LOCAL_CHUNK_WINDOW_MS = 2 * 60 * 1000
+LOCAL_CHUNK_OVERLAP_MS = 2 * 1000
+LOCAL_WORKER_POLL_SECONDS = 0.2
 LOCAL_QUEUE = "local"
 PROVIDER_QUEUE = "provider"
 ACTIVE_TASK_STATUSES = {
@@ -382,8 +389,14 @@ def _prepare_task_media(db: Session, row: TranscriptionTask) -> Path:
         row.normalized_audio_path = config.to_storage_path(normalized_path)
     options = _read_options(row)
     options["audio_metadata"] = metadata
+    is_local = row.source == "local" and bool(row.model_name)
     try:
-        options["audio_quality"] = preflight_media(audio_path, long_audio_threshold_ms=LONG_AUDIO_THRESHOLD_MS, chunk_window_ms=CHUNK_WINDOW_MS, chunk_overlap_ms=CHUNK_OVERLAP_MS)
+        options["audio_quality"] = preflight_media(
+            audio_path,
+            long_audio_threshold_ms=LOCAL_CHUNK_THRESHOLD_MS if is_local else LONG_AUDIO_THRESHOLD_MS,
+            chunk_window_ms=LOCAL_CHUNK_WINDOW_MS if is_local else CHUNK_WINDOW_MS,
+            chunk_overlap_ms=LOCAL_CHUNK_OVERLAP_MS if is_local else CHUNK_OVERLAP_MS,
+        )
     except Exception as exc:
         options["audio_quality"] = {"warnings": [str(exc)]}
     _write_options(row, options)
@@ -413,22 +426,14 @@ def _transcribe_provider_path(db: Session, row: TranscriptionTask, audio_path: P
 
 
 def _transcribe_with_local_model(db: Session, row: TranscriptionTask):
-    model_name = row.model_name or "whisper-base"
     normalized_path = config.resolve_storage_path(row.normalized_audio_path or row.audio_path)
     if normalized_path is None:
         raise RuntimeError("Task audio file not found")
-    stop_progress = threading.Event()
-    progress_thread = threading.Thread(
-        target=_advance_local_transcription_progress,
-        args=(row.id, stop_progress),
-        daemon=True,
-    )
-    progress_thread.start()
-    try:
+    if os.environ.get("ASRBOX_INLINE_LOCAL_TRANSCRIPTION") == "1":
+        if row.duration_ms and row.duration_ms > LONG_AUDIO_THRESHOLD_MS:
+            return _transcribe_chunks(db, row, normalized_path)
         return _transcribe_local_path(db, row, normalized_path)
-    finally:
-        stop_progress.set()
-        progress_thread.join(timeout=LOCAL_PROGRESS_INTERVAL_SECONDS)
+    return _transcribe_local_subprocess(db, row, normalized_path)
 
 
 def _transcribe_local_path(db: Session, row: TranscriptionTask, audio_path: Path):
@@ -443,20 +448,231 @@ def _transcribe_local_path(db: Session, row: TranscriptionTask, audio_path: Path
     return transcribe_with_local_model(model_name, str(audio_path), transcribe_options)
 
 
-def _advance_local_transcription_progress(task_id: str, stop_progress: threading.Event) -> None:
-    if db_session.SessionLocal is None:
-        db_session.init_db()
-    while not stop_progress.wait(LOCAL_PROGRESS_INTERVAL_SECONDS):
-        db = db_session.SessionLocal()
+def _local_worker_command(request_path: Path, result_path: Path) -> list[str]:
+    command = [sys.executable]
+    if not getattr(sys, "frozen", False):
+        command.extend(["-m", "backend.server"])
+    command.extend(
+        [
+            "--data-dir",
+            str(config.get_data_dir()),
+            "--parent-pid",
+            str(os.getpid()),
+            "--local-worker-request",
+            str(request_path),
+            "--local-worker-result",
+            str(result_path),
+        ]
+    )
+    return command
+
+
+def _read_worker_state(path: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _terminate_worker(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def _local_worker_inputs(db: Session, row: TranscriptionTask, audio_path: Path) -> tuple[list[dict[str, Any]], list[TranscriptionChunk]]:
+    if not row.duration_ms or row.duration_ms <= LOCAL_CHUNK_THRESHOLD_MS:
+        return [{"audio_path": str(audio_path), "start_ms": 0, "end_ms": row.duration_ms or 0}], []
+
+    chunks_dir = audio_path.parent / f"{row.id}_chunks"
+    chunk_files = split_audio_chunks(
+        audio_path,
+        chunks_dir,
+        row.duration_ms,
+        window_ms=LOCAL_CHUNK_WINDOW_MS,
+        overlap_ms=LOCAL_CHUNK_OVERLAP_MS,
+    )
+    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == row.id).delete()
+    rows: list[TranscriptionChunk] = []
+    inputs: list[dict[str, Any]] = []
+    for index, (path, start_ms, end_ms) in enumerate(chunk_files, 1):
+        chunk = TranscriptionChunk(
+            task_id=row.id,
+            idx=index,
+            audio_path=config.to_storage_path(path),
+            start_ms=start_ms,
+            end_ms=end_ms,
+            status="transcribing" if index == 1 else "queued",
+            progress=20 if index == 1 else 0,
+        )
+        db.add(chunk)
+        rows.append(chunk)
+        inputs.append({"audio_path": str(path), "start_ms": start_ms, "end_ms": end_ms})
+    db.commit()
+    for chunk in rows:
+        db.refresh(chunk)
+    first_chunk = rows[0]
+    task_logs.add_log(db, row.id, "chunk", "info", "Chunk 1 started", {"chunk_id": first_chunk.id})
+    event_bus.publish(
+        "chunk.updated",
+        {"task_id": row.id, "chunk_id": first_chunk.id, "status": first_chunk.status, "progress": first_chunk.progress},
+    )
+    return inputs, rows
+
+
+def _publish_local_worker_progress(
+    db: Session,
+    row: TranscriptionTask,
+    chunks: list[TranscriptionChunk],
+    results: list[dict[str, Any]],
+    published: int,
+) -> int:
+    completed = len(results)
+    if completed <= published:
+        return published
+    if not chunks:
+        return completed
+    if completed > len(chunks):
+        raise ASRboxError("LOCAL_WORKER_PROTOCOL_ERROR", "Local transcription worker returned too many chunk results", stage="transcribing")
+    for result_index in range(published, completed):
+        chunk = chunks[result_index]
+        chunk.status = "completed"
+        chunk.progress = 100
+        chunk.text = str(results[result_index].get("text") or "")
+        chunk.error = None
+        chunk.error_code = None
+        task_logs.add_log(db, row.id, "chunk", "info", f"Chunk {chunk.idx} completed", {"chunk_id": chunk.id})
+        event_bus.publish("chunk.updated", {"task_id": row.id, "chunk_id": chunk.id, "status": chunk.status, "progress": chunk.progress})
+        if result_index + 1 < len(chunks):
+            next_chunk = chunks[result_index + 1]
+            next_chunk.status = "transcribing"
+            next_chunk.progress = 20
+            task_logs.add_log(db, row.id, "chunk", "info", f"Chunk {next_chunk.idx} started", {"chunk_id": next_chunk.id})
+        row.progress = 60 + int((result_index + 1) / len(chunks) * 28)
+    db.commit()
+    return completed
+
+
+def _combine_local_worker_results(
+    row: TranscriptionTask,
+    inputs: list[dict[str, Any]],
+    payloads: list[dict[str, Any]],
+):
+    from backend.models import TranscriptionResult
+
+    if len(payloads) != len(inputs):
+        raise ASRboxError(
+            "LOCAL_WORKER_PROTOCOL_ERROR",
+            f"Local transcription worker returned {len(payloads)} of {len(inputs)} expected results",
+            stage="transcribing",
+        )
+    segments: list[TranscriptSegment] = []
+    parsed = [TranscriptionResult.model_validate(payload) for payload in payloads]
+    previous_end = 0.0
+    for index, (item, result) in enumerate(zip(inputs, parsed, strict=True)):
+        offset = float(item["start_ms"]) / 1000
+        for segment in result.segments:
+            start = segment.start + offset
+            end = segment.end + offset
+            if index > 0 and ((start + end) / 2) <= previous_end:
+                continue
+            segments.append(
+                TranscriptSegment(
+                    id=len(segments) + 1,
+                    start=start,
+                    end=end,
+                    text=segment.text,
+                    speaker=segment.speaker,
+                    confidence=segment.confidence,
+                )
+            )
+        previous_end = float(item["end_ms"]) / 1000
+
+    return TranscriptionResult(
+        text=transcript_text_from_segments(segments) or "\n".join(result.text for result in parsed if result.text),
+        language=next((result.language for result in parsed if result.language), row.language),
+        duration=row.duration_ms / 1000 if row.duration_ms else (segments[-1].end if segments else None),
+        segments=segments,
+        model_name=row.model_name,
+    )
+
+
+def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path: Path):
+    model_name = row.model_name or "whisper-base"
+    settings = settings_service.get_settings(db)
+    options = _read_options(row)
+    transcribe_options = {
+        "language": row.language,
+        "vad": options.get("vad", settings.vad),
+        "word_timestamps": options.get("word_timestamps", settings.word_timestamps),
+    }
+    inputs, chunks = _local_worker_inputs(db, row, audio_path)
+    worker_dir = config.get_cache_dir() / "task-workers" / row.id
+    shutil.rmtree(worker_dir, ignore_errors=True)
+    worker_dir.mkdir(parents=True, exist_ok=True)
+    request_path = worker_dir / "request.json"
+    result_path = worker_dir / "result.json"
+    stderr_path = worker_dir / "stderr.log"
+    request_path.write_text(
+        json.dumps({"model_name": model_name, "options": transcribe_options, "inputs": inputs}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    published = 0
+    process: subprocess.Popen | None = None
+    stderr_file = stderr_path.open("w", encoding="utf-8")
+
+    def stderr_excerpt() -> str:
+        stderr_file.flush()
         try:
-            row = get_task_row(db, task_id)
-            if row is None or row.status != "transcribing":
-                return
-            if row.progress < 88:
-                row.progress = min(88, row.progress + 1)
-                db.commit()
-        finally:
-            db.close()
+            return stderr_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+        except OSError:
+            return ""
+
+    try:
+        process = subprocess.Popen(_local_worker_command(request_path, result_path), stdout=subprocess.DEVNULL, stderr=stderr_file, text=True)
+        while True:
+            if task_runtime.is_cancelled(row.id):
+                _terminate_worker(process)
+                for chunk in chunks:
+                    if chunk.status != "completed":
+                        chunk.status = "cancelled"
+                        chunk.error = "Task was cancelled"
+                        chunk.error_code = "TASK_CANCELLED"
+                        chunk.progress = 100
+                if chunks:
+                    db.commit()
+                raise ASRboxError("TASK_CANCELLED", "Task was cancelled", stage="cancel")
+            state = _read_worker_state(result_path)
+            if state:
+                results = state.get("results") if isinstance(state.get("results"), list) else []
+                published = _publish_local_worker_progress(db, row, chunks, results, published)
+                if state.get("status") == "completed":
+                    process.wait(timeout=5)
+                    return _combine_local_worker_results(row, inputs, results)
+                if state.get("status") == "failed":
+                    raise ASRboxError(
+                        "MODEL_LOAD_FAILED",
+                        str(state.get("error") or "Local transcription worker failed"),
+                        stage="transcribing",
+                        stderr_excerpt=stderr_excerpt(),
+                    )
+            return_code = process.poll()
+            if return_code is not None:
+                state = _read_worker_state(result_path)
+                detail = str((state or {}).get("error") or f"Local transcription worker exited with code {return_code}")
+                raise ASRboxError("MODEL_LOAD_FAILED", detail, stage="transcribing", stderr_excerpt=stderr_excerpt())
+            time.sleep(LOCAL_WORKER_POLL_SECONDS)
+    finally:
+        if process is not None:
+            _terminate_worker(process)
+        stderr_file.close()
+        shutil.rmtree(worker_dir, ignore_errors=True)
 
 
 def _transcribe_path_for_row(db: Session, row: TranscriptionTask, audio_path: Path):
@@ -598,12 +814,12 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             model_service.ensure_model_ready(row.model_name)
         _set_task_state(db, row, "transcribing", 60)
         _raise_if_cancelled(row.id)
-        if row.duration_ms and row.duration_ms > LONG_AUDIO_THRESHOLD_MS:
+        if row.source == "local" and row.model_name:
+            result = _transcribe_with_local_model(db, row)
+        elif row.duration_ms and row.duration_ms > LONG_AUDIO_THRESHOLD_MS:
             result = _transcribe_chunks(db, row, normalized_path)
         elif row.source == "provider" or row.provider_id:
             result = _transcribe_with_provider(db, row)
-        elif row.source == "local" and row.model_name:
-            result = _transcribe_with_local_model(db, row)
         else:
             raise ASRboxError("INVALID_TRANSCRIPTION_BACKEND", f"Invalid transcription backend: {row.source}", stage="transcribing")
         db.refresh(row)

@@ -48,6 +48,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--data-dir", default=None)
     parser.add_argument("--parent-pid", type=int, default=None)
     parser.add_argument("--keep-running-sentinel", default=None)
+    parser.add_argument("--local-worker-request", default=None)
+    parser.add_argument("--local-worker-result", default=None)
     parser.add_argument("--version", action="store_true")
     return parser.parse_args(argv)
 
@@ -62,6 +64,13 @@ def main(argv: list[str] | None = None) -> None:
     os.environ["HF_HUB_DISABLE_XET"] = "1"
     sentinel = Path(args.keep_running_sentinel).expanduser().resolve() if args.keep_running_sentinel else None
     _start_parent_watchdog(args.parent_pid, sentinel)
+    if args.local_worker_request or args.local_worker_result:
+        if not args.local_worker_request or not args.local_worker_result:
+            parser_error = "--local-worker-request and --local-worker-result must be used together"
+            raise SystemExit(parser_error)
+        from backend.services.local_task_worker import run_local_task_worker
+
+        raise SystemExit(run_local_task_worker(args.local_worker_request, args.local_worker_result))
     uvicorn.run("backend.app:app", host=args.host, port=args.port, log_level="info")
 
 

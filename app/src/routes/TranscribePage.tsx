@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Play, PlugZap, RefreshCw, Settings, ShieldAlert, Trash2 } from 'lucide-react';
+import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Loader2, Play, PlugZap, RefreshCw, Settings, ShieldAlert, Square, Trash2 } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -22,6 +22,7 @@ import {
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
+const activeTaskStatuses = new Set(['queued', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
 
 export function TranscribePage() {
   const queryClient = useQueryClient();
@@ -131,6 +132,17 @@ export function TranscribePage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
+
+  const cancelTaskMutation = useMutation({
+    mutationFn: (taskId: string) => apiClient.cancelTask(taskId),
+    onSuccess: (task) => {
+      refreshTasks();
+      toast.success(t('toast.taskCancelled'), task.filename);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+
+  const selectedTaskIsActive = Boolean(selectedTask && activeTaskStatuses.has(selectedTask.status));
 
   const readinessIssues = [
     ...(readinessQuery.data?.issues ?? []),
@@ -348,11 +360,24 @@ export function TranscribePage() {
           {tasks.length > 0 && <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {tasks.length > recentTasks.length && (
                   <Button asChild variant="ghost" size="sm">
                     <Link to="/tasks">{t('transcribe.viewAllTasks')}</Link>
                   </Button>
+                )}
+                {selectedTaskIsActive && selectedTask && (
+                  <ConfirmAction
+                    title={t('confirm.stopTaskTitle')}
+                    description={t('confirm.stopTaskDescription')}
+                    confirmLabel={t('common.stop')}
+                    onConfirm={() => cancelTaskMutation.mutate(selectedTask.id)}
+                  >
+                    <Button variant="danger" size="sm" disabled={cancelTaskMutation.isPending}>
+                      {cancelTaskMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" />}
+                      {cancelTaskMutation.isPending ? t('transcribe.stopping') : t('common.stop')}
+                    </Button>
+                  </ConfirmAction>
                 )}
                 <ConfirmAction
                   title={t('confirm.clearTasksTitle')}
