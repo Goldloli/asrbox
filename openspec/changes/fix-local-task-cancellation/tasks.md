@@ -21,4 +21,4 @@
 
 - [x] 4.1 Validate the OpenSpec change strictly and run focused backend/frontend tests
 - [x] 4.2 Run typecheck, Web build, full backend tests, contract tests, and maintained open-source gates
-- [ ] 4.3 Push the repair to main and confirm the replacement GitHub Actions run passes
+- [x] 4.3 Push the repair to main and confirm the replacement GitHub Actions run passes
