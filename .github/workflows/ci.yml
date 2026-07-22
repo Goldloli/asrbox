@@ -91,3 +91,6 @@ jobs:
 
       - name: Browser smoke test
         run: npm run test:e2e:smoke
+
+      - name: AI LLM browser regression tests
+        run: npm run test:e2e:llm

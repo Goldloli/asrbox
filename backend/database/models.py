@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
 
@@ -107,6 +107,70 @@ class TranscriptVersion(Base):
     model_name = Column(String, nullable=True)
     provider_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=utc_now)
+
+
+class LLMProvider(Base):
+    __tablename__ = "llm_providers"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    preset = Column(String, nullable=False)
+    base_url = Column(Text, nullable=False)
+    api_key_secret = Column(Text, nullable=True)
+    default_model = Column(String, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class ProofreadingRun(Base):
+    __tablename__ = "proofreading_runs"
+    __table_args__ = (
+        Index(
+            "uq_proofreading_runs_active_task",
+            "task_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+    )
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    task_id = Column(String, ForeignKey("transcription_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_version_id = Column(Integer, ForeignKey("transcript_versions.id"), nullable=False)
+    llm_provider_id = Column(String, ForeignKey("llm_providers.id", ondelete="SET NULL"), nullable=True)
+    provider_name = Column(String, nullable=False)
+    provider_preset = Column(String, nullable=False)
+    model_name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="queued")
+    total_batches = Column(Integer, nullable=False, default=0)
+    completed_batches = Column(Integer, nullable=False, default=0)
+    error_code = Column(String, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    completed_at = Column(DateTime, nullable=True)
+    applied_at = Column(DateTime, nullable=True)
+
+    suggestions = relationship(
+        "ProofreadingSuggestion",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ProofreadingSuggestion.id",
+    )
+
+
+class ProofreadingSuggestion(Base):
+    __tablename__ = "proofreading_suggestions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(String, ForeignKey("proofreading_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    segment_id = Column(Integer, nullable=False)
+    original_text = Column(Text, nullable=False)
+    suggested_text = Column(Text, nullable=False)
+    reason = Column(Text, nullable=False)
+    resolution = Column(String, nullable=False, default="pending")
+
+    run = relationship("ProofreadingRun", back_populates="suggestions")
 
 
 class SchemaMigration(Base):

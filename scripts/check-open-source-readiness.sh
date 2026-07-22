@@ -16,5 +16,6 @@ npm run test:backend
 cargo check --manifest-path tauri/src-tauri/Cargo.toml --locked
 cargo test --manifest-path tauri/src-tauri/Cargo.toml --locked
 npm run test:e2e:smoke
+npm run test:e2e:llm
 
 echo "ASRbox open-source readiness checks passed."

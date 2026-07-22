@@ -51,6 +51,11 @@ def _normalize_storage_paths(engine, tables: set[str]) -> None:
                     conn.execute(text(f"UPDATE {table} SET {column} = :value WHERE id = :id"), {"value": normalized, "id": row_id})
 
 
+def _create_llm_proofreading_tables(engine) -> None:
+    for name in ("llm_providers", "proofreading_runs", "proofreading_suggestions"):
+        Base.metadata.tables[name].create(bind=engine, checkfirst=True)
+
+
 def run_migrations(engine, session_factory) -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -89,6 +94,7 @@ def run_migrations(engine, session_factory) -> None:
                 ],
             ),
         ),
+        ("20260721_001_llm_proofreading", lambda: _create_llm_proofreading_tables(engine)),
     ]
 
     db = session_factory()

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from backend import config
 from backend.database import session as db_session
 from backend.database.models import TranscriptSegment as DBSegment
+from backend.database.models import ProofreadingRun, ProofreadingSuggestion
 from backend.database.models import TaskDiagnostic, TranscriptVersion
 from backend.database.models import TaskLog, TranscriptionBatch
 from backend.database.models import TranscriptionChunk
@@ -851,6 +852,11 @@ def delete_task(db: Session, task_id: str) -> bool:
     db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
     db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
     db.query(TaskDiagnostic).filter(TaskDiagnostic.task_id == task_id).delete()
+    run_ids = db.query(ProofreadingRun.id).filter(ProofreadingRun.task_id == task_id)
+    db.query(ProofreadingSuggestion).filter(ProofreadingSuggestion.run_id.in_(run_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(ProofreadingRun).filter(ProofreadingRun.task_id == task_id).delete()
     db.query(TranscriptVersion).filter(TranscriptVersion.task_id == task_id).delete()
     db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
     db.delete(row)

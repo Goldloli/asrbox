@@ -49,6 +49,16 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("GET", "/tasks/{task_id}/diagnostics"),
         ("GET", "/tasks/{task_id}/logs"),
         ("GET", "/tasks/{task_id}/versions"),
+        ("GET", "/llm-providers/presets"),
+        ("GET", "/llm-providers"),
+        ("POST", "/llm-providers"),
+        ("PUT", "/llm-providers/{provider_id}"),
+        ("DELETE", "/llm-providers/{provider_id}"),
+        ("POST", "/llm-providers/{provider_id}/test"),
+        ("POST", "/tasks/{task_id}/proofreading-runs"),
+        ("GET", "/tasks/{task_id}/proofreading-runs"),
+        ("GET", "/tasks/{task_id}/proofreading-runs/{run_id}"),
+        ("POST", "/tasks/{task_id}/proofreading-runs/{run_id}/apply"),
         ("GET", "/runtime/status"),
         ("GET", "/events"),
         ("POST", "/transcriptions"),
@@ -65,6 +75,57 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("POST", "/tasks/{task_id}/cleanup-artifacts"),
     }
     assert expected <= routes
+
+
+def test_llm_proofreading_openapi_contract_is_typed_and_masked(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    schemas = client.app.openapi()["components"]["schemas"]
+
+    provider_fields = schemas["LLMProviderResponse"]["properties"]
+    assert {
+        "id",
+        "name",
+        "preset",
+        "base_url",
+        "api_key_masked",
+        "default_model",
+        "enabled",
+        "is_local",
+        "created_at",
+        "updated_at",
+    } <= provider_fields.keys()
+    assert "api_key" not in provider_fields
+
+    run_fields = schemas["ProofreadingRunResponse"]["properties"]
+    assert {
+        "id",
+        "task_id",
+        "source_version_id",
+        "provider_name",
+        "provider_preset",
+        "model_name",
+        "status",
+        "total_batches",
+        "completed_batches",
+        "error_code",
+        "error",
+        "stale",
+        "suggestions",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "applied_at",
+    } <= run_fields.keys()
+
+    suggestion_fields = schemas["ProofreadingSuggestionResponse"]["properties"]
+    assert set(suggestion_fields) == {
+        "id",
+        "segment_id",
+        "original_text",
+        "suggested_text",
+        "reason",
+        "resolution",
+    }
 
 
 def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:

@@ -40,7 +40,13 @@ def _loads_dict(value: str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def create_version(db: Session, task: TranscriptionTask, version_type: str) -> TranscriptVersion:
+def create_version(
+    db: Session,
+    task: TranscriptionTask,
+    version_type: str,
+    *,
+    commit: bool = True,
+) -> TranscriptVersion:
     row = TranscriptVersion(
         task_id=task.id,
         version_type=version_type,
@@ -51,8 +57,11 @@ def create_version(db: Session, task: TranscriptionTask, version_type: str) -> T
         provider_id=task.provider_id,
     )
     db.add(row)
-    db.commit()
-    db.refresh(row)
+    if commit:
+        db.commit()
+        db.refresh(row)
+    else:
+        db.flush()
     return row
 
 

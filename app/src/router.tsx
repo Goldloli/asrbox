@@ -5,6 +5,7 @@ import { LoadingState } from './components/weiui';
 
 const TranscribePage = lazy(() => import('./routes/TranscribePage').then((module) => ({ default: module.TranscribePage })));
 const TasksPage = lazy(() => import('./routes/TasksPage').then((module) => ({ default: module.TasksPage })));
+const AIPage = lazy(() => import('./routes/AIPage').then((module) => ({ default: module.AIPage })));
 const ModelsPage = lazy(() => import('./routes/ModelsPage').then((module) => ({ default: module.ModelsPage })));
 const SettingsPage = lazy(() => import('./routes/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 
@@ -30,6 +31,12 @@ const tasksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tasks',
   component: withSuspense(TasksPage),
+});
+
+const aiRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ai',
+  component: withSuspense(AIPage),
 });
 
 const modelsRoute = createRoute({
@@ -63,6 +70,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   tasksRoute,
+  aiRoute,
   modelsRoute,
   providersRoute,
   exportsRoute,
