@@ -189,6 +189,77 @@ export interface ProviderTestResult {
   models?: string[];
 }
 
+export interface LLMProviderPreset {
+  id: 'minimax' | 'kimi' | 'deepseek' | 'qwen' | 'glm' | 'ollama' | 'custom';
+  name: string;
+  base_url: string;
+  requires_api_key: boolean;
+  local_default: boolean;
+}
+
+export interface LLMProvider {
+  id: string;
+  name: string;
+  preset: LLMProviderPreset['id'];
+  base_url: string;
+  api_key_masked?: string | null;
+  default_model?: string | null;
+  enabled: boolean;
+  is_local: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LLMProviderTestResult {
+  ok: boolean;
+  message: string;
+  error_code?: string | null;
+}
+
+export type ProofreadingRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'interrupted' | 'applied';
+
+export interface ProofreadingSuggestion {
+  id: number;
+  segment_id: number;
+  original_text: string;
+  suggested_text: string;
+  reason: string;
+  resolution: 'pending' | 'applied' | 'skipped';
+}
+
+export interface ProofreadingRun {
+  id: string;
+  task_id: string;
+  source_version_id: number;
+  llm_provider_id?: string | null;
+  provider_name: string;
+  provider_preset: string;
+  model_name: string;
+  status: ProofreadingRunStatus;
+  total_batches: number;
+  completed_batches: number;
+  error_code?: string | null;
+  error?: string | null;
+  stale: boolean;
+  suggestions: ProofreadingSuggestion[];
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+  applied_at?: string | null;
+}
+
+export interface ProofreadingApplyResult {
+  run: ProofreadingRun;
+  version: {
+    id: number;
+    task_id: string;
+    version_type: string;
+    text?: string | null;
+    segments: TranscriptSegment[];
+    created_at: string;
+  };
+}
+
 export interface ASRSettings {
   id: number;
   default_backend: string;
@@ -269,8 +340,10 @@ export interface TaskLogEntry {
 export interface TaskVersion {
   id: string | number;
   task_id?: string;
+  version_type?: string;
   label?: string | null;
   text?: string | null;
+  segments?: TranscriptSegment[];
   created_at: string;
   metadata?: Record<string, unknown>;
 }
@@ -540,6 +613,52 @@ class ApiClient {
 
   testProvider(id: string) {
     return this.request<ProviderTestResult>(`/providers/${id}/test`, { method: 'POST' });
+  }
+
+  listLLMProviderPresets() {
+    return this.request<{ items: LLMProviderPreset[] }>('/llm-providers/presets');
+  }
+
+  listLLMProviders() {
+    return this.request<{ items: LLMProvider[] }>('/llm-providers');
+  }
+
+  createLLMProvider(data: Record<string, unknown>) {
+    return this.request<LLMProvider>('/llm-providers', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  updateLLMProvider(id: string, data: Record<string, unknown>) {
+    return this.request<LLMProvider>(`/llm-providers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  deleteLLMProvider(id: string) {
+    return this.request<{ message: string }>(`/llm-providers/${id}`, { method: 'DELETE' });
+  }
+
+  testLLMProvider(id: string) {
+    return this.request<LLMProviderTestResult>(`/llm-providers/${id}/test`, { method: 'POST' });
+  }
+
+  listProofreadingRuns(taskId: string) {
+    return this.request<{ items: ProofreadingRun[] }>(`/tasks/${taskId}/proofreading-runs`);
+  }
+
+  getProofreadingRun(taskId: string, runId: string) {
+    return this.request<ProofreadingRun>(`/tasks/${taskId}/proofreading-runs/${runId}`);
+  }
+
+  createProofreadingRun(taskId: string, providerId: string) {
+    return this.request<ProofreadingRun>(`/tasks/${taskId}/proofreading-runs`, {
+      method: 'POST',
+      body: JSON.stringify({ provider_id: providerId }),
+    });
+  }
+
+  applyProofreadingRun(taskId: string, runId: string, suggestionIds: number[]) {
+    return this.request<ProofreadingApplyResult>(`/tasks/${taskId}/proofreading-runs/${runId}/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ suggestion_ids: suggestionIds }),
+    });
   }
 
   getSettings() {

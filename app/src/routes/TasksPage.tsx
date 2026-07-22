@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { ArchiveX, CheckSquare, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
+import { Link, useSearch } from '@tanstack/react-router';
+import { ArchiveX, BrainCircuit, CheckSquare, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
@@ -54,6 +54,7 @@ export function TasksPage() {
   const [clearingTasks, setClearingTasks] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const search = useSearch({ strict: false }) as { task?: string };
   const tasksQuery = useTasksQuery();
   const activeTasksQuery = useActiveTasksQuery();
   const tasks = tasksQuery.data?.items ?? [];
@@ -167,6 +168,10 @@ export function TasksPage() {
   useEffect(() => {
     if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) setSelectedTaskId(null);
   }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (search.task && tasks.some((task) => task.id === search.task)) setSelectedTaskId(search.task);
+  }, [search.task, tasks]);
 
   const clearAllTasks = async () => {
     setClearingTasks(true);
@@ -620,6 +625,14 @@ export function TasksPage() {
                   onRetry={() => retry.mutate(selectedTask.id)}
                   onRetryChunks={() => retryChunks.mutate(selectedTask.id)}
                 />
+              )}
+              {selectedTask.status === 'completed' && selectedTask.segments.length > 0 && (
+                <Button asChild variant="secondary" className="w-fit">
+                  <Link to="/ai" search={{ task: selectedTask.id }}>
+                    <BrainCircuit className="size-4" />
+                    {t('tasks.aiProofreading')}
+                  </Link>
+                </Button>
               )}
               {selectedTask.status === 'completed' && (
                 <div className="grid gap-3 rounded-xl border app-control p-3">

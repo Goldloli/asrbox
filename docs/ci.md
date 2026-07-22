@@ -19,6 +19,7 @@ It performs:
 9. Backend test suite, excluding the separately invoked frozen-binary smoke test.
 10. Tauri `cargo check --locked` and `cargo test --locked`.
 11. Playwright public-beta browser smoke test.
+12. AI LLM provider and subtitle-proofreading browser regression tests.
 
 CI uses the vendored Apple Silicon ffmpeg and ffprobe paths for backend tests. It does not download large ASR models or run private real-media fixtures.
 
@@ -30,7 +31,7 @@ Run the closest local equivalent before merge:
 npm run check:open-source
 ```
 
-The script runs frozen Bun installation, Python package health and compilation, version/release checks, third-party verification, TypeScript, Web build, backend tests, Cargo, and browser smoke coverage.
+The script runs frozen Bun installation, Python package health and compilation, version/release checks, third-party verification, TypeScript, Web build, backend tests, Cargo, browser smoke coverage, and the AI LLM browser regression suite.
 
 The network dependency audit is intentionally separate locally:
 
@@ -49,6 +50,7 @@ npm run test:backend
 npm run test:backend:contract
 npm run test:backend:server
 npm run test:e2e:smoke
+npm run test:e2e:llm
 bunx playwright test app/e2e/models-download-controls.spec.ts
 cd tauri/src-tauri && cargo check --locked && cargo test --locked
 ```

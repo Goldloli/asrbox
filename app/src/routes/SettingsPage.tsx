@@ -13,16 +13,17 @@ import { ConfirmAction } from '../components/ConfirmAction';
 import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
 import { ProvidersPage } from './ProvidersPage';
+import { LLMProvidersPanel } from '../components/settings/LLMProvidersPanel';
 import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 
-type SettingsTab = 'general' | 'transcription' | 'providers' | 'storage';
+type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage';
 
 const shortcutActions: ShortcutAction[] = ['newTranscription', 'globalSearch', 'settings', 'commandPalette'];
 
 function normalizeSettingsTab(value: unknown): SettingsTab {
-  return value === 'transcription' || value === 'providers' || value === 'storage' ? value : 'general';
+  return value === 'transcription' || value === 'providers' || value === 'llm' || value === 'storage' ? value : 'general';
 }
 
 export function SettingsPage() {
@@ -202,6 +203,7 @@ export function SettingsPage() {
             <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
             <TabsTrigger value="transcription">{t('settings.tabTranscription')}</TabsTrigger>
             <TabsTrigger value="providers">{t('settings.tabProviders')}</TabsTrigger>
+            <TabsTrigger value="llm">{t('settings.tabLLMProviders')}</TabsTrigger>
             <TabsTrigger value="storage">{t('settings.tabStorage')}</TabsTrigger>
           </TabsList>
         </div>
@@ -397,6 +399,10 @@ export function SettingsPage() {
 
       <TabsContent value="providers">
         <ProvidersPage />
+      </TabsContent>
+
+      <TabsContent value="llm">
+        <LLMProvidersPanel />
       </TabsContent>
 
       <TabsContent value="storage">

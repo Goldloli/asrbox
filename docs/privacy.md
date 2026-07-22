@@ -14,6 +14,14 @@ With an online provider, ASRbox may send the original media, extracted audio, tr
 
 Before use, review the provider's pricing, retention, training, privacy, and regional-processing terms. Use a local model when the media must not be submitted to a third-party ASR service.
 
+## LLM Transcript Proofreading
+
+LLM proofreading is a separate, optional post-processing step for a completed transcript. It sends only target segment identifiers and text plus limited neighboring segment identifiers and text. It does not send audio, media bytes, filenames, file paths, timestamps, speaker labels, confidence values, or other task metadata.
+
+An endpoint is classified as local only when its configured hostname is `localhost`, `127.0.0.1`, or `::1`. Ollama defaults to `http://localhost:11434/v1`, but changing that address to a non-loopback host makes it a third-party endpoint. Remote LLM endpoints must use HTTPS. Review the selected provider's retention, training, privacy, and regional-processing terms before starting proofreading.
+
+Proofreading suggestions never change a transcript automatically. Runs are bound to an immutable source version, and only explicitly selected suggestions are applied. Application creates a new transcript version; the source version remains available for export and restore.
+
 ## Desktop Data Root
 
 The normal macOS desktop data root is:
@@ -26,7 +34,7 @@ The backend can store:
 
 | Location | Contents |
 | --- | --- |
-| `asrbox.db` | Tasks, transcript versions, settings, diagnostics metadata, and provider configuration |
+| `asrbox.db` | Tasks, transcript versions, settings, diagnostics metadata, ASR/LLM provider configuration, proofreading runs, and suggestions |
 | `models/<model-name>/` | Downloaded model files, markers, and model-local caches |
 | `uploads/` | Media managed by transcription tasks |
 | `audio/` | Extracted or normalized audio |
@@ -41,7 +49,7 @@ A development backend uses the repository's `data/` directory unless `ASRBOX_DAT
 
 ## Provider Credentials
 
-Provider API keys are masked in normal API responses but are currently stored as plaintext in `asrbox.db`. They are not encrypted with macOS Keychain. ASRbox backups include the database, so backup archives also contain provider credentials.
+ASR and LLM provider API keys are masked in normal API responses but are currently stored as plaintext in `asrbox.db`. They are not encrypted with macOS Keychain. ASRbox backups include the database, so backup archives also contain provider credentials, proofreading runs, source-version references, reasons, and suggestion text.
 
 Treat the data directory and every backup as sensitive. Do not attach them to public issues or commit them to Git.
 
@@ -53,7 +61,7 @@ Health and root metadata remain available without the token. A manually started 
 
 ## Backups and Diagnostics
 
-Backups can contain the SQLite database and therefore provider credentials, task metadata, filenames, and transcript information. Diagnostic bundles and logs can contain local paths, runtime data, provider URLs, model ids, and error excerpts.
+Backups can contain the SQLite database and therefore provider credentials, task metadata, filenames, transcript information, proofreading runs, and suggestions. Diagnostic bundles do not include LLM keys, proofreading prompts, transcript payloads sent for proofreading, raw LLM responses, or suggestion text. They can contain local paths, runtime data, ASR provider URLs, model ids, and sanitized error excerpts. Proofreading errors are stored and returned in sanitized form; ASRbox does not persist the prompt or raw provider response.
 
 Inspect archives before sharing them. Remove private filenames, transcript content, media, tokens, credentials, and internal endpoints. Use a private security report for sensitive material.
 

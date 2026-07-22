@@ -15,6 +15,10 @@ export const queryKeys = {
   activeDownloads: ['models', 'active-downloads'] as const,
   modelStorage: ['models', 'storage'] as const,
   providers: ['providers'] as const,
+  llmProviderPresets: ['llm-providers', 'presets'] as const,
+  llmProviders: ['llm-providers'] as const,
+  proofreadingRuns: (taskId: string) => ['tasks', taskId, 'proofreading-runs'] as const,
+  proofreadingRun: (taskId: string, runId: string) => ['tasks', taskId, 'proofreading-runs', runId] as const,
   settings: ['settings'] as const,
   runtime: ['runtime-status'] as const,
 };
@@ -54,6 +58,14 @@ export function useModelStorageQuery() {
 
 export function useProvidersQuery() {
   return useQuery({ queryKey: queryKeys.providers, queryFn: () => apiClient.listProviders(), retry: 1 });
+}
+
+export function useLLMProviderPresetsQuery() {
+  return useQuery({ queryKey: queryKeys.llmProviderPresets, queryFn: () => apiClient.listLLMProviderPresets(), retry: 1 });
+}
+
+export function useLLMProvidersQuery() {
+  return useQuery({ queryKey: queryKeys.llmProviders, queryFn: () => apiClient.listLLMProviders(), retry: 1 });
 }
 
 export function useSettingsQuery() {

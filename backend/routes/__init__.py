@@ -9,6 +9,8 @@ def register_routers(app: FastAPI) -> None:
     from backend.routes.events import router as events_router
     from backend.routes.diagnostics import router as diagnostics_router
     from backend.routes.models import router as models_router
+    from backend.routes.llm_providers import router as llm_providers_router
+    from backend.routes.proofreading import router as proofreading_router
     from backend.routes.providers import router as providers_router
     from backend.routes.runtime import router as runtime_router
     from backend.routes.settings import router as settings_router
@@ -22,7 +24,9 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(events_router)
     app.include_router(diagnostics_router)
     app.include_router(models_router)
+    app.include_router(llm_providers_router)
     app.include_router(providers_router)
+    app.include_router(proofreading_router)
     app.include_router(runtime_router)
     app.include_router(settings_router)
     app.include_router(storage_router)

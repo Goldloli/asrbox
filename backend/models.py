@@ -157,6 +157,59 @@ class ProviderHealth(BaseModel):
     models: list[str] = Field(default_factory=list)
 
 
+class LLMProviderPresetResponse(BaseModel):
+    id: str
+    name: str
+    base_url: str
+    requires_api_key: bool
+    local_default: bool = False
+
+
+class LLMProviderPresetListResponse(BaseModel):
+    items: list[LLMProviderPresetResponse]
+
+
+class LLMProviderCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    preset: str = Field(..., min_length=1, max_length=40)
+    base_url: str
+    api_key: str | None = None
+    default_model: str | None = None
+    enabled: bool = True
+
+
+class LLMProviderUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=120)
+    preset: str | None = Field(None, min_length=1, max_length=40)
+    base_url: str | None = None
+    api_key: str | None = None
+    default_model: str | None = None
+    enabled: bool | None = None
+
+
+class LLMProviderResponse(BaseModel):
+    id: str
+    name: str
+    preset: str
+    base_url: str
+    api_key_masked: str | None = None
+    default_model: str | None = None
+    enabled: bool
+    is_local: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class LLMProviderListResponse(BaseModel):
+    items: list[LLMProviderResponse]
+
+
+class LLMProviderTestResponse(BaseModel):
+    ok: bool
+    message: str
+    error_code: str | None = None
+
+
 class ASRSettingsResponse(BaseModel):
     id: int = 1
     default_backend: str
@@ -426,6 +479,53 @@ class TranscriptVersionResponse(BaseModel):
     provider_id: str | None = None
     created_at: datetime
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProofreadingCreateRequest(BaseModel):
+    provider_id: str = Field(..., min_length=1)
+
+
+class ProofreadingApplyRequest(BaseModel):
+    suggestion_ids: list[int] = Field(..., min_length=1)
+
+
+class ProofreadingSuggestionResponse(BaseModel):
+    id: int
+    segment_id: int
+    original_text: str
+    suggested_text: str
+    reason: str
+    resolution: Literal["pending", "applied", "skipped"]
+
+
+class ProofreadingRunResponse(BaseModel):
+    id: str
+    task_id: str
+    source_version_id: int
+    llm_provider_id: str | None = None
+    provider_name: str
+    provider_preset: str
+    model_name: str
+    status: Literal["queued", "running", "completed", "failed", "interrupted", "applied"]
+    total_batches: int
+    completed_batches: int
+    error_code: str | None = None
+    error: str | None = None
+    stale: bool
+    suggestions: list[ProofreadingSuggestionResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    applied_at: datetime | None = None
+
+
+class ProofreadingRunListResponse(BaseModel):
+    items: list[ProofreadingRunResponse]
+
+
+class ProofreadingApplyResponse(BaseModel):
+    run: ProofreadingRunResponse
+    version: TranscriptVersionResponse
 
 
 class SegmentUpdateRequest(BaseModel):

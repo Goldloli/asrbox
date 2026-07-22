@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from '@tanstack/react-router';
-import { DownloadCloud, ListChecks, Settings } from 'lucide-react';
+import { BrainCircuit, DownloadCloud, ListChecks, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
@@ -8,6 +8,7 @@ import asrboxIcon from '../assets/asrbox-icon-256.png';
 const mobileNav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon?: LucideIcon; brand?: boolean }> = [
   { to: '/', labelKey: 'nav.transcribe', brand: true },
   { to: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
+  { to: '/ai', labelKey: 'nav.ai', icon: BrainCircuit },
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
@@ -17,7 +18,7 @@ export function MobileNav() {
   const { t } = useI18n();
 
   return (
-    <nav className="app-shell-surface grid h-16 shrink-0 grid-cols-4 border-t app-border md:hidden">
+    <nav className="app-shell-surface grid h-16 shrink-0 grid-cols-5 border-t app-border md:hidden">
       {mobileNav.map((item) => {
         const Icon = item.icon;
         const active = item.to === '/' ? matchRoute({ to: '/', fuzzy: false }) : matchRoute({ to: item.to, fuzzy: true });

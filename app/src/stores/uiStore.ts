@@ -24,6 +24,7 @@ interface UiStore {
   fontScale: FontScale;
   reducedMotion: ReducedMotionMode;
   exportDirectory: string | null;
+  lastLLMProviderId: string | null;
   shortcuts: ShortcutMap;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: ThemeMode) => void;
@@ -32,6 +33,7 @@ interface UiStore {
   setFontScale: (fontScale: FontScale) => void;
   setReducedMotion: (reducedMotion: ReducedMotionMode) => void;
   setExportDirectory: (exportDirectory: string | null) => void;
+  setLastLLMProviderId: (providerId: string | null) => void;
   setShortcut: (action: ShortcutAction, shortcut: string) => void;
 }
 
@@ -45,6 +47,7 @@ export const useUiStore = create<UiStore>()(
       fontScale: 'standard',
       reducedMotion: 'system',
       exportDirectory: null,
+      lastLLMProviderId: null,
       shortcuts: defaultShortcuts,
       setLocale: (locale) => set({ locale }),
       setTheme: (theme) => set({ theme }),
@@ -53,6 +56,7 @@ export const useUiStore = create<UiStore>()(
       setFontScale: (fontScale) => set({ fontScale }),
       setReducedMotion: (reducedMotion) => set({ reducedMotion }),
       setExportDirectory: (exportDirectory) => set({ exportDirectory }),
+      setLastLLMProviderId: (lastLLMProviderId) => set({ lastLLMProviderId }),
       setShortcut: (action, shortcut) => set((state) => ({
         shortcuts: { ...defaultShortcuts, ...state.shortcuts, [action]: normalizeShortcut(shortcut) },
       })),

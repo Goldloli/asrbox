@@ -65,9 +65,12 @@ def create_app() -> FastAPI:
 
 
 def _mark_interrupted_tasks() -> None:
+    from backend.services.proofreading import mark_interrupted_runs
+
     db = db_session.SessionLocal()
     try:
         mark_interrupted_tasks(db)
+        mark_interrupted_runs(db)
     finally:
         db.close()
 
