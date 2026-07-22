@@ -13,6 +13,7 @@ from backend.models import ModelBenchmarkRequest, ModelBenchmarkResponse, ModelR
 from backend.services import media
 from backend.services import models as model_service
 from backend.services.errors import ASRboxError
+from backend.services import model_storage
 from backend.services.transcribe import transcribe_with_local_model
 
 
@@ -51,6 +52,11 @@ def delete_benchmark(db: Session, benchmark_id: int) -> bool:
 
 
 def run_benchmark(db: Session, request: ModelBenchmarkRequest) -> list[ModelBenchmarkResponse]:
+    with model_storage.model_operation("benchmark"):
+        return _run_benchmark(db, request)
+
+
+def _run_benchmark(db: Session, request: ModelBenchmarkRequest) -> list[ModelBenchmarkResponse]:
     if not request.audio_path:
         raise ValueError("audio_path is required for model benchmark")
     source_path = Path(request.audio_path).expanduser()

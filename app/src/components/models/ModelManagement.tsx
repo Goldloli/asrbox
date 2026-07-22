@@ -18,7 +18,7 @@ export function createModelGroups(
   const downloading = models.filter((model) => model.downloading || progressByModel[model.model_name]);
   const pinned = models.filter((model) => pinnedModelNames.includes(model.model_name));
   const local = models.filter((model) => model.downloaded && !downloading.includes(model) && !pinned.includes(model));
-  const recommended = models.filter((model) => isRecommendedModel(model) && !model.downloaded && !downloading.includes(model) && !pinned.includes(model) && !issues.includes(model));
+  const recommended = models.filter((model) => isRecommendedModel(model) && model.downloaded === false && !downloading.includes(model) && !pinned.includes(model) && !issues.includes(model));
   const available = models.filter(
     (model) => !issues.includes(model) && !downloading.includes(model) && !pinned.includes(model) && !local.includes(model) && !recommended.includes(model),
   );
@@ -68,6 +68,7 @@ export function ModelListRow({
   const isActive = model.downloading || Boolean(progress);
   const isPaused = progress?.status === 'paused';
   const hasDownloadError = Boolean(progress?.error || model.download_error);
+  const storageUnavailable = model.storage_status === 'unavailable' || model.storage_status === 'migrating' || model.storage_status === 'read_only';
 
   return (
     <article className="grid gap-2 rounded-lg border app-control px-3 py-3">
@@ -78,8 +79,8 @@ export function ModelListRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-app">{model.display_name}</h2>
-            <Badge tone={model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
-              {model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
+            <Badge tone={storageUnavailable ? 'danger' : model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
+              {storageUnavailable ? t('settings.modelStorageUnavailable') : model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
             </Badge>
             {pinned && <Badge tone="accent">{t('models.pinned')}</Badge>}
             {model.compatible === false && <Badge tone="danger">{t('common.incompatible')}</Badge>}
@@ -141,7 +142,7 @@ export function ModelListRow({
                     confirmLabel={t('common.delete')}
                     onConfirm={onDelete}
                   >
-                    <Button variant="danger" size="sm">
+                    <Button variant="danger" size="sm" disabled={storageUnavailable}>
                       <Trash2 className="size-4" />
                       {t('common.delete')}
                     </Button>
@@ -162,12 +163,12 @@ export function ModelListRow({
               </Button>
             </>
           ) : hasDownloadError ? (
-            <Button variant="secondary" size="sm" onClick={onRetry}>
+            <Button variant="secondary" size="sm" onClick={onRetry} disabled={storageUnavailable}>
               <RefreshCw className="size-4" />
               {t('common.retry')}
             </Button>
           ) : (
-            <Button variant="secondary" size="sm" onClick={onDownload}>
+            <Button variant="secondary" size="sm" onClick={onDownload} disabled={storageUnavailable}>
               <DownloadCloud className="size-4" />
               {t('common.download')}
             </Button>

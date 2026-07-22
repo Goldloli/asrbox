@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 import os
 import signal
 import sys
@@ -50,14 +51,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--keep-running-sentinel", default=None)
     parser.add_argument("--local-worker-request", default=None)
     parser.add_argument("--local-worker-result", default=None)
+    parser.add_argument("--runtime-check", choices=["mlx"], default=None)
     parser.add_argument("--version", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
+    multiprocessing.freeze_support()
     args = parse_args(argv)
     if args.version:
         print(__version__)
+        return
+    if args.runtime_check == "mlx":
+        from backend.services.platform import mlx_runtime_import_error
+
+        error = mlx_runtime_import_error()
+        if error:
+            print(error, file=sys.stderr)
+            raise SystemExit(1)
+        print("MLX runtime available")
         return
     if args.data_dir:
         os.environ["ASRBOX_DATA_DIR"] = str(Path(args.data_dir).expanduser().resolve())

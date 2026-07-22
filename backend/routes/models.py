@@ -15,6 +15,10 @@ from backend.models import (
     ModelBenchmarkResponse,
     ModelDownloadRequest,
     ModelMigrateRequest,
+    ModelRelocationJobResponse,
+    ModelRelocationStartRequest,
+    ModelStorageCandidateRequest,
+    ModelStorageCandidateResponse,
     ModelRecommendationRequest,
     ModelRecommendationResponse,
     ModelStatusListResponse,
@@ -22,6 +26,7 @@ from backend.models import (
 )
 from backend.services import benchmarks as benchmark_service
 from backend.services import models as model_service
+from backend.services import model_storage as model_storage_service
 from backend.utils.progress import get_progress_manager
 
 router = APIRouter(prefix="/models", tags=["models"])
@@ -97,6 +102,47 @@ async def active_downloads():
 @router.get("/storage", response_model=ModelStorageResponse)
 async def model_storage():
     return ModelStorageResponse(**model_service.storage_summary())
+
+
+@router.post("/storage/plan", response_model=ModelStorageCandidateResponse)
+async def plan_model_storage(request: ModelStorageCandidateRequest, db: Session = Depends(get_db)):
+    return ModelStorageCandidateResponse(
+        **model_storage_service.plan_relocation(
+            request.target_root,
+            request.mode,
+            include_shared_caches=request.include_shared_caches,
+            acknowledge_network=request.acknowledge_network,
+            db=db,
+        )
+    )
+
+
+@router.get("/storage/relocation", response_model=ModelRelocationJobResponse)
+async def model_storage_relocation():
+    return ModelRelocationJobResponse(**model_storage_service.current_relocation())
+
+
+@router.post("/storage/relocation", response_model=ModelRelocationJobResponse, status_code=202)
+async def start_model_storage_relocation(request: ModelRelocationStartRequest, db: Session = Depends(get_db)):
+    plan = model_storage_service.plan_relocation(
+        request.target_root,
+        request.mode,
+        include_shared_caches=request.include_shared_caches,
+        acknowledge_network=request.acknowledge_network,
+        db=db,
+    )
+    if not plan["valid"]:
+        raise HTTPException(status_code=409, detail={"errors": plan["errors"], "conflicts": plan["conflicts"], "blockers": plan["blockers"]})
+    from backend.database.session import SessionLocal
+
+    return ModelRelocationJobResponse(
+        **model_storage_service.start_relocation(request.model_dump(), db_factory=SessionLocal)
+    )
+
+
+@router.post("/storage/relocation/cancel", response_model=ModelRelocationJobResponse)
+async def cancel_model_storage_relocation():
+    return ModelRelocationJobResponse(**model_storage_service.cancel_relocation())
 
 
 @router.post("/cleanup-incomplete")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -11,7 +12,15 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.database.models import ASRProvider
 from backend import config
-from backend.models import BatchFailure, BatchTranscriptionResponse, ModelRecommendationRequest, TranscriptionPreflightResponse, TranscriptionReadinessResponse
+from backend.models import (
+    BatchFailure,
+    BatchTranscriptionResponse,
+    DesktopPathPreflightRequest,
+    DesktopPathTranscriptionRequest,
+    ModelRecommendationRequest,
+    TranscriptionPreflightResponse,
+    TranscriptionReadinessResponse,
+)
 from backend.services.errors import ASRboxError
 from backend.services.media import preflight_media
 from backend.services import models as model_service
@@ -19,9 +28,14 @@ from backend.services import providers as provider_service
 from backend.services import settings as settings_service
 from backend.services import tasks as task_service
 from backend.services.platform import detect_runtime
-from backend.services.uploads import UploadLimitExceeded, save_upload, validate_upload_metadata
+from backend.services.uploads import UploadLimitExceeded, max_batch_files, save_upload, validate_upload_metadata
 
 router = APIRouter(prefix="/transcriptions", tags=["transcriptions"])
+
+
+def _require_desktop_mode() -> None:
+    if os.environ.get("ASRBOX_DESKTOP_MODE") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def _validate_transcription_selection(
@@ -38,6 +52,10 @@ def _validate_transcription_selection(
             raise HTTPException(status_code=422, detail="Local transcription requires a model")
         if model_service.get_model_config(model_name) is None:
             raise HTTPException(status_code=422, detail=f"Unknown local model: {model_name}")
+        if model_service.is_model_downloaded(model_name):
+            compatibility = model_service.check_model_compatibility(model_name)
+            if not compatibility["compatible"]:
+                raise HTTPException(status_code=409, detail=compatibility["message"])
         return
     if not provider_id:
         raise HTTPException(status_code=422, detail="Provider transcription requires a provider")
@@ -203,10 +221,18 @@ def transcription_preflight(
         raise HTTPException(status_code=400, detail={"error_code": exc.code, "message": exc.message}) from exc
     finally:
         path.unlink(missing_ok=True)
+    return _preflight_response(db, file.filename or "audio", result)
+
+
+def _preflight_response(
+    db: Session,
+    filename: str,
+    result: dict,
+) -> TranscriptionPreflightResponse:
     settings = settings_service.get_settings(db)
     readiness = transcription_readiness(db).model_dump()
     return TranscriptionPreflightResponse(
-        filename=file.filename or "audio",
+        filename=filename,
         supported_format=bool(result.get("supported_format")),
         has_audio_stream=bool(result.get("has_audio_stream")),
         duration_ms=result.get("duration_ms"),
@@ -222,6 +248,67 @@ def transcription_preflight(
         warnings=list(result.get("warnings") or []),
         readiness={**readiness, "default_language": settings.default_language},
     )
+
+
+@router.post("/preflight/path", response_model=TranscriptionPreflightResponse)
+def transcription_path_preflight(
+    request: DesktopPathPreflightRequest,
+    db: Session = Depends(get_db),
+):
+    _require_desktop_mode()
+    path = Path(request.path).expanduser()
+    if not path.is_file():
+        raise HTTPException(status_code=400, detail="Selected media file is unavailable")
+    try:
+        result = preflight_media(path)
+    except ASRboxError as exc:
+        raise HTTPException(status_code=400, detail={"error_code": exc.code, "message": exc.message}) from exc
+    return _preflight_response(db, path.name, result)
+
+
+@router.post("/path", response_model=BatchTranscriptionResponse)
+def create_path_transcriptions(
+    request: DesktopPathTranscriptionRequest,
+    db: Session = Depends(get_db),
+):
+    _require_desktop_mode()
+    _validate_transcription_selection(
+        db,
+        backend=request.backend,
+        model_name=request.model_name,
+        provider_id=request.provider_id,
+    )
+    if len(request.paths) > max_batch_files():
+        raise HTTPException(status_code=413, detail=f"Batch contains too many files; maximum is {max_batch_files()}")
+
+    options = _postprocess_options(
+        vad=None,
+        word_timestamps=None,
+        postprocess_mode=request.postprocess_mode,
+        traditional_to_simplified=request.traditional_to_simplified,
+    )
+    batch_id = str(uuid.uuid4()) if len(request.paths) > 1 else None
+    items = []
+    failures = []
+    for value in request.paths:
+        path = Path(value).expanduser()
+        try:
+            items.append(
+                task_service.create_task_from_path(
+                    db,
+                    path=path,
+                    backend=request.backend,
+                    model_name=request.model_name,
+                    provider_id=request.provider_id,
+                    language=request.language,
+                    output_formats=request.output_formats,
+                    options=options,
+                    batch_id=batch_id,
+                )
+            )
+        except (OSError, ValueError) as exc:
+            failures.append(BatchFailure(filename=path.name or "media", error=str(exc)))
+    return BatchTranscriptionResponse(items=items, failures=failures, total=len(items), batch_id=batch_id)
 
 
 @router.post("")

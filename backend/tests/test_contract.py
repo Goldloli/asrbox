@@ -41,9 +41,15 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("GET", "/api-info"),
         ("GET", "/transcriptions/readiness"),
         ("POST", "/transcriptions/preflight"),
+        ("POST", "/transcriptions/preflight/path"),
+        ("POST", "/transcriptions/path"),
         ("GET", "/models/status"),
         ("GET", "/models/active-downloads"),
         ("GET", "/models/storage"),
+        ("POST", "/models/storage/plan"),
+        ("GET", "/models/storage/relocation"),
+        ("POST", "/models/storage/relocation"),
+        ("POST", "/models/storage/relocation/cancel"),
         ("GET", "/tasks"),
         ("GET", "/tasks/active"),
         ("GET", "/tasks/{task_id}"),
@@ -147,8 +153,40 @@ def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:
         "installed_source",
         "installed_repo_id",
         "last_verified_at",
+        "storage_status",
+        "storage_error",
     ]:
         assert key in model
+    downloaded_schema = client.app.openapi()["components"]["schemas"]["ASRModelStatus"]["properties"]["downloaded"]
+    assert {item.get("type") for item in downloaded_schema["anyOf"]} == {"boolean", "null"}
+
+
+def test_model_storage_contract_is_typed(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    schema = client.app.openapi()
+    routes = schema["paths"]
+    assert routes["/models/storage"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("ModelStorageResponse")
+    assert routes["/models/storage/plan"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("ModelStorageCandidateResponse")
+    assert routes["/models/storage/relocation"]["post"]["responses"]["202"]["content"]["application/json"]["schema"]["$ref"].endswith("ModelRelocationJobResponse")
+    candidate_fields = schema["components"]["schemas"]["ModelStorageCandidateResponse"]["properties"]
+    assert "required_headroom_bytes" in candidate_fields
+    fields = schema["components"]["schemas"]["ModelStorageResponse"]["properties"]
+    assert {
+        "root",
+        "models_dir",
+        "status",
+        "reason",
+        "available",
+        "writable",
+        "cache_dirs",
+        "cache_usage",
+        "cache_bytes",
+        "allowed_roots",
+        "root_locked",
+        "runtime",
+        "used_bytes",
+        "free_bytes",
+    } <= fields.keys()
 
 
 def test_readiness_and_active_tasks_contract_fields_are_stable(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ import { Badge } from './weiui';
 const toneByStatus: Record<TaskStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'accent'> = {
   created: 'neutral',
   queued: 'neutral',
+  importing: 'accent',
   preprocessing: 'accent',
   waiting_model: 'warning',
   downloading_model: 'warning',

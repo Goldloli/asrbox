@@ -49,6 +49,8 @@ A development backend uses the repository's `data/` directory unless `ASRBOX_DAT
 
 Docker stores the same classes of data under `/data`, normally backed by the `asrbox-data` named volume. Removing or recreating the application container does not remove that volume. `docker compose down -v` or an explicit `docker volume rm` permanently deletes it. Container backups and migrated volumes have the same sensitivity as desktop backups.
 
+Model weights and framework caches may instead use a user-selected desktop volume or an operator-declared Docker bind mount. The configured path remains recorded if that storage disconnects; ASRbox does not silently recreate it on the system disk. A relocation keeps the old model data until the target is copied, verified, and activated. Detected global Hugging Face, ModelScope, or Torch caches may be shared with other software and are excluded unless the user explicitly accepts the shared-cache warning.
+
 ## Provider Credentials
 
 ASR and LLM provider API keys are masked in normal API responses but are currently stored as plaintext in `asrbox.db`. They are not encrypted with macOS Keychain. ASRbox backups include the database, so backup archives also contain provider credentials, proofreading runs, source-version references, reasons, and suggestion text.

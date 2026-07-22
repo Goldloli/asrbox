@@ -763,6 +763,30 @@ def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monke
     assert calls[0][1]["language"] == "zh"
 
 
+def test_online_provider_remains_available_when_model_storage_is_disconnected(tmp_path: Path, monkeypatch) -> None:
+    from backend import config
+
+    monkeypatch.setattr(
+        "backend.providers.bcut.BcutProvider.transcribe",
+        lambda self, audio_path, options: TranscriptionResult(text="online", provider_id="bcut", segments=[]),
+    )
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    client = make_client(tmp_path)
+    missing = tmp_path / "disconnected-models"
+    config.set_model_storage_root(missing)
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("online.wav", b"audio", "audio/wav")},
+        data={"backend": "provider", "provider_id": "bcut", "language": "zh"},
+    )
+
+    assert response.status_code == 200
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
+    assert task["text"] == "online"
+    assert not missing.exists()
+
+
 def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypatch) -> None:
     calls: list[tuple[str, str, dict]] = []
 
@@ -1597,6 +1621,69 @@ def test_preflight_and_storage_usage_endpoints(tmp_path: Path, monkeypatch) -> N
     assert "removed" in cleanup.json()
 
 
+def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path: Path, monkeypatch) -> None:
+    from backend.database import session as db_session
+    from backend.services import tasks as task_service
+
+    source = tmp_path / "large-source.wav"
+    source.write_bytes(b"source-media")
+    monkeypatch.setattr(task_service, "start_task_in_background", lambda _task_id: None)
+    client = make_client(tmp_path)
+
+    blocked = client.post(
+        "/transcriptions/path",
+        json={"paths": [str(source)], "backend": "local", "model_name": "whisper-base"},
+    )
+    assert blocked.status_code == 404
+
+    monkeypatch.setenv("ASRBOX_DESKTOP_MODE", "1")
+    created = client.post(
+        "/transcriptions/path",
+        json={"paths": [str(source)], "backend": "local", "model_name": "whisper-base"},
+    )
+    assert created.status_code == 200
+    task = created.json()["items"][0]
+    assert task["status"] == "importing"
+    assert "_ingest_source_path" not in task["options"]
+    managed = tmp_path / task["audio_path"]
+    assert not managed.exists()
+
+    def fake_copy(copy_source: Path, destination: Path, *, on_progress, **_kwargs) -> int:
+        assert copy_source == source
+        on_progress(0, 12)
+        on_progress(6, 12)
+        destination.write_bytes(copy_source.read_bytes())
+        on_progress(12, 12)
+        return 12
+
+    monkeypatch.setattr(task_service, "copy_local_path", fake_copy)
+    db = db_session.SessionLocal()
+    try:
+        row = task_service.get_task_row(db, task["id"])
+        assert row is not None
+        task_service._import_task_media(db, row)
+        db.refresh(row)
+        assert row.progress == 9
+        assert "_ingest_source_path" not in row.options_json
+    finally:
+        db.close()
+    assert managed.read_bytes() == b"source-media"
+    assert source.read_bytes() == b"source-media"
+
+
+def test_desktop_path_preflight_does_not_disclose_paths_outside_desktop_mode(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    existing = tmp_path / "exists.wav"
+    existing.write_bytes(b"audio")
+
+    existing_response = client.post("/transcriptions/preflight/path", json={"path": str(existing)})
+    missing_response = client.post("/transcriptions/preflight/path", json={"path": str(tmp_path / "missing.wav")})
+
+    assert existing_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert existing_response.json() == missing_response.json()
+
+
 def test_model_storage_cleanup_and_cancel_download(tmp_path: Path, monkeypatch) -> None:
     release = threading.Event()
 
@@ -1633,6 +1720,33 @@ def test_model_storage_cleanup_and_cancel_download(tmp_path: Path, monkeypatch) 
     cleanup = client.post("/models/cleanup-incomplete")
     assert cleanup.status_code == 200
     assert "whisper-small" in cleanup.json()["removed"]
+
+
+def test_unavailable_model_storage_is_not_reported_as_missing_or_recreated(tmp_path: Path, monkeypatch) -> None:
+    from backend import config
+
+    client = make_client(tmp_path)
+    missing = tmp_path / "disconnected-volume"
+    config.set_model_storage_root(missing)
+
+    storage = client.get("/models/storage")
+    assert storage.status_code == 200
+    assert storage.json()["status"] == "unavailable"
+    assert storage.json()["root"] == str(missing)
+    assert all(item["downloaded"] is None for item in storage.json()["models"])
+    statuses = client.get("/models/status").json()["models"]
+    assert all(item["storage_status"] == "unavailable" for item in statuses)
+    assert all(item["storage_error"] == "模型存储位置不可用" for item in statuses)
+    assert all(item["downloaded"] is None for item in statuses)
+
+    download = client.post("/models/download", json={"model_name": "whisper-base"})
+    assert download.status_code == 409
+    assert download.json()["error_code"] == "MODEL_STORAGE_UNAVAILABLE"
+    filesystem = client.get("/health/filesystem")
+    assert filesystem.status_code == 200
+    model_check = next(item for item in filesystem.json()["directories"] if item["label"] == "models")
+    assert model_check["error"] == "MODEL_STORAGE_UNAVAILABLE"
+    assert not missing.exists()
 
 
 def test_model_download_can_pause_resume_and_stop(tmp_path: Path, monkeypatch) -> None:
@@ -2013,7 +2127,14 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert "asrbox-server" in command
     assert "accelerate" in command
     assert "mlx_whisper" in command
+    assert "mlx.core" in command
+    assert "mlx._reprlib_fix" in command
+    assert command[command.index("--collect-binaries") + 1] == "mlx"
+    assert command.count("--collect-data") == 3
+    assert command[command.index("--collect-data", command.index("--collect-data") + 1) + 1] == "mlx"
     assert command[command.index("--collect-data") + 1] == "funasr"
+    mlx_data_index = command.index("--collect-data", command.index("--collect-data", command.index("--collect-data") + 1) + 1)
+    assert command[mlx_data_index + 1] == "mlx_whisper"
     assert "--copy-metadata" not in command
     assert command[command.index("--exclude-module") + 1] == "torchcodec"
 
@@ -2029,14 +2150,53 @@ def test_build_binary_dry_run_and_server_args() -> None:
 
     version_args = parse_args(["--version"])
     assert version_args.version is True
+    runtime_args = parse_args(["--runtime-check", "mlx"])
+    assert runtime_args.runtime_check == "mlx"
+
+    build_script = (Path(__file__).resolve().parents[2] / "scripts" / "build-server.sh").read_text(encoding="utf-8")
+    assert "BUILD_ARGS+=(--mlx)" in build_script
+    assert 'backend/build_binary.py "${BUILD_ARGS[@]}"' in build_script
+    assert 'MLX_METALLIB="dist/asrbox-server/_internal/mlx/lib/mlx.metallib"' in build_script
+    assert 'MLX_BUNDLE_METALLIB="dist/asrbox-server/_internal/mlx.metallib"' in build_script
+    assert 'cp "$MLX_METALLIB" "$MLX_BUNDLE_METALLIB"' in build_script
+
+
+def test_mlx_runtime_import_errors_are_actionable(monkeypatch) -> None:
+    from backend.services import platform as platform_service
+
+    monkeypatch.setattr(platform_service, "module_available", lambda _name: True)
+    monkeypatch.setattr(
+        platform_service,
+        "module_import_error",
+        lambda name: "ImportError: Library not loaded: @rpath/libjaccl.dylib" if name == "mlx.core" else None,
+    )
+
+    assert platform_service.mlx_runtime_import_error() == (
+        "mlx.core import failed: ImportError: Library not loaded: @rpath/libjaccl.dylib"
+    )
+
+
+def test_mlx_model_compatibility_uses_runtime_import(monkeypatch) -> None:
+    from backend.services import models as model_service
+
+    monkeypatch.setattr(model_service.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(model_service.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(model_service, "mlx_runtime_import_error", lambda: "mlx.core import failed: missing libjaccl")
+    model = model_service.get_model_config("mlx-whisper-turbo")
+
+    assert model is not None
+    assert model_service._model_runtime_error(model) == "mlx.core import failed: missing libjaccl"
 
 
 def test_server_disables_xet_for_controllable_downloads(tmp_path: Path, monkeypatch) -> None:
     from backend import server
 
+    freeze_support_calls = []
     monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    monkeypatch.setattr(server.multiprocessing, "freeze_support", lambda: freeze_support_calls.append(True))
     monkeypatch.setattr(server.uvicorn, "run", lambda *args, **kwargs: None)
 
     server.main(["--port", "17495", "--data-dir", str(tmp_path)])
 
+    assert freeze_support_calls == [True]
     assert os.environ["HF_HUB_DISABLE_XET"] == "1"

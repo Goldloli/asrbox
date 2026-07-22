@@ -30,6 +30,7 @@ export function ModelDownloadCard({
 }) {
   const { t } = useI18n();
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
+  const storageUnavailable = model.storage_status !== 'available';
 
   return (
     <Panel className="overflow-hidden">
@@ -57,8 +58,8 @@ export function ModelDownloadCard({
             >
               <Star className={pinned ? 'size-4 fill-current' : 'size-4'} />
             </Button>
-            <Badge tone={model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
-              {model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
+            <Badge tone={storageUnavailable ? 'danger' : model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
+              {storageUnavailable ? t('settings.modelStorageUnavailable') : model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
             </Badge>
           </div>
         </div>
@@ -108,7 +109,7 @@ export function ModelDownloadCard({
               </Button>
             </ConfirmAction>
           ) : (
-            <Button variant="secondary" size="sm" onClick={onDownload}>
+            <Button variant="secondary" size="sm" onClick={onDownload} disabled={storageUnavailable}>
               <DownloadCloud className="size-4" />
               {t('common.download')}
             </Button>

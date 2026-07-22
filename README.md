@@ -31,6 +31,12 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
 - 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
 
+### LLM 核验校对
+
+接入 Ollama 或任意 OpenAI 兼容 LLM，自动核对转写字幕中的错字、漏字和明显识别错误，并给出可直接套用的修改建议：
+
+![LLM 核验校对演示](assets/asrbox-llm-proofread.gif)
+
 ## Docker 部署
 
 需要 Docker Engine 24+ 和 Docker Compose v2。建议至少准备 8 GB 内存和 15 GB 可用空间；大模型还需要更多空间与内存。
@@ -50,6 +56,8 @@ docker compose logs -f asrbox
 ```
 
 数据库、媒体、字幕、设置、模型和缓存都在名为 `asrbox-data` 的 Docker volume 中。`docker compose down` 不会删除它；`docker compose down -v` 会永久删除数据。
+
+模型与 Hugging Face、ModelScope、Torch 缓存可在“设置 → 存储与诊断”中迁移到统一存储根。桌面版可选择本地或已挂载外接磁盘；Docker 版必须先在 `compose.yaml` 中挂载宿主机目录并通过 `ASRBOX_MODEL_STORAGE_ROOTS` 声明允许的容器挂载点，Web 页面只显示容器路径。完整配置与恢复步骤见 [Docker 部署指南](docs/docker.md)。
 
 默认配置只绑定 `127.0.0.1`。手机或其他局域网设备访问时，在 `.env` 中设置：
 

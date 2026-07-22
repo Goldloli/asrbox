@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.services.uploads import UploadLimitExceeded, save_upload
+from backend.services import uploads
+from backend.services.uploads import UploadLimitExceeded, copy_local_path, save_upload
 
 
 def make_client(tmp_path: Path, monkeypatch) -> TestClient:
@@ -33,6 +34,56 @@ def test_save_upload_streams_valid_file(tmp_path: Path) -> None:
 
     assert written == 5
     assert destination.read_bytes() == b"12345"
+
+
+def test_copy_local_path_streams_with_progress_when_clone_is_unavailable(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.wav"
+    destination = tmp_path / "managed" / "target.wav"
+    source.write_bytes(b"123456")
+    progress = []
+    monkeypatch.setattr(uploads, "_try_clone_file", lambda *_args: False)
+
+    copied = copy_local_path(source, destination, on_progress=lambda current, total: progress.append((current, total)), chunk_size=2)
+
+    assert copied == 6
+    assert destination.read_bytes() == b"123456"
+    assert progress == [(0, 6), (2, 6), (4, 6), (6, 6)]
+
+
+def test_copy_local_path_uses_clone_when_available(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.wav"
+    destination = tmp_path / "target.wav"
+    source.write_bytes(b"audio")
+    progress = []
+
+    def fake_clone(clone_source: Path, clone_destination: Path) -> bool:
+        clone_destination.write_bytes(clone_source.read_bytes())
+        return True
+
+    monkeypatch.setattr(uploads, "_try_clone_file", fake_clone)
+
+    copy_local_path(source, destination, on_progress=lambda current, total: progress.append((current, total)))
+
+    assert destination.read_bytes() == b"audio"
+    assert progress == [(0, 5), (5, 5)]
+
+
+def test_copy_local_path_failure_preserves_source_and_removes_partial_target(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "source.wav"
+    destination = tmp_path / "target.wav"
+    source.write_bytes(b"original")
+    monkeypatch.setattr(uploads, "_try_clone_file", lambda *_args: False)
+
+    def fail_after_first_chunk(current: int, _total: int) -> None:
+        if current:
+            raise OSError("disk disconnected")
+
+    with pytest.raises(OSError, match="disk disconnected"):
+        copy_local_path(source, destination, on_progress=fail_after_first_chunk, chunk_size=2)
+
+    assert source.read_bytes() == b"original"
+    assert not destination.exists()
+    assert not destination.with_name(f"{destination.name}.importing").exists()
 
 
 def test_transcription_rejects_oversized_file_before_task_creation(tmp_path: Path, monkeypatch) -> None:

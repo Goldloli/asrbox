@@ -42,6 +42,21 @@ Compose 默认值：
 
 修改 `.env` 后运行 `docker compose up -d` 应用配置。
 
+### 单独挂载模型存储
+
+默认模型和下载缓存位于 `/data/models` 与 `/data/cache`。如需使用大容量磁盘，先停止正在进行的本地转写和模型下载，然后取消 `compose.yaml` 中可选 bind mount 的注释，并在 `.env` 中设置：
+
+```dotenv
+ASRBOX_MODEL_STORAGE_HOST_PATH=/宿主机/大容量磁盘/asrbox-models
+ASRBOX_MODEL_STORAGE_ROOTS=/data,/model-storage
+```
+
+宿主机目录必须预先存在，并允许容器内 UID/GID `10001:10001` 读写。重新创建容器后，进入“设置 → 存储与诊断”，从允许的挂载点中选择 `/model-storage`，再选择“移动已有模型”或“使用目标文件夹中的已有模型”。Web 页面显示、复制的都是容器路径，浏览器不能选择或打开 Docker 宿主机目录。
+
+统一目录结构为 `<root>/models` 和 `<root>/cache/{huggingface,modelscope,torch,xdg}`。移动会暂时保留两份数据，需要目标磁盘具有足够空间；ASRbox 完成复制和校验、切换配置后才清理旧目录。目标冲突不会被覆盖。全局共享缓存只有在单独确认后才会纳入迁移。
+
+如果 `/model-storage` 未挂载、磁盘断开或权限失效，页面显示“模型存储位置不可用”，本地模型操作会停止，且不会回退 `/data` 或重新下载。恢复同一挂载后会自动重新识别模型。迁移成功但旧目录清理失败时，根据页面列出的旧路径手动核对后再删除；不要同时删除新旧两份。
+
 ## 数据、备份与恢复
 
 容器内 `/data` 包含数据库、媒体、音频、字幕版本、导出、模型、下载缓存、设置和 Provider 密钥。默认映射到 `asrbox-data` named volume。

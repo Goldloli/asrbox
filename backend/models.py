@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 TaskStatus = Literal[
     "created",
     "queued",
+    "importing",
     "preprocessing",
     "waiting_model",
     "downloading_model",
@@ -62,7 +63,7 @@ class ASRModelStatus(BaseModel):
     supports_word_timestamps: bool
     supports_diarization: bool
     supports_streaming: bool
-    downloaded: bool
+    downloaded: bool | None
     downloading: bool
     loaded: bool
     error: str | None = None
@@ -78,6 +79,8 @@ class ASRModelStatus(BaseModel):
     installed_source: str | None = None
     installed_repo_id: str | None = None
     last_verified_at: str | None = None
+    storage_status: Literal["available", "read_only", "unavailable", "migrating"] = "available"
+    storage_error: str | None = None
 
 
 class ModelStatusListResponse(BaseModel):
@@ -91,6 +94,67 @@ class ModelDownloadRequest(BaseModel):
 class ModelMigrateRequest(BaseModel):
     source: str | None = None
     destination: str | None = None
+
+
+ModelStorageStatus = Literal["available", "read_only", "unavailable", "migrating"]
+ModelRelocationMode = Literal["move", "adopt"]
+
+
+class ModelCacheUsage(BaseModel):
+    name: str
+    path: str
+    size_bytes: int
+    shared: bool = False
+    selected: bool = True
+    warning: str | None = None
+
+
+class ModelStorageCandidateRequest(BaseModel):
+    target_root: str
+    mode: ModelRelocationMode
+    include_shared_caches: bool = False
+    acknowledge_network: bool = False
+
+
+class ModelStorageCandidateResponse(BaseModel):
+    target_root: str
+    mode: ModelRelocationMode
+    valid: bool
+    writable: bool
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    valid_models: list[str] = Field(default_factory=list)
+    incomplete_models: list[str] = Field(default_factory=list)
+    caches: list[ModelCacheUsage] = Field(default_factory=list)
+    required_bytes: int = 0
+    required_headroom_bytes: int = 0
+    free_bytes: int | None = None
+    network_filesystem: bool = False
+
+
+class ModelRelocationStartRequest(ModelStorageCandidateRequest):
+    pass
+
+
+class ModelRelocationJobResponse(BaseModel):
+    id: str | None = None
+    status: Literal["idle", "running", "cancelling", "cancelled", "complete", "failed"] = "idle"
+    phase: str = "idle"
+    mode: ModelRelocationMode | None = None
+    source_root: str | None = None
+    target_root: str | None = None
+    current_item: str | None = None
+    copied_bytes: int = 0
+    total_bytes: int = 0
+    progress: float = 0
+    warnings: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    cleanup_required: bool = False
+    cleanup_paths: list[str] = Field(default_factory=list)
+    error_code: str | None = None
+    error: str | None = None
 
 
 class TranscriptSegment(BaseModel):
@@ -339,6 +403,8 @@ class RuntimeStatusResponse(BaseModel):
     diarization_ready: bool
     mlx_available: bool = False
     mlx_whisper_available: bool = False
+    mlx_import_error: str | None = None
+    mlx_whisper_import_error: str | None = None
     qwen3_asr_available: bool = False
     transformers_qwen3_asr_available: bool = False
     data_dir: str
@@ -405,12 +471,26 @@ class ModelStorageItem(BaseModel):
     exists: bool
     size_bytes: int
     size_on_disk_mb: float
-    downloaded: bool
+    downloaded: bool | None
 
 
 class ModelStorageResponse(BaseModel):
+    root: str
     models_dir: str
     models: list[ModelStorageItem]
+    status: ModelStorageStatus = "available"
+    reason: str | None = None
+    detail: str | None = None
+    available: bool = True
+    writable: bool = True
+    cache_dirs: dict[str, str] = Field(default_factory=dict)
+    cache_usage: list[ModelCacheUsage] = Field(default_factory=list)
+    cache_bytes: int = 0
+    allowed_roots: list[str] = Field(default_factory=list)
+    root_locked: bool = False
+    runtime: Literal["desktop", "container"] = "desktop"
+    network_filesystem: bool = False
+    filesystem_type: str | None = None
     used_bytes: int
     free_bytes: int | None = None
     total_bytes: int | None = None
@@ -466,6 +546,21 @@ class TranscriptionPreflightResponse(BaseModel):
     chunk_count: int
     warnings: list[str] = Field(default_factory=list)
     readiness: dict[str, Any] = Field(default_factory=dict)
+
+
+class DesktopPathPreflightRequest(BaseModel):
+    path: str
+
+
+class DesktopPathTranscriptionRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=32)
+    backend: str = "local"
+    model_name: str | None = None
+    provider_id: str | None = None
+    language: str | None = None
+    output_formats: list[str] = Field(default_factory=lambda: ["txt", "srt"])
+    postprocess_mode: str | None = None
+    traditional_to_simplified: bool | None = None
 
 
 class TranscriptVersionResponse(BaseModel):

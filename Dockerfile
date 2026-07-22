@@ -31,6 +31,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MODELSCOPE_CACHE=/data/cache/modelscope \
     TORCH_HOME=/data/cache/torch \
     XDG_CACHE_HOME=/data/cache \
+    ASRBOX_MODEL_STORAGE_ROOTS=/data \
     HOME=/data/home
 
 RUN apt-get update \

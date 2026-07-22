@@ -17,7 +17,7 @@ import { ErrorDiagnosticsPanel, FilterCheckboxGroup, Metric, TaskRow, useTaskMut
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { downloadUrl } from '../lib/downloads';
 
-const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
+const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'importing', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
 type ErrorFilter = 'all' | 'with' | 'without';
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];

@@ -3,6 +3,7 @@ import { useServerStore } from '../stores/serverStore';
 export type TaskStatus =
   | 'created'
   | 'queued'
+  | 'importing'
   | 'preprocessing'
   | 'waiting_model'
   | 'downloading_model'
@@ -96,6 +97,17 @@ export interface BatchTranscriptionResponse {
   total?: number;
 }
 
+export interface PathTranscriptionInput {
+  paths: string[];
+  backend: string;
+  modelName?: string;
+  providerId?: string;
+  language?: string;
+  outputFormats: string[];
+  postprocessMode?: string;
+  traditionalToSimplified?: boolean;
+}
+
 export interface ModelStatus {
   model_name: string;
   display_name: string;
@@ -110,7 +122,7 @@ export interface ModelStatus {
   supports_word_timestamps: boolean;
   supports_diarization: boolean;
   supports_streaming: boolean;
-  downloaded: boolean;
+  downloaded: boolean | null;
   downloading: boolean;
   loaded: boolean;
   error?: string | null;
@@ -126,6 +138,8 @@ export interface ModelStatus {
   installed_source?: string | null;
   installed_repo_id?: string | null;
   last_verified_at?: string | null;
+  storage_status: 'available' | 'read_only' | 'unavailable' | 'migrating';
+  storage_error?: string | null;
 }
 
 export interface ModelProgress {
@@ -145,16 +159,83 @@ export interface ModelProgress {
 export type ActiveDownloadsResponse = ModelProgress[] | { items?: ModelProgress[]; downloads?: ModelProgress[] };
 
 export interface ModelStorage {
-  models_dir?: string;
-  total_bytes?: number;
-  used_bytes?: number;
-  free_bytes?: number;
+  root: string;
+  models_dir: string;
+  status: 'available' | 'read_only' | 'unavailable' | 'migrating';
+  reason?: string | null;
+  detail?: string | null;
+  available: boolean;
+  writable: boolean;
+  cache_dirs: Record<string, string>;
+  cache_usage: ModelCacheUsage[];
+  cache_bytes: number;
+  allowed_roots: string[];
+  root_locked: boolean;
+  runtime: 'desktop' | 'container';
+  network_filesystem: boolean;
+  filesystem_type?: string | null;
+  total_bytes?: number | null;
+  used_bytes: number;
+  free_bytes?: number | null;
   models?: Array<{
     model_name: string;
     size_bytes?: number;
     path?: string;
     last_modified?: string;
   }>;
+}
+
+export interface ModelCacheUsage {
+  name: string;
+  path: string;
+  size_bytes: number;
+  shared: boolean;
+  selected: boolean;
+  warning?: string | null;
+}
+
+export interface ModelStorageCandidate {
+  target_root: string;
+  mode: 'move' | 'adopt';
+  valid: boolean;
+  writable: boolean;
+  errors: string[];
+  warnings: string[];
+  conflicts: string[];
+  blockers: string[];
+  valid_models: string[];
+  incomplete_models: string[];
+  caches: ModelCacheUsage[];
+  required_bytes: number;
+  required_headroom_bytes: number;
+  free_bytes?: number | null;
+  network_filesystem: boolean;
+}
+
+export interface ModelRelocationRequest {
+  target_root: string;
+  mode: 'move' | 'adopt';
+  include_shared_caches: boolean;
+  acknowledge_network: boolean;
+}
+
+export interface ModelRelocationJob {
+  id?: string | null;
+  status: 'idle' | 'running' | 'cancelling' | 'cancelled' | 'complete' | 'failed';
+  phase: string;
+  mode?: 'move' | 'adopt' | null;
+  source_root?: string | null;
+  target_root?: string | null;
+  current_item?: string | null;
+  copied_bytes: number;
+  total_bytes: number;
+  progress: number;
+  warnings: string[];
+  conflicts: string[];
+  cleanup_required: boolean;
+  cleanup_paths: string[];
+  error_code?: string | null;
+  error?: string | null;
 }
 
 export interface StorageCleanupOptions {
@@ -392,10 +473,39 @@ class ApiClient {
     return response.json();
   }
 
-  private async formRequest<T>(path: string, form: FormData): Promise<T> {
+  private async formRequest<T>(path: string, form: FormData, onUploadProgress?: (progress: number) => void): Promise<T> {
     const headers = new Headers();
     const apiToken = useServerStore.getState().apiToken;
     if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`);
+    if (onUploadProgress) {
+      return new Promise<T>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', `${this.baseUrl()}${path}`);
+        if (apiToken) request.setRequestHeader('Authorization', `Bearer ${apiToken}`);
+        request.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable && event.total > 0) onUploadProgress(Math.round((event.loaded / event.total) * 100));
+        });
+        request.addEventListener('load', () => {
+          if (request.status < 200 || request.status >= 300) {
+            try {
+              const body = JSON.parse(request.responseText) as { detail?: unknown; message?: unknown; error?: unknown };
+              const detail = body.detail ?? body.message ?? body.error ?? `HTTP ${request.status}`;
+              reject(new Error(typeof detail === 'string' ? detail : JSON.stringify(detail)));
+            } catch {
+              reject(new Error(`HTTP ${request.status}`));
+            }
+            return;
+          }
+          try {
+            resolve(JSON.parse(request.responseText) as T);
+          } catch {
+            reject(new Error('Backend returned an invalid JSON response'));
+          }
+        });
+        request.addEventListener('error', () => reject(new Error('Media upload failed')));
+        request.send(form);
+      });
+    }
     const response = await fetch(`${this.baseUrl()}${path}`, {
       method: 'POST',
       body: form,
@@ -413,10 +523,17 @@ class ApiClient {
     return this.request<TranscriptionReadiness>('/transcriptions/readiness');
   }
 
-  async preflightTranscription(file: File) {
+  async preflightTranscription(file: File, onUploadProgress?: (progress: number) => void) {
     const form = new FormData();
     form.append('file', file);
-    return this.formRequest<TranscriptionPreflight>('/transcriptions/preflight', form);
+    return this.formRequest<TranscriptionPreflight>('/transcriptions/preflight', form, onUploadProgress);
+  }
+
+  preflightPath(path: string) {
+    return this.request<TranscriptionPreflight>('/transcriptions/preflight/path', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
   }
 
   async createTranscription(input: {
@@ -428,6 +545,7 @@ class ApiClient {
     outputFormats: string[];
     postprocessMode?: string;
     traditionalToSimplified?: boolean;
+    onUploadProgress?: (progress: number) => void;
   }) {
     const form = new FormData();
     form.append('file', input.file);
@@ -438,7 +556,7 @@ class ApiClient {
     form.append('output_formats', JSON.stringify(input.outputFormats));
     if (input.postprocessMode) form.append('postprocess_mode', input.postprocessMode);
     if (input.traditionalToSimplified != null) form.append('traditional_to_simplified', String(input.traditionalToSimplified));
-    return this.formRequest<TranscriptionTask>('/transcriptions', form);
+    return this.formRequest<TranscriptionTask>('/transcriptions', form, input.onUploadProgress);
   }
 
   async createBatchTranscription(input: {
@@ -450,6 +568,7 @@ class ApiClient {
     outputFormats: string[];
     postprocessMode?: string;
     traditionalToSimplified?: boolean;
+    onUploadProgress?: (progress: number) => void;
   }) {
     const form = new FormData();
     input.files.forEach((file) => form.append('files', file));
@@ -460,7 +579,23 @@ class ApiClient {
     form.append('output_formats', JSON.stringify(input.outputFormats));
     if (input.postprocessMode) form.append('postprocess_mode', input.postprocessMode);
     if (input.traditionalToSimplified != null) form.append('traditional_to_simplified', String(input.traditionalToSimplified));
-    return this.formRequest<BatchTranscriptionResponse>('/transcriptions/batch', form);
+    return this.formRequest<BatchTranscriptionResponse>('/transcriptions/batch', form, input.onUploadProgress);
+  }
+
+  createPathTranscriptions(input: PathTranscriptionInput) {
+    return this.request<BatchTranscriptionResponse>('/transcriptions/path', {
+      method: 'POST',
+      body: JSON.stringify({
+        paths: input.paths,
+        backend: input.backend,
+        model_name: input.modelName,
+        provider_id: input.providerId,
+        language: input.language,
+        output_formats: input.outputFormats,
+        postprocess_mode: input.postprocessMode,
+        traditional_to_simplified: input.traditionalToSimplified,
+      }),
+    });
   }
 
   listTasks() {
@@ -547,6 +682,22 @@ class ApiClient {
 
   getModelStorage() {
     return this.request<ModelStorage>('/models/storage');
+  }
+
+  planModelStorage(request: ModelRelocationRequest) {
+    return this.request<ModelStorageCandidate>('/models/storage/plan', { method: 'POST', body: JSON.stringify(request) });
+  }
+
+  startModelStorageRelocation(request: ModelRelocationRequest) {
+    return this.request<ModelRelocationJob>('/models/storage/relocation', { method: 'POST', body: JSON.stringify(request) });
+  }
+
+  getModelStorageRelocation() {
+    return this.request<ModelRelocationJob>('/models/storage/relocation');
+  }
+
+  cancelModelStorageRelocation() {
+    return this.request<ModelRelocationJob>('/models/storage/relocation/cancel', { method: 'POST' });
   }
 
   cleanupStorage(options: StorageCleanupOptions, dryRun = false) {

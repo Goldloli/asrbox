@@ -62,7 +62,7 @@ export function GlobalSearch() {
       kind: 'model' as const,
       title: model.display_name,
       description: `${model.model_name} · ${model.engine} · ${model.runtime}`,
-      meta: `${t('models.title')} · ${model.downloaded ? t('common.downloaded') : t('common.notDownloaded')}`,
+      meta: `${t('models.title')} · ${model.storage_status === 'available' ? (model.downloaded ? t('common.downloaded') : t('common.notDownloaded')) : t('settings.modelStorageUnavailable')}`,
       href: '/models' as const,
       haystack: [
         model.display_name,

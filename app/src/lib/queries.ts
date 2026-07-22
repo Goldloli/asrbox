@@ -14,6 +14,7 @@ export const queryKeys = {
   models: ['models'] as const,
   activeDownloads: ['models', 'active-downloads'] as const,
   modelStorage: ['models', 'storage'] as const,
+  modelStorageRelocation: ['models', 'storage', 'relocation'] as const,
   providers: ['providers'] as const,
   llmProviderPresets: ['llm-providers', 'presets'] as const,
   llmProviders: ['llm-providers'] as const,
@@ -54,6 +55,15 @@ export function useActiveDownloadsQuery() {
 
 export function useModelStorageQuery() {
   return useQuery({ queryKey: queryKeys.modelStorage, queryFn: () => apiClient.getModelStorage(), retry: 1, refetchInterval: 15000 });
+}
+
+export function useModelStorageRelocationQuery() {
+  return useQuery({
+    queryKey: queryKeys.modelStorageRelocation,
+    queryFn: () => apiClient.getModelStorageRelocation(),
+    retry: 1,
+    refetchInterval: (query) => ['running', 'cancelling'].includes(query.state.data?.status ?? '') ? 750 : 5000,
+  });
 }
 
 export function useProvidersQuery() {

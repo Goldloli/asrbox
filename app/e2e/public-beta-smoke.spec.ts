@@ -102,3 +102,66 @@ test('transcription workspace confirms and stops the selected active task', asyn
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
   expect(cancelRequests).toBe(1);
 });
+
+test('web start uploads once, shows transfer progress, and creates an importing task', async ({ page }) => {
+  const serverUrl = 'http://127.0.0.1:17496';
+  let preflightRequests = 0;
+  let createRequests = 0;
+  let createdTask: Record<string, unknown> | null = null;
+
+  await page.addInitScript((url) => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
+  }, serverUrl);
+  await page.route(`${serverUrl}/transcriptions/preflight`, async (route) => {
+    preflightRequests += 1;
+    await route.fulfill({ status: 500, json: { detail: 'Start must not call preflight' } });
+  });
+  await page.route(`${serverUrl}/transcriptions`, async (route) => {
+    createRequests += 1;
+    createdTask = {
+      id: 'web-import-task',
+      filename: 'short.wav',
+      source: 'local',
+      audio_path: 'uploads/web-import-task.wav',
+      normalized_audio_path: null,
+      status: 'importing',
+      progress: 4,
+      language: 'zh',
+      model_name: 'whisper-base',
+      provider_id: null,
+      duration_ms: null,
+      text: null,
+      error: null,
+      error_code: null,
+      options: {},
+      segments: [],
+      created_at: '2026-07-22T11:00:00Z',
+      updated_at: '2026-07-22T11:00:01Z',
+      completed_at: null,
+      batch_id: null,
+    };
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.fulfill({ json: createdTask });
+  });
+  await page.route(`${serverUrl}/tasks`, (route) => route.fulfill({ json: { items: createdTask ? [createdTask] : [], total: createdTask ? 1 : 0 } }));
+  await page.route(`${serverUrl}/tasks/active`, (route) => route.fulfill({ json: {
+    downloads: [], queued_tasks: [], running_tasks: createdTask ? [createdTask] : [], orphan_tasks: [], failed_resumable_tasks: [], running_chunks: [],
+    local_queue_length: 0, provider_queue_length: 0, local_worker_count: 1, provider_worker_count: 1,
+    max_concurrent_local_tasks: 1, max_concurrent_provider_tasks: 2, recent_error: null, worker_state: {}, cancelled_task_ids: [],
+  } }));
+  await page.route(`${serverUrl}/models/status`, (route) => route.fulfill({ json: { models: [{
+    model_name: 'whisper-base', display_name: 'Whisper Base', engine: 'whisper_transformers', source: 'huggingface', model_size: 'base', size_mb: 290,
+    languages: ['auto', 'zh'], runtime: 'torch', supports_timestamps: true, supports_word_timestamps: true, supports_diarization: false,
+    supports_streaming: false, downloaded: true, downloading: false, loaded: false, compatible: true, storage_status: 'available',
+  }] } }));
+
+  await page.goto('/');
+  await page.locator('input[type="file"]').setInputFiles({ name: 'short.wav', mimeType: 'audio/wav', buffer: Buffer.from('audio') });
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+
+  await expect(page.getByText('Uploading media', { exact: true })).toBeVisible();
+  await expect(page.getByText('Transcription started', { exact: true })).toBeVisible();
+  await expect(page.getByText('importing media', { exact: true }).first()).toBeVisible();
+  expect(preflightRequests).toBe(0);
+  expect(createRequests).toBe(1);
+});

@@ -26,8 +26,10 @@ except Exception as exc:  # pragma: no cover - optional runtime dependency
 
 try:
     import mlx_whisper
-except Exception:  # pragma: no cover - optional runtime dependency
+    MLX_WHISPER_IMPORT_ERROR = None
+except Exception as exc:  # pragma: no cover - optional runtime dependency
     mlx_whisper = None
+    MLX_WHISPER_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 
 class LocalASRBackend(Protocol):
@@ -301,7 +303,8 @@ class MLXWhisperBackend:
 
     def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
         if mlx_whisper is None:
-            raise RuntimeError("mlx_whisper is not installed")
+            detail = MLX_WHISPER_IMPORT_ERROR or "mlx_whisper is not installed"
+            raise RuntimeError(f"mlx_whisper runtime is unavailable: {detail}")
         language = options.get("language")
         kwargs = {}
         if language and language != "auto":
