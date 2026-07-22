@@ -1,17 +1,19 @@
 # Contributing to ASRbox
 
-ASRbox is a local-first ASR workbench with a React Web UI, FastAPI backend, and Tauri desktop app. The current supported release target is macOS Apple Silicon.
+ASRbox is a local-first ASR and subtitle workbench with a React Web UI, FastAPI backend, Tauri desktop app, and Linux CPU Docker deployment. The maintained desktop release target is macOS Apple Silicon.
 
 ## Before You Start
 
 - Search existing issues and describe the user-visible behavior you want to change.
 - Keep each change focused. Separate product behavior, dependency updates, broad formatting, and unrelated refactors.
 - Do not upload private media, transcripts, diagnostic archives, credentials, or downloaded model weights.
-- For large behavior or architecture changes, open an issue before investing in implementation.
+- Typo, wording, test-maintenance, and unambiguous localized bug fixes may proceed directly when they preserve accepted behavior and maintained contracts.
+- New or changed behavior, APIs, persisted data, privacy or security boundaries, dependencies, packaging, architecture, or multiple subsystems require an OpenSpec change under `openspec/changes/` before implementation.
+- Read the relevant accepted capability in `openspec/specs/`; for large or uncertain work, discuss the proposal before investing in implementation.
 
 ## Development Setup
 
-The locked environment targets Bun `1.3.8`, Python `3.13`, macOS Apple Silicon, and stable Rust.
+The desktop development lock targets Bun `1.3.8`, Python `3.13`, macOS Apple Silicon, and stable Rust. Docker has a separate Linux CPU input/lock and does not install MLX.
 
 ```bash
 bun install
@@ -26,6 +28,15 @@ Development commands:
 npm run dev:server
 npm run dev:web
 npm run dev:desktop
+```
+
+Container development:
+
+```bash
+cp .env.example .env
+npm run build:docker
+docker compose up -d
+npm run test:docker
 ```
 
 Development needs ffmpeg and ffprobe. Use a system installation or the verified binaries in `third_party/ffmpeg/darwin-arm64/`.
@@ -45,7 +56,7 @@ Run the checks relevant to the change. Before requesting merge, run the unified 
 npm run check:open-source
 ```
 
-It covers Python package health and compilation, version and release tooling, third-party FFmpeg verification, TypeScript, Web build, backend tests, Cargo checks/tests, and the browser smoke test.
+It covers Python package health and compilation, version and release tooling, third-party FFmpeg verification, TypeScript, Web build, backend tests, Cargo checks/tests, the browser smoke test, and AI LLM browser regressions. Docker build/runtime smoke is a separate Linux gate because it is substantially more expensive.
 
 Additional focused commands:
 
@@ -55,6 +66,8 @@ npm run build:web
 npm run test:backend
 npm run test:backend:contract
 npm run test:backend:server
+npm run test:e2e:llm
+npm run test:docker
 bunx playwright test app/e2e/models-download-controls.spec.ts
 cd tauri/src-tauri && cargo check --locked && cargo test --locked
 ```
@@ -78,14 +91,16 @@ A pull request should include:
 - Security, privacy, model-license, dependency-license, and release impact.
 - Screenshots for visible UI changes when useful.
 
-Backend behavior changes should include tests that fail without the fix. API changes must update `backend/API_FREEZE.md` and contract tests when they affect a stable route or field.
+Backend behavior changes should include tests that fail without the fix. Maintained API changes must update the active OpenSpec change, generated OpenAPI and backend models, typed frontend consumers, and contract tests together.
 
 ## Dependencies and Third-Party Code
 
 - Python runtime changes start in the relevant `requirements-*.in` file and include updated macOS Apple Silicon / Python 3.13 lock snapshots. Do not edit only `requirements.txt`.
+- Docker Python changes start in `requirements-docker.in`, regenerate `requirements-docker.lock` for Linux/Python 3.13, and must not add Apple-only MLX packages.
 - Frontend dependency changes must update `bun.lock` and pass the dependency audit.
 - Vendored or bundled software changes must update `THIRD_PARTY_NOTICES.md` and any source, license, or checksum records.
 - New model entries must document the upstream repository, license, estimated disk size, runtime, and redistribution constraints.
+- Container changes must preserve the non-root runtime, loopback Compose default, `/data` volume contract, health check, and same-origin Web behavior.
 
 ## Do Not Commit
 

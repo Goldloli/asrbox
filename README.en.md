@@ -4,196 +4,168 @@
 
 [中文](README.md) | English
 
-ASRbox is a local-first audio and video transcription workbench. It converts media into editable text and subtitles with 14 local ASR models, optional online ASR providers, task recovery, transcript history, and multiple export formats.
+ASRbox is a local-first audio/video transcription and subtitle workspace. It turns media into editable subtitles with local or online ASR, recoverable tasks, immutable transcript history, multiple export formats, and LLM-powered checks for typos, omissions, and obvious recognition errors.
 
-## Public beta status
+## Status
 
-The current source version is `0.1.0-beta.1`. It is ready for evaluation, testing, and feedback, but it is not a stable release.
+The current source version is `0.1.0-beta.1`. It is suitable for evaluation and feedback, not a stable release.
 
-| Area | Current status |
+| Runtime | Supported scope |
 | --- | --- |
-| Desktop release target | macOS Apple Silicon |
-| Desktop stack | Tauri 2 with a bundled FastAPI sidecar |
-| Local models | 14 on-demand downloads; not included in the DMG |
-| Media tools | ffmpeg and ffprobe bundled with the desktop package |
-| Code signing / notarization | Not available yet |
-| Windows / Linux packages | Not available yet |
-| Automatic updates | Not available yet |
+| macOS desktop | Apple Silicon, Tauri 2 with a bundled FastAPI sidecar |
+| Docker Web | Linux CPU container, same-origin UI/API, persistent `/data` |
+| Native Windows/Linux desktop | Not available |
+| Signing, notarization, auto-update | Not available |
+| Model weights | Downloaded on demand; not included in the DMG or image |
 
-Keep the original copy of important media. Create a backup in Settings before upgrading. Provider credentials are stored in the local SQLite database and are not protected by macOS Keychain yet.
+Keep originals of important media and back up before upgrades. Provider secrets are currently stored in local SQLite rather than an OS keychain. Docker binds to host loopback by default and must not be exposed directly to the public Internet.
 
-## What it can do
+## Highlights
 
-- Select, batch-select, or drag audio and video files, then preflight format, audio streams, duration, and chunking.
-- Transcribe locally with Whisper, Faster Whisper, MLX Whisper, SenseVoice, and Qwen3-ASR.
-- Manage model downloads with pause, resume, stop, and retry controls.
-- Configure online ASR providers; online mode sends media or audio to the selected third party.
-- View, search, replace, edit, copy, and play transcription results.
-- Preserve transcription, retranscription, edit, restore, and post-processing versions.
+- Preflight and transcribe one or many audio/video files.
+- Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Qwen3-ASR, or an online ASR provider.
+- Pause, resume, stop, retry, and remove model downloads while inspecting compatibility and storage.
+- Search, replace, edit, play, and copy transcript content.
+- Preserve transcription, retranscription, manual edit, restore, post-processing, and AI-applied versions.
 - Export TXT, SRT, VTT, ASS, JSON, and Markdown.
-- Inspect task logs, diagnostics, quality data, model compatibility, and storage usage.
+- Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
+- Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 
-## Download and first launch
+## Docker deployment
 
-Get `v0.1.0-beta.1` from its [GitHub Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1), or [download the Apple Silicon DMG directly](https://github.com/Goldloli/asrbox/releases/download/v0.1.0-beta.1/ASRbox_0.1.0-beta.1_aarch64.dmg). Repository source can be newer than the latest Release.
+Docker Engine 24+ and Docker Compose v2 are required. Allow at least 8 GB RAM and 15 GB free space; larger models need more.
 
-The current DMG is unsigned and not notarized. On first launch:
+```bash
+git clone https://github.com/Goldloli/asrbox.git
+cd asrbox
+cp .env.example .env
+docker compose up -d --build
+```
 
-1. Move `ASRbox.app` to Applications.
-2. Right-click the app and choose Open, or allow it in macOS System Settings → Privacy & Security.
-3. Wait while the desktop app starts the local backend. Create a task only after the UI reports that the backend is online.
-4. Open Models and download one local model.
+Open [http://127.0.0.1:17494](http://127.0.0.1:17494). Inspect the service with:
 
-Download packages only from this project's Releases and verify `SHA256SUMS.txt`. Do not run an artifact whose checksum does not match.
+```bash
+docker compose ps
+docker compose logs -f asrbox
+```
+
+The `asrbox-data` volume contains the database, media, transcripts, settings, models, and caches. `docker compose down` preserves it; `docker compose down -v` permanently removes it.
+
+For a phone or another trusted LAN device, set these values in `.env`:
+
+```dotenv
+ASRBOX_BIND_ADDRESS=0.0.0.0
+ASRBOX_API_TOKEN=a-long-random-value-from-openssl-rand-hex-32
+```
+
+Restart, open `http://HOST_LAN_IP:17494`, and enter the same token under Settings → General → API token. ASRbox has no built-in TLS, multi-user accounts, or role authorization. Outside a trusted LAN, use a trusted VPN or an authenticated HTTPS reverse proxy.
+
+See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connectivity, removal, and troubleshooting.
+
+## macOS desktop
+
+Download the Apple Silicon DMG from the [`v0.1.0-beta.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
+
+Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 
 ## First transcription
 
-1. Download a model from Models. On Apple Silicon, start with `mlx-whisper-turbo`; for a smaller functional check, use `faster-whisper-base`.
-2. Select an audio or video file in New Task.
-3. Choose Local Model and an installed model, then set language, timestamps, and chunking as needed.
-4. Submit the task and inspect progress, logs, and results on the task page.
-5. Review the text and export SRT, VTT, ASS, TXT, JSON, or Markdown.
+1. Download a model. Apple Silicon desktop users can start with `mlx-whisper-turbo`; Docker users should start with `faster-whisper-base` or `faster-whisper-small`.
+2. Select media under New Transcription.
+3. Choose a local model or online platform and configure language, timestamps, and chunking.
+4. Follow progress, logs, and results under Tasks.
+5. Edit or export SRT, VTT, ASS, TXT, JSON, or Markdown.
 
-Larger models usually need more disk space, memory, and cold-start time. All 14 models completed real-video transcription in the maintainer's Apple Silicon test environment. This is compatibility evidence, not a guarantee for every machine, file, or upstream model revision.
+ASRbox registers 14 local models. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md).
 
-## Local models
+## AI subtitle proofreading
 
-ASRbox currently registers 14 local models:
+1. Add and test a provider under Settings → AI LLM providers.
+2. Ollama needs no API key. From Docker, connect to host Ollama at `http://host.docker.internal:11434/v1`.
+3. Open AI and select a completed task with a subtitle version.
+4. Select the provider and start Subtitle proofreading.
+5. Suggestions are expanded; correct neighboring ranges remain individually collapsible.
+6. Select the suggestions to apply. Applying creates a new version; unselected suggestions never change the transcript.
 
-- Transformers Whisper: `whisper-base`, `whisper-small`, `whisper-medium`, `whisper-large-v3`, `whisper-large-v3-turbo`
-- Faster Whisper: `faster-whisper-base`, `faster-whisper-small`, `faster-whisper-medium`, `faster-whisper-large-v3`, `faster-whisper-large-v3-turbo`
-- Apple MLX: `mlx-whisper-turbo`
-- FunASR: `sensevoice-small`
-- Qwen3-ASR: `qwen3-asr-0.6b`, `qwen3-asr-1.7b`
+Connection, authentication, server, context-length, and malformed-response failures have distinct feedback. “No changes needed” appears only after a successful LLM response with no suggestions. LLM failure never invalidates a completed transcription. See the [AI proofreading guide](docs/ai-proofreading.en.md).
 
-Models are downloaded on demand from Hugging Face or ModelScope into the ASRbox data directory. Pause affects the current app process; stop ends the task while retaining reusable downloaded files; retry reuses the existing directory; deleting a model removes its ASRbox-managed model directory.
+## Data and privacy
 
-See the [model guide](docs/models.md) for selection guidance, estimated sizes, sources, and license notes.
-
-## Where data is stored
-
-The default macOS desktop data root is:
+Desktop data defaults to:
 
 ```text
 ~/Library/Application Support/com.goldloli.asrbox/
 ```
 
-Important contents:
+Docker keeps all managed state under `/data` in the `asrbox-data` volume. Treat backups as sensitive: they may contain media, transcripts, exports, logs, models, and provider credentials.
 
-```text
-asrbox.db                 Tasks, settings, versions, and provider configuration
-models/<model-name>/      Final model files and model download caches
-uploads/                  Media managed by ASRbox
-audio/                    Extracted or normalized audio
-cache/                    Task cache
-exports/                  Backend exports and diagnostic files
-backups/                  Backups created in the app
-```
+Local ASR does not send media to an ASR service, although model downloads contact Hugging Face or ModelScope. Online ASR sends media or extracted audio to the selected third party. LLM proofreading sends segment text, identifiers, and limited neighboring context, never audio or file paths; remote LLMs are still third-party processing.
 
-Desktop saves go to `~/Downloads/ASRbox Exports/` by default. Change this under Settings → General → Download location. Models do not live in the repository, `.app`, or DMG. Removing the application does not remove the data directory or downloaded models.
-
-The development backend uses the repository's `data/` directory by default; override it with `ASRBOX_DATA_DIR`. See [privacy and local data](docs/privacy.md) for the full data boundary and uninstall steps.
-
-## Architecture
-
-```text
-app/                 React components, routes, state, and shared UI
-web/                 Vite Web entry point
-backend/             FastAPI API, task scheduler, ASR backends, storage, and exports
-tauri/               Tauri shell, sidecar lifecycle, and system integration
-scripts/             Build, version, audit, and release gates
-third_party/ffmpeg/  Bundled ffmpeg/ffprobe and compliance material
-```
-
-The desktop app starts the bundled `asrbox-server` on `127.0.0.1:17494`, creates an in-memory API token for each launch, and passes the Tauri app data directory to the backend. The Web UI connects to an existing backend and does not start one. Exposing a development backend to a LAN or the public internet is unsupported.
+Read [privacy and local data](docs/privacy.md) and the [security policy](SECURITY.md).
 
 ## Development
 
-Requirements: macOS Apple Silicon, Bun `1.3.8`, Python `3.13`, and stable Rust. The current Python lock snapshots target macOS Apple Silicon and Python 3.13.
+Desktop development uses Bun `1.3.8`, Python `3.13`, stable Rust, and macOS Apple Silicon. Docker has a separate Linux CPU dependency lock.
 
 ```bash
 bun install
 python -m venv .venv
 .venv/bin/python -m pip install pip==25.3
 .venv/bin/pip install -r requirements-dev.lock
-```
-
-Run the backend and Web UI separately:
-
-```bash
 npm run dev:server
 npm run dev:web
 ```
 
-Run desktop development mode:
+Use `npm run dev:desktop` for Tauri and `npm run build:docker` for the container. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Build and verify
 
 ```bash
-npm run dev:desktop
+npm run typecheck
+npm run build:web
+npm run test:backend
+npm run test:e2e:llm
+npm run test:docker
+npm run check:open-source
 ```
 
-Development needs ffmpeg and ffprobe. Install a system build or use the binaries in `third_party/ffmpeg/darwin-arm64/`.
-
-## Build and release
-
-Install frozen-backend dependencies and build the `.app` and DMG:
+Build the desktop package with:
 
 ```bash
 .venv/bin/pip install -r requirements-build.lock
 npm run build:desktop
 ```
 
-Expected Apple Silicon DMG path:
+The DMG is written under `tauri/src-tauri/target/release/bundle/dmg/`. Real-model tests require legally supplied media and downloaded weights and are not part of default CI.
+
+## Project layout
 
 ```text
-tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
-```
-
-The `v0.1.0-beta.1` tag triggers the Release workflow and produces the DMG, an FFmpeg source archive, and `SHA256SUMS.txt`. See the [release process](docs/release.md).
-
-## Verification
-
-Run the repository gate before submitting changes:
-
-```bash
-npm run check:open-source
-```
-
-It checks locked dependencies, Python packages, version consistency, release tools, third-party compliance, TypeScript, the Web build, backend tests, Cargo, and browser smoke coverage. The network dependency audit is enforced by CI and Release and can also be run directly:
-
-```bash
-npm run audit:dependencies
-```
-
-Real-model tests need predownloaded models and legally supplied test media, so they are not part of default CI:
-
-```bash
-ASRBOX_REAL_MEDIA_DIR="/path/to/media" npm run test:backend:real-models:full
+app/                 Shared React routes, components, state, and UI
+web/                 Vite Web entry point
+backend/             FastAPI, tasks, ASR, LLM, versions, storage, exports
+tauri/               macOS shell and sidecar lifecycle
+Dockerfile           Linux CPU single-container build
+compose.yaml         Persistent deployment and network defaults
+scripts/             Build, test, audit, and release gates
+openspec/            Accepted specifications and active changes
+third_party/ffmpeg/  Desktop FFmpeg license and source records
 ```
 
 ## Documentation
 
+- [Docker deployment](docs/docker.en.md)
+- [AI subtitle proofreading](docs/ai-proofreading.en.md)
 - [Model guide](docs/models.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy and local data](docs/privacy.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
 - [Continuous integration](docs/ci.md)
 - [Release process](docs/release.md)
-- [Backend API stability boundary](backend/API_FREEZE.md)
-- [Backend maturity report](backend/MATURITY_REPORT.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Changelog](CHANGELOG.md)
 
-## Security and privacy
-
-Local-model mode processes media on the machine. Online-provider mode sends media, extracted audio, text, or metadata to the configured third party. Provider API keys are currently stored in plaintext in local `asrbox.db` and are included in application backups.
-
-The desktop backend listens only on loopback and uses a per-launch token. This does not protect against malicious software running as the same macOS user and is not disk encryption. Report sensitive vulnerabilities privately using the [security policy](SECURITY.md).
-
-## Contributing
-
-Reproducible issues and small, verifiable changes are welcome. Changes to backend behavior, model downloads, desktop packaging, storage, or exports should include relevant automated tests and manual verification notes. Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting.
-
 ## License
 
-ASRbox source code is available under the [MIT License](LICENSE). Bundled FFmpeg, models, runtimes, and other third-party components remain under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Model weights are not redistributed in the ASRbox repository or DMG.
+ASRbox source is licensed under the [MIT License](LICENSE). FFmpeg, models, Python/JavaScript runtimes, and other third-party components retain their own licenses. Model weights are not redistributed in the repository, DMG, or Docker image.

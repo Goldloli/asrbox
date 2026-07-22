@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox `0.1.0-beta.1` registers 14 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, or DMG.
+ASRbox `0.1.0-beta.1` registers 14 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -17,6 +17,8 @@ Each model has its own directory:
 ```
 
 The backend derives this from `<data-root>/models/`. A development backend defaults to `<repository>/data/models/`; set `ASRBOX_DATA_DIR` to use another data root.
+
+Docker uses `/data/models/` inside the persistent volume. Provider caches are also redirected below `/data/cache/`, so container recreation does not force a complete redownload.
 
 Model Management displays the resolved directory, per-model bytes, total model bytes, and free/total filesystem capacity. Actual size can exceed the catalog estimate because upstream repositories change and interrupted downloads can retain resumable cache files.
 
@@ -48,6 +50,7 @@ The estimates add up to roughly 26.3 GiB. A real all-model installation may use 
 - Quick functional check: `faster-whisper-base`.
 - General use with moderate resources: `faster-whisper-small` or `faster-whisper-medium`.
 - Apple Silicon optimized path: `mlx-whisper-turbo`.
+- Docker/Linux CPU quick start: `faster-whisper-base` or `faster-whisper-small`; MLX is unavailable.
 - Chinese, Cantonese, English, Japanese, or Korean with a compact model: `sensevoice-small`.
 - Broad multilingual Qwen path: `qwen3-asr-0.6b`; use `qwen3-asr-1.7b` when additional model capacity is worth the memory and disk cost.
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
@@ -78,11 +81,13 @@ A model is considered downloaded only when its directory has a `model.json` mark
 
 Hugging Face `.incomplete` files inside a completed model's internal `.cache` do not invalidate the usable model. An incomplete file outside that cache, a missing marker, or missing weights marks the directory incomplete. “Clean incomplete downloads” removes such incomplete managed directories; use it carefully because removal is irreversible.
 
+The Linux Docker runtime excludes Apple-only `mlx` and `mlx-whisper` packages. The backend marks `mlx-whisper-turbo` incompatible and rejects its download in a container instead of consuming disk for unusable weights. CPU-compatible models can still require substantial RAM and can run much more slowly than desktop MLX or GPU execution.
+
 ## Verification Status
 
 All 14 registered models completed transcription of a real MP4 excerpt in the maintainer's macOS Apple Silicon environment on 2026-07-13. Each run returned non-empty text and segments. Automated API tests cover download status, source fallback, pause/resume/stop/retry, compatibility, storage totals, and duplicate-weight filtering.
 
-This evidence verifies the tested dependency snapshot and machine. It does not guarantee future upstream revisions, every media codec, or every hardware configuration.
+This evidence verifies the tested dependency snapshot and machine. Docker build and smoke coverage verify runtime startup and compatibility reporting, not the accuracy or speed of all models on every Linux CPU. Future upstream revisions, media codecs, architectures, and hardware can behave differently.
 
 ## Model Sources and Licenses
 

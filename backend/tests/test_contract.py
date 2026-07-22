@@ -38,6 +38,7 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
     routes = _registered_routes(client.app)
 
     expected = {
+        ("GET", "/api-info"),
         ("GET", "/transcriptions/readiness"),
         ("POST", "/transcriptions/preflight"),
         ("GET", "/models/status"),

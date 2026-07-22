@@ -40,6 +40,32 @@ def test_health_reports_ready_and_filesystem(tmp_path: Path) -> None:
     }
 
 
+def test_source_backend_keeps_root_metadata_and_dedicated_api_info(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ASRBOX_FRONTEND_DIR", str(tmp_path / "missing-frontend"))
+    client = make_client(tmp_path)
+
+    root = client.get("/")
+    api_info = client.get("/api-info")
+
+    assert root.status_code == 200
+    assert root.json()["message"] == "ASRbox API"
+    assert api_info.status_code == 200
+    assert api_info.json() == root.json()
+
+
+def test_container_accepts_host_gateway_ollama_without_weakening_normal_http_rules(tmp_path: Path, monkeypatch) -> None:
+    from backend.services.llm_providers import list_presets, validate_base_url
+
+    monkeypatch.delenv("ASRBOX_CONTAINER", raising=False)
+    with pytest.raises(ValueError, match="must use HTTPS"):
+        validate_base_url("http://host.docker.internal:11434/v1")
+
+    monkeypatch.setenv("ASRBOX_CONTAINER", "1")
+    assert validate_base_url("http://host.docker.internal:11434/v1") == "http://host.docker.internal:11434/v1"
+    ollama = next(item for item in list_presets() if item.id == "ollama")
+    assert ollama.base_url == "http://host.docker.internal:11434/v1"
+
+
 def test_health_allows_tauri_origin(tmp_path: Path) -> None:
     client = make_client(tmp_path)
 
@@ -401,6 +427,21 @@ def test_model_compatibility_verify_and_recommendation(tmp_path: Path) -> None:
     recommendation = client.post("/models/recommend", json={"language": "zh", "duration_ms": 120000})
     assert recommendation.status_code == 200
     assert recommendation.json()["model_name"] in {"qwen3-asr-0.6b", "sensevoice-small", "mlx-whisper-turbo", "faster-whisper-small", "whisper-base"}
+
+
+def test_linux_runtime_rejects_apple_only_mlx_model(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("backend.services.models.platform.system", lambda: "Linux")
+    monkeypatch.setattr("backend.services.models.platform.machine", lambda: "x86_64")
+    client = make_client(tmp_path)
+
+    statuses = client.get("/models/status").json()["models"]
+    mlx = next(item for item in statuses if item["model_name"] == "mlx-whisper-turbo")
+    download = client.post("/models/download", json={"model_name": "mlx-whisper-turbo"})
+
+    assert mlx["compatible"] is False
+    assert "macOS Apple Silicon" in mlx["compatibility_error"]
+    assert download.status_code == 400
+    assert "unavailable in Linux containers" in download.json()["detail"]
 
 
 def test_qwen3_asr_compatibility_requires_processor_and_transformers_support(tmp_path: Path, monkeypatch) -> None:

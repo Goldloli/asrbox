@@ -1,6 +1,6 @@
 # Release Process
 
-ASRbox currently publishes macOS Apple Silicon prereleases. Windows, Linux, Intel macOS, code signing, notarization, and automatic updates are not part of `0.1.0-beta.1`.
+ASRbox currently publishes macOS Apple Silicon desktop prereleases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic updates, and built-in public-hosting security are not part of `0.1.0-beta.1`.
 
 Current release: [`v0.1.0-beta.1`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
 
@@ -29,6 +29,7 @@ Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containin
 ```bash
 npm run check:open-source
 npm run audit:dependencies
+npm run test:docker
 ```
 
 7. For model-runtime changes, record the real models and media characteristics tested. Do not publish private filenames or content.
@@ -77,11 +78,21 @@ SHA256SUMS.txt
 
 The DMG contains the Tauri app, frozen FastAPI sidecar, and ffmpeg/ffprobe. It does not contain ASR model weights.
 
+The workflow also builds and smoke-tests `asrbox:local` from the tag. That image is verification evidence only and is not pushed to GHCR or attached to the GitHub Release. Publishing a container image requires a separate approved change, immutable tags/digests, architecture policy, and third-party package-license review.
+
 Local build output is normally:
 
 ```text
 tauri/src-tauri/target/release/bundle/macos/ASRbox.app
 tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
+```
+
+Local Docker packaging is the tagged image in the Docker engine:
+
+```bash
+docker compose build
+docker image inspect asrbox:local
+npm run test:docker
 ```
 
 ## Post-Build Verification
@@ -97,6 +108,7 @@ Before publishing or immediately after downloading the Release assets:
 7. Download a small model, exercise pause/resume/stop/retry, and complete a transcription.
 8. Export TXT, SRT, VTT, ASS, JSON, and Markdown.
 9. Quit and confirm the backend releases port `17494`.
+10. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
 
 ## Release Page Notes
 
@@ -109,6 +121,7 @@ Release notes must state:
 - Models download separately and can require substantial disk and memory.
 - Data persists after deleting the app.
 - Known security/privacy limitations, especially plaintext provider keys.
+- Docker is Linux CPU only, excludes MLX, binds to loopback by default, and is not a public-Internet gateway.
 
 ## Rollback
 

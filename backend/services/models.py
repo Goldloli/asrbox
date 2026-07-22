@@ -257,6 +257,9 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
     downloaded = is_model_downloaded(model_name)
     if model_config is None:
         return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model registry entry"], "message": f"Unknown model: {model_name}"}
+    runtime_error = _model_runtime_error(model_config)
+    if runtime_error:
+        return {"model_name": model_name, "downloaded": downloaded, "compatible": False, "missing": ["compatible runtime"], "message": runtime_error}
     if not downloaded:
         return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model.json", "weights"], "message": f"Model {model_name} is not downloaded"}
 
@@ -315,6 +318,14 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
     }
 
 
+def _model_runtime_error(model_config: ASRModelConfig) -> str | None:
+    if model_config.engine != "mlx_whisper":
+        return None
+    if platform.system() == "Darwin" and platform.machine().lower() in {"arm64", "aarch64"}:
+        return None
+    return "MLX Whisper requires the macOS Apple Silicon desktop runtime and is unavailable in Linux containers"
+
+
 def list_model_statuses() -> list[ASRModelStatus]:
     statuses: list[ASRModelStatus] = []
     progress = get_progress_manager()
@@ -328,6 +339,7 @@ def list_model_statuses() -> list[ASRModelStatus]:
         marker = _read_model_marker(item.model_name)
         cache = _cache_info(item)
         compatibility = check_model_compatibility(item.model_name)
+        runtime_error = _model_runtime_error(item)
         statuses.append(
             ASRModelStatus(
                 model_name=item.model_name,
@@ -349,8 +361,8 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 error=error,
                 size_on_disk_mb=size_on_disk_mb,
                 download_error=error,
-                compatible=compatibility["compatible"] if compatibility["downloaded"] else None,
-                compatibility_error=None if compatibility["compatible"] else compatibility["message"],
+                compatible=False if runtime_error else compatibility["compatible"] if compatibility["downloaded"] else None,
+                compatibility_error=runtime_error or (None if compatibility["compatible"] else compatibility["message"]),
                 cache_detected=bool(cache["detected"]),
                 cache_size_mb=round(cache["size_mb"], 2) if cache["size_mb"] else None,
                 cache_path=cache["path"],
@@ -538,6 +550,9 @@ def download_model(model_name: str) -> str:
     model_config = get_model_config(model_name)
     if model_config is None:
         raise ValueError(f"Unknown model: {model_name}")
+    runtime_error = _model_runtime_error(model_config)
+    if runtime_error:
+        raise ValueError(runtime_error)
 
     if _is_local_model_downloaded(model_name):
         return f"Model {model_name} is already downloaded"

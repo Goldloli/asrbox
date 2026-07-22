@@ -46,7 +46,7 @@ export function SettingsPage() {
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
   const setExportDirectory = useUiStore((state) => state.setExportDirectory);
   const setShortcut = useUiStore((state) => state.setShortcut);
-  const { serverUrl, setServerUrl } = useServerStore();
+  const { serverUrl, apiToken, setServerUrl, setApiToken } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const healthQuery = useHealthQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -226,6 +226,18 @@ export function SettingsPage() {
               </Field>
               <Field label={t('settings.serverUrl')}>
                 <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} />
+              </Field>
+              <Field label={t('settings.apiToken')}>
+                <div className="grid gap-1.5">
+                  <Input
+                    type="password"
+                    autoComplete="off"
+                    value={apiToken ?? ''}
+                    placeholder={t('settings.apiTokenPlaceholder')}
+                    onChange={(event) => setApiToken(event.target.value)}
+                  />
+                  <p className="text-xs text-app-muted">{t('settings.apiTokenHint')}</p>
+                </div>
               </Field>
               <Field label={t('settings.theme')}>
                 <Select

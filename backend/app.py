@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import secrets
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -14,6 +14,8 @@ from backend.database import init_db
 from backend.database import session as db_session
 from backend.routes import register_routers
 from backend.services.tasks import mark_interrupted_tasks
+
+API_DOCUMENT_PATHS = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
 
 
 @asynccontextmanager
@@ -24,6 +26,7 @@ async def lifespan(_app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    frontend_dir = _frontend_directory()
     app = FastAPI(
         title="ASRbox API",
         description="Web-first ASR model and provider workspace",
@@ -48,8 +51,23 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def require_loopback_token(request: Request, call_next):
+        if frontend_dir is not None and request.method == "GET":
+            accepts_html = "text/html" in request.headers.get("accept", "")
+            if accepts_html and request.url.path not in {"/health", "/health/filesystem", "/api-info", *API_DOCUMENT_PATHS}:
+                from fastapi.responses import FileResponse
+
+                return FileResponse(frontend_dir / "index.html", media_type="text/html")
         expected = os.environ.get("ASRBOX_API_TOKEN")
-        if not expected or request.method == "OPTIONS" or request.url.path in {"/", "/health"}:
+        requested_frontend_file = (frontend_dir / request.url.path.removeprefix("/")).resolve() if frontend_dir is not None else None
+        public_frontend_path = frontend_dir is not None and (
+            request.url.path == "/"
+            or (
+                requested_frontend_file is not None
+                and requested_frontend_file.is_relative_to(frontend_dir)
+                and requested_frontend_file.is_file()
+            )
+        )
+        if not expected or request.method == "OPTIONS" or request.url.path in {"/", "/health", "/api-info"} or public_frontend_path:
             return await call_next(request)
         authorization = request.headers.get("authorization", "")
         supplied = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
@@ -60,7 +78,12 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     register_routers(app)
-    _mount_frontend(app)
+    if frontend_dir is None:
+        @app.get("/")
+        async def root():
+            return {"message": "ASRbox API", "version": __version__}
+
+    _mount_frontend(app, frontend_dir)
     return app
 
 
@@ -75,9 +98,17 @@ def _mark_interrupted_tasks() -> None:
         db.close()
 
 
-def _mount_frontend(app: FastAPI) -> None:
-    frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
-    if not frontend_dir.is_dir():
+def _frontend_directory() -> Path | None:
+    configured = os.environ.get("ASRBOX_FRONTEND_DIR")
+    frontend_dir = Path(configured) if configured else Path(__file__).resolve().parent.parent / "frontend"
+    frontend_dir = frontend_dir.resolve()
+    if not (frontend_dir / "index.html").is_file():
+        return None
+    return frontend_dir
+
+
+def _mount_frontend(app: FastAPI, frontend_dir: Path | None) -> None:
+    if frontend_dir is None:
         return
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
@@ -87,11 +118,15 @@ def _mount_frontend(app: FastAPI) -> None:
         app.mount("/assets", StaticFiles(directory=str(assets)), name="frontend-assets")
 
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str, request: Request):
         file_path = (frontend_dir / full_path).resolve()
+        if not full_path:
+            return FileResponse(frontend_dir / "index.html", media_type="text/html")
         if full_path and file_path.is_file() and file_path.is_relative_to(frontend_dir):
             return FileResponse(file_path)
-        return FileResponse(frontend_dir / "index.html", media_type="text/html")
+        if "text/html" in request.headers.get("accept", ""):
+            return FileResponse(frontend_dir / "index.html", media_type="text/html")
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 app = create_app()

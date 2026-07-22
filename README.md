@@ -4,196 +4,168 @@
 
 中文 | [English](README.en.md)
 
-ASRbox 是一个本地优先的音视频转写工作台。它把音频或视频转换为可编辑文本与字幕，支持 14 个本地 ASR 模型、在线 ASR Provider、任务恢复、版本记录和多格式导出。
+ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体转换为可编辑字幕，支持本地与在线 ASR、任务恢复、版本历史、多格式导出，并可让 Ollama 或 OpenAI 兼容 LLM 核对字幕中的错字、漏字和明显识别错误。
 
-## 公开 Beta 状态
+## 当前状态
 
-当前源码版本为 `0.1.0-beta.1`，适合试用、测试和反馈，还不是稳定版。
+当前源码版本为 `0.1.0-beta.1`，适合试用和反馈，还不是稳定版。
 
-| 项目 | 当前状态 |
+| 运行方式 | 支持范围 |
 | --- | --- |
-| 桌面发布目标 | macOS Apple Silicon |
-| 桌面技术 | Tauri 2 + 内置 FastAPI sidecar |
-| 本地模型 | 14 个，按需下载，不包含在 DMG 中 |
-| 媒体工具 | 桌面包内置 ffmpeg / ffprobe |
-| 代码签名 / 公证 | 尚未提供 |
-| Windows / Linux 安装包 | 尚未提供 |
-| 自动更新 | 尚未提供 |
+| macOS 桌面端 | Apple Silicon，Tauri 2 + 内置 FastAPI sidecar |
+| Docker Web | Linux CPU 容器，网页与 API 同源，数据持久化到 `/data` |
+| Windows / Linux 原生桌面端 | 暂未提供 |
+| 签名、公证、自动更新 | 暂未提供 |
+| 模型权重 | 按需下载，不包含在 DMG 或 Docker 镜像中 |
 
-重要素材请保留原始副本。升级前建议在设置中创建备份。Provider 密钥目前保存在本机 SQLite 数据库中，尚未接入 macOS Keychain。
+重要素材请保留原件，升级前先备份。Provider 密钥目前保存在本地 SQLite 数据库中，未接入系统钥匙串。Docker 默认只允许本机访问，不应直接暴露到公网。
 
-## 可以做什么
+## 主要功能
 
-- 选择、批量选择或拖入音频和视频，预检格式、音频流、时长与分段策略。
-- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice 和 Qwen3-ASR 本地转写。
-- 管理模型下载进度，支持暂停、继续、停止和失败重试。
-- 配置在线 ASR Provider；使用在线模式时，媒体或音频会发送给对应第三方。
-- 查看、搜索、替换、编辑、复制和播放转写结果。
-- 保留转写、重新转写、编辑、恢复和后处理版本。
+- 拖入单个或多个音频、视频，预检音轨、格式、时长和分段策略。
+- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Qwen3-ASR，或在线 ASR Provider 转写。
+- 暂停、继续、停止、重试和删除模型下载，查看运行时兼容性与磁盘占用。
+- 查看、搜索、替换、编辑、播放和复制转写结果。
+- 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本。
 - 导出 TXT、SRT、VTT、ASS、JSON 和 Markdown。
-- 查看任务日志、诊断、质量信息、模型兼容性和存储占用。
+- 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
+- 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
 
-## 下载与首次启动
+## Docker 部署
 
-`v0.1.0-beta.1` 安装包可从 [GitHub Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) 获取，也可以[直接下载 Apple Silicon DMG](https://github.com/Goldloli/asrbox/releases/download/v0.1.0-beta.1/ASRbox_0.1.0-beta.1_aarch64.dmg)。仓库源码可能领先于最新 Release。
+需要 Docker Engine 24+ 和 Docker Compose v2。建议至少准备 8 GB 内存和 15 GB 可用空间；大模型还需要更多空间与内存。
 
-当前 DMG 未签名且未公证。首次打开时：
+```bash
+git clone https://github.com/Goldloli/asrbox.git
+cd asrbox
+cp .env.example .env
+docker compose up -d --build
+```
 
-1. 将 `ASRbox.app` 拖入“应用程序”。
-2. 右键应用并选择“打开”；或在“系统设置 → 隐私与安全性”中允许打开。
-3. 等待桌面端启动本地后端。主界面显示后端在线后再创建任务。
-4. 进入“模型”页面，先下载一个本地模型。
+浏览器打开 [http://127.0.0.1:17494](http://127.0.0.1:17494)。查看状态和日志：
 
-只从本项目 Releases 获取安装包，并核对 Release 中的 `SHA256SUMS.txt`。校验和不一致时不要运行。
+```bash
+docker compose ps
+docker compose logs -f asrbox
+```
+
+数据库、媒体、字幕、设置、模型和缓存都在名为 `asrbox-data` 的 Docker volume 中。`docker compose down` 不会删除它；`docker compose down -v` 会永久删除数据。
+
+默认配置只绑定 `127.0.0.1`。手机或其他局域网设备访问时，在 `.env` 中设置：
+
+```dotenv
+ASRBOX_BIND_ADDRESS=0.0.0.0
+ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
+```
+
+重启后用 `http://主机局域网IP:17494` 打开，在“设置 → 通用 → API 令牌”输入同一令牌。ASRbox 没有内置 TLS、多用户账号或权限系统；局域网以外请使用可信 VPN，或带 HTTPS 和认证的反向代理。
+
+完整升级、备份、Ollama 连接、卸载和排障步骤见 [Docker 部署指南](docs/docker.md)。
+
+## macOS 桌面端
+
+从 [`v0.1.0-beta.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。当前包未签名、未公证，首次打开需要右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。
+
+桌面端在 `127.0.0.1:17494` 启动内置后端，每次启动生成仅在内存中的 API token；退出应用会停止 sidecar。删除应用不会删除任务、模型或备份。
 
 ## 第一次转写
 
-1. 在“模型”页下载模型。Apple Silicon 上可先尝试 `mlx-whisper-turbo`；更小的快速验证可选择 `faster-whisper-base`。
-2. 在“新建任务”中选择音频或视频。
-3. 选择“本地模型”和已下载模型，按需设置语言、时间戳和分段选项。
-4. 提交后在任务页查看进度、日志和结果。
-5. 校对文本后导出 SRT、VTT、ASS、TXT、JSON 或 Markdown。
+1. 在“模型”页下载模型。桌面 Apple Silicon 可先试 `mlx-whisper-turbo`；Docker 建议先试 `faster-whisper-base` 或 `faster-whisper-small`。
+2. 在“新建转写”选择音频或视频。
+3. 选择本地模型或在线平台，设置语言、时间戳和分段选项。
+4. 提交后在“任务”查看进度、日志和转写结果。
+5. 编辑字幕或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
 
-模型越大，通常需要更多下载空间、内存和首次加载时间。14 个模型已在维护者的 Apple Silicon 环境中使用真实视频片段完成转写验证，但这不保证所有机器、素材和上游模型版本都得到相同结果。
+ASRbox 注册 14 个本地模型。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
 
-## 本地模型
+## AI 字幕核对
 
-ASRbox 当前注册 14 个本地模型：
+1. 打开“设置 → AI LLM 提供商”，新增并测试一个提供商。
+2. Ollama 不需要接口密钥；Docker 连接宿主机 Ollama 时使用 `http://host.docker.internal:11434/v1`。
+3. 打开左侧“AI”，选择一个已完成且有字幕版本的任务。
+4. 选择提供商并开始“字幕核对”。
+5. 页面默认只展开 LLM 发现的建议；正确段落按相邻区间分别折叠，可逐段展开。
+6. 勾选要采纳的建议后点击应用。未勾选的建议不会改字幕，应用结果会创建新版本。
 
-- Transformers Whisper：`whisper-base`、`whisper-small`、`whisper-medium`、`whisper-large-v3`、`whisper-large-v3-turbo`
-- Faster Whisper：`faster-whisper-base`、`faster-whisper-small`、`faster-whisper-medium`、`faster-whisper-large-v3`、`faster-whisper-large-v3-turbo`
-- Apple MLX：`mlx-whisper-turbo`
-- FunASR：`sensevoice-small`
-- Qwen3-ASR：`qwen3-asr-0.6b`、`qwen3-asr-1.7b`
+连接失败、鉴权失败、服务端错误、上下文过长和返回格式错误会分别提示；只有 LLM 正常完成且没有建议时，才显示“没有发现需要修改的内容”。LLM 失败不会影响已经成功的转写。详见 [AI 字幕核对指南](docs/ai-proofreading.md)。
 
-模型按需从 Hugging Face 或 ModelScope 下载到 ASRbox 数据目录。暂停只暂停当前应用进程中的任务；停止会结束任务但保留可复用的已下载文件；重试会继续使用现有目录；删除模型会删除对应的 ASRbox 模型目录。
+## 数据与隐私
 
-模型选择、估算体积、下载来源和许可注意事项见[模型指南](docs/models.md)。
-
-## 数据存放位置
-
-macOS 桌面端默认数据根目录：
+桌面数据默认位于：
 
 ```text
 ~/Library/Application Support/com.goldloli.asrbox/
 ```
 
-主要内容：
+Docker 数据统一位于容器 `/data`，由 `asrbox-data` volume 持久化。这里可能包含原始媒体、提取音频、字幕版本、导出、模型、日志和 Provider 密钥，备份时应按敏感数据处理。
 
-```text
-asrbox.db                 任务、设置、版本和 Provider 配置
-models/<model-name>/      最终模型文件与模型下载缓存
-uploads/                  ASRbox 管理的导入媒体
-audio/                    提取或规范化后的音频
-cache/                    任务缓存
-exports/                  后端生成的导出与诊断文件
-backups/                  应用内创建的备份
-```
+本地 ASR 不会把媒体发送给 ASR 服务，但下载模型仍会访问 Hugging Face 或 ModelScope。在线 ASR 会把媒体或音频发送给所选第三方。LLM 核对只发送字幕段落文字、段落编号和有限相邻上下文，不发送音频或文件路径；远程 LLM 仍属于第三方处理。
 
-用户从桌面端保存的导出默认进入 `~/Downloads/ASRbox Exports/`，可在“设置 → 通用 → 下载位置”修改。模型不存放在项目目录、`.app` 或 DMG 中；删除应用也不会自动删除数据目录和模型。
-
-开发后端默认使用仓库下的 `data/`，可通过 `ASRBOX_DATA_DIR` 修改。完整的数据边界和卸载步骤见[隐私与本地数据](docs/privacy.md)。
-
-## 架构
-
-```text
-app/                 React 组件、路由、状态与共享 UI
-web/                 Vite Web 入口
-backend/             FastAPI API、任务调度、ASR 后端、存储与导出
-tauri/               Tauri 桌面壳、sidecar 生命周期和系统集成
-scripts/             构建、版本、审计和发布门禁
-third_party/ffmpeg/  内置 ffmpeg / ffprobe 及合规材料
-```
-
-桌面端在 `127.0.0.1:17494` 启动内置 `asrbox-server`，每次启动生成内存 API token，并把 Tauri app data 目录传给后端。Web UI 连接已有后端，不会自动启动本地服务。将开发后端暴露到局域网或公网不属于支持范围。
+详见[隐私与本地数据](docs/privacy.md)和[安全政策](SECURITY.md)。
 
 ## 本地开发
 
-环境要求：macOS Apple Silicon、Bun `1.3.8`、Python `3.13`、Rust stable。当前 Python 锁文件面向 macOS Apple Silicon / Python 3.13。
+桌面开发目标使用 Bun `1.3.8`、Python `3.13`、Rust stable 和 macOS Apple Silicon；Docker 运行时使用独立的 Linux CPU 依赖锁。
 
 ```bash
 bun install
 python -m venv .venv
 .venv/bin/python -m pip install pip==25.3
 .venv/bin/pip install -r requirements-dev.lock
-```
-
-分别启动后端和 Web UI：
-
-```bash
 npm run dev:server
 npm run dev:web
 ```
 
-启动桌面开发模式：
+桌面开发：`npm run dev:desktop`。容器构建：`npm run build:docker`。详细贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 构建与验证
 
 ```bash
-npm run dev:desktop
+npm run typecheck
+npm run build:web
+npm run test:backend
+npm run test:e2e:llm
+npm run test:docker
+npm run check:open-source
 ```
 
-开发环境需要 ffmpeg / ffprobe；可以安装系统版本，也可以使用 `third_party/ffmpeg/darwin-arm64/` 中的内置二进制。
-
-## 构建与发布
-
-安装冻结后端所需依赖并构建 `.app` 和 DMG：
+桌面安装包：
 
 ```bash
 .venv/bin/pip install -r requirements-build.lock
 npm run build:desktop
 ```
 
-Apple Silicon DMG 输出位置：
+输出位于 `tauri/src-tauri/target/release/bundle/dmg/`。真实模型测试需要自行准备合法媒体和已下载模型，不属于默认 CI。
+
+## 项目结构
 
 ```text
-tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
-```
-
-`v0.1.0-beta.1` 通过与应用版本一致的 tag 触发 Release workflow，生成 DMG、FFmpeg 源码归档和 `SHA256SUMS.txt`。详细步骤见[发布流程](docs/release.md)。
-
-## 验证
-
-提交前统一门禁：
-
-```bash
-npm run check:open-source
-```
-
-该命令检查锁定依赖、Python 包、版本一致性、发布工具、第三方合规、TypeScript、Web 构建、后端测试、Cargo 和浏览器烟雾测试。联网依赖漏洞审计由 CI/Release 强制运行，也可单独执行：
-
-```bash
-npm run audit:dependencies
-```
-
-真实模型测试需要预先下载模型和自备合法测试素材，不属于默认 CI：
-
-```bash
-ASRBOX_REAL_MEDIA_DIR="/path/to/media" npm run test:backend:real-models:full
+app/                 React 路由、组件、状态和共享 UI
+web/                 Vite Web 入口
+backend/             FastAPI、任务、ASR、LLM、版本、存储和导出
+tauri/               macOS 桌面壳与 sidecar 生命周期
+Dockerfile           Linux CPU 单容器构建
+compose.yaml         持久化和网络部署入口
+scripts/             构建、测试、审计和发布门禁
+openspec/            已接受规格与活动变更
+third_party/ffmpeg/  桌面内置 FFmpeg 的许可与来源材料
 ```
 
 ## 文档
 
+- [Docker 部署](docs/docker.md)
+- [AI 字幕核对](docs/ai-proofreading.md)
 - [模型指南](docs/models.md)
 - [故障排查](docs/troubleshooting.md)
 - [隐私与本地数据](docs/privacy.md)
-- [贡献指南](CONTRIBUTING.md)
-- [安全政策](SECURITY.md)
 - [持续集成](docs/ci.md)
 - [发布流程](docs/release.md)
-- [后端 API 稳定边界](backend/API_FREEZE.md)
-- [后端成熟度报告](backend/MATURITY_REPORT.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全政策](SECURITY.md)
 - [第三方依赖与许可](THIRD_PARTY_NOTICES.md)
 - [更新记录](CHANGELOG.md)
 
-## 安全与隐私
-
-本地模型模式在本机处理媒体；在线 Provider 模式会把媒体、提取音频、文本或元数据发送给配置的第三方。Provider API 密钥当前以明文保存在本地 `asrbox.db`，并会进入应用备份。
-
-桌面后端只监听 loopback，并使用每次启动生成的 token；这不能防止同一 macOS 账户下的恶意软件，也不等同于磁盘加密。敏感漏洞请按[安全政策](SECURITY.md)私下报告。
-
-## 贡献
-
-欢迎提交可复现问题和小而可验证的改动。涉及后端行为、模型下载、桌面打包、存储或导出的修改应附相关自动化测试和人工验证记录。开始前请阅读[贡献指南](CONTRIBUTING.md)。
-
 ## 许可证
 
-ASRbox 源代码使用 [MIT License](LICENSE)。内置 FFmpeg 及模型、运行时和其他第三方组件分别受其自身许可证约束，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。模型权重不会随 ASRbox 仓库或 DMG 再分发。
+ASRbox 源代码采用 [MIT License](LICENSE)。FFmpeg、模型、Python/JavaScript 运行库和其他第三方组件分别受其自身许可证约束。模型权重不会随仓库、DMG 或 Docker 镜像分发。

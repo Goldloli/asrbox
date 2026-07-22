@@ -10,6 +10,8 @@
 | `model` | Local model registry, loading, compatibility, or inference |
 | `model-download` | Download source, progress, pause/resume/stop/retry, or cache behavior |
 | `provider` | Online ASR provider protocol or credentials |
+| `llm` | LLM provider configuration, subtitle proofreading, suggestions, or apply flow |
+| `docker` | Container image, Compose, Linux runtime, health, persistence, or network exposure |
 | `media-runtime` | ffmpeg, ffprobe, audio decoding, codecs, or chunking |
 | `storage` | App data, model sizes, cleanup, backup, restore, or export paths |
 | `release` | Versioning, CI, packaging, checksums, signing, or GitHub Releases |

@@ -4,6 +4,27 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- Source-built Linux CPU Docker deployment with a multi-stage non-root image, same-origin Web UI/API, ffmpeg, health checks, and persistent `/data` volume.
+- Loopback-only Compose defaults with configurable host port, bind address, API token, and host-Ollama connectivity.
+- Docker image, health, persistence, token, deep-link, desktop-browser, and mobile-browser smoke coverage in CI and Release verification.
+- Dedicated AI workspace for LLM subtitle proofreading, provider presets/testing, ordered suggestions, individually collapsible correct ranges, and explicit versioned application.
+- Docker and AI proofreading guides in Chinese and English.
+
+### Changed
+
+- Container-built Web UI connects to its browser origin; desktop and Vite development keep the loopback default.
+- Web API tokens are kept only in browser session storage and excluded from settings export/persistent local storage.
+- Packaged frontend owns `/`; API metadata is available at `/api-info`, while source backend development retains its JSON root.
+- Linux containers identify and reject the Apple-only MLX model before download.
+- README, privacy, security, model, troubleshooting, contribution, CI, release, and third-party documentation now distinguish desktop, Docker, local ASR, online providers, and LLM text processing.
+
+### Security
+
+- Docker binds to `127.0.0.1` by default; LAN exposure is explicit and documented with token, VPN, and authenticated HTTPS proxy requirements.
+- Container state and backups are documented as sensitive because `/data` can contain media, transcripts, and plaintext provider credentials.
+
 ## [0.1.0-beta.1] - 2026-07-13
 
 ### Added

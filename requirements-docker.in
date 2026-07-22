@@ -1,0 +1,24 @@
+# Linux CPU container runtime. Apple-only MLX packages are intentionally excluded.
+fastapi
+uvicorn
+sqlalchemy
+python-multipart
+requests
+pydantic
+huggingface_hub
+tqdm
+modelscope
+# Keep the Python 3.13-compatible scientific stack selected by the maintained runtime.
+numpy==2.4.6
+numba==0.66.0
+llvmlite==0.48.0
+torch==2.11.0
+torchaudio==2.11.0
+transformers @ git+https://github.com/huggingface/transformers.git@09835700ac3db4a08762a0a6f6960c346ebf7365
+accelerate
+faster-whisper
+funasr
+pyannote.audio
+opencc-python-reimplemented
+sse-starlette
+fastmcp

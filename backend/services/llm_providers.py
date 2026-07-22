@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -75,7 +76,14 @@ class LLMProviderError(RuntimeError):
 
 
 def list_presets() -> list[LLMProviderPresetResponse]:
-    return list(PRESETS)
+    if os.environ.get("ASRBOX_CONTAINER") != "1":
+        return list(PRESETS)
+    return [
+        preset.model_copy(update={"base_url": "http://host.docker.internal:11434/v1"})
+        if preset.id == "ollama"
+        else preset
+        for preset in PRESETS
+    ]
 
 
 def mask_secret(value: str | None) -> str | None:
@@ -101,6 +109,16 @@ def is_loopback_url(value: str) -> bool:
         return False
 
 
+def is_local_url(value: str) -> bool:
+    if is_loopback_url(value):
+        return True
+    try:
+        hostname = urlparse(value).hostname
+    except ValueError:
+        return False
+    return os.environ.get("ASRBOX_CONTAINER") == "1" and hostname == "host.docker.internal"
+
+
 def validate_base_url(value: str) -> str:
     normalized = value.strip().rstrip("/")
     try:
@@ -112,7 +130,7 @@ def validate_base_url(value: str) -> str:
         raise ValueError("LLM provider base URL must be an HTTP or HTTPS URL")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("LLM provider base URL must not contain credentials, query parameters, or fragments")
-    if parsed.scheme == "http" and not is_loopback_url(normalized):
+    if parsed.scheme == "http" and not is_local_url(normalized):
         raise ValueError("Remote LLM provider endpoints must use HTTPS")
     return normalized
 
@@ -122,7 +140,7 @@ def _requires_api_key(provider: LLMProvider) -> bool:
         return True
     if provider.preset == "ollama":
         return False
-    return not is_loopback_url(provider.base_url)
+    return not is_local_url(provider.base_url)
 
 
 def _validate_preset(preset: str) -> None:
@@ -149,7 +167,7 @@ def to_response(row: LLMProvider) -> LLMProviderResponse:
         api_key_masked=mask_secret(row.api_key_secret),
         default_model=row.default_model,
         enabled=bool(row.enabled),
-        is_local=is_loopback_url(row.base_url),
+        is_local=is_local_url(row.base_url),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
