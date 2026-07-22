@@ -20,7 +20,26 @@ Fix:
 3. In development, run `npm run dev:server` and confirm the terminal has no import error.
 4. Use the desktop “Restart backend” action if the app shell is responsive.
 
-The supported desktop backend listens only on `127.0.0.1`. A manually exposed LAN/public backend is outside the supported configuration.
+The desktop backend listens only on `127.0.0.1`. For Docker, also run:
+
+```bash
+docker compose ps
+docker compose logs --tail=200 asrbox
+docker inspect --format '{{json .State.Health}}' "$(docker compose ps -q asrbox)"
+```
+
+If the Docker page loads but reports the backend offline, confirm the API token in Settings matches `ASRBOX_API_TOKEN`. Changing the service URL clears the session token.
+
+## Docker Build or Startup Fails
+
+- Run `docker compose config` to catch malformed `.env` values.
+- Confirm Docker has enough disk and memory; the CPU ML stack makes the image large.
+- First builds need Docker Hub, PyPI, the PyTorch CPU index, and GitHub access.
+- A `/data` permission error usually means a bind mount is not writable by container uid/gid `10001`; prefer the named volume or fix host ownership.
+- An unhealthy container should be diagnosed from logs before it is repeatedly restarted.
+- `mlx-whisper-turbo` is intentionally unavailable in Linux containers. Choose Faster Whisper, Transformers Whisper, SenseVoice, or Qwen3-ASR.
+
+Do not use `docker compose down -v` as a troubleshooting reset unless permanent data loss is intended.
 
 ## macOS Blocks the App
 
@@ -128,6 +147,17 @@ ASRbox appends a numeric suffix rather than overwriting an existing file. Backen
 6. Preserve the original media and export any useful transcript before cleanup.
 
 Music, crowd noise, overlapping speakers, poor microphones, and unsupported languages can reduce accuracy even when the runtime is healthy.
+
+## AI Subtitle Proofreading Fails
+
+- **Connection failed**: start Ollama or check DNS, firewall, proxy, and provider URL. Docker reaches host Ollama at `http://host.docker.internal:11434/v1`.
+- **Authentication failed**: replace the provider key and use Test connection.
+- **Model error**: confirm the exact model name; for Ollama, run `ollama list` on its host.
+- **Context too long**: use a larger-context model or a shorter transcript.
+- **Invalid response**: retry or choose a model that reliably follows structured-output instructions.
+- **No changes needed** appears only after a successful response with zero suggestions; it is not used for failures.
+
+Provider failures preserve the source transcript. See [AI subtitle proofreading](ai-proofreading.md).
 
 ## Create a Diagnostic Bundle
 

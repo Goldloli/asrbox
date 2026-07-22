@@ -15,8 +15,8 @@ from backend.database.session import SessionLocal
 router = APIRouter()
 
 
-@router.get("/")
-async def root():
+@router.get("/api-info")
+async def api_info():
     return {"message": "ASRbox API", "version": __version__}
 
 
@@ -99,4 +99,3 @@ async def shutdown():
 
     asyncio.create_task(_shutdown())
     return {"message": "Shutting down..."}
-

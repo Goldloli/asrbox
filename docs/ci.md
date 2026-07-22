@@ -4,7 +4,7 @@ ASRbox uses separate GitHub Actions workflows for pull-request/main checks and r
 
 ## CI Workflow
 
-`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main` on a `macos-15` runner with Bun `1.3.8` and Python `3.13`.
+`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main`. macOS validates the desktop/source stack; Ubuntu validates the Docker build and deployment path.
 
 It performs:
 
@@ -20,6 +20,14 @@ It performs:
 10. Tauri `cargo check --locked` and `cargo test --locked`.
 11. Playwright public-beta browser smoke test.
 12. AI LLM provider and subtitle-proofreading browser regression tests.
+
+The Ubuntu Docker job:
+
+1. Builds `asrbox:local` with Buildx and GitHub Actions layer caching.
+2. Starts Compose with a temporary project and named volume.
+3. Verifies health, SPA root/deep links, API metadata, token-protected APIs, and missing MLX runtime.
+4. Creates persisted state, removes/recreates the container, and confirms the state remains.
+5. Runs Playwright against the container at desktop and mobile widths and confirms same-origin requests and session-only token storage.
 
 CI uses the vendored Apple Silicon ffmpeg and ffprobe paths for backend tests. It does not download large ASR models or run private real-media fixtures.
 
@@ -51,6 +59,7 @@ npm run test:backend:contract
 npm run test:backend:server
 npm run test:e2e:smoke
 npm run test:e2e:llm
+npm run test:docker
 bunx playwright test app/e2e/models-download-controls.spec.ts
 cd tauri/src-tauri && cargo check --locked && cargo test --locked
 ```
@@ -70,6 +79,8 @@ In addition to the CI-class checks, Release:
 - Creates the FFmpeg source archive required by the bundled GPL build.
 - Generates and validates `SHA256SUMS.txt`.
 - Publishes the DMG, FFmpeg source archive, and checksums to GitHub Releases.
+
+Release also rebuilds and smoke-tests the Docker deployment, but the current workflow does not publish an image to a registry. Docker users build the tagged source locally.
 
 Tags containing `-` are published as prereleases.
 

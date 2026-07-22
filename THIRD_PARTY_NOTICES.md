@@ -16,6 +16,8 @@ ASRbox depends on open source projects and optional model ecosystems. This file 
 
 ## Runtime and Application Frameworks
 
+The source-built Docker image installs ffmpeg/ffprobe from Debian packages rather than copying the macOS binaries above. Debian package license files remain in the image. Anyone redistributing a derived container image must review the exact package versions and satisfy their source, notice, and license obligations; the repository does not currently publish a prebuilt container image.
+
 | Dependency | Purpose | License check |
 | --- | --- | --- |
 | Tauri | Desktop shell and native commands | Check upstream crate/package license |
@@ -59,3 +61,4 @@ Before a public release:
 - Run `npm run verify:third-party` and attach the generated FFmpeg source archive to every binary release.
 - Confirm model documentation does not imply redistribution rights that ASRbox does not have.
 - Confirm release artifacts do not include model weights, test media, caches, `.venv`, or `node_modules`.
+- For any future published container image, inventory Debian ffmpeg and Python/runtime package licenses and provide required source or notices before publication.

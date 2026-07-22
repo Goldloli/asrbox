@@ -18,11 +18,11 @@ Before use, review the provider's pricing, retention, training, privacy, and reg
 
 LLM proofreading is a separate, optional post-processing step for a completed transcript. It sends only target segment identifiers and text plus limited neighboring segment identifiers and text. It does not send audio, media bytes, filenames, file paths, timestamps, speaker labels, confidence values, or other task metadata.
 
-An endpoint is classified as local only when its configured hostname is `localhost`, `127.0.0.1`, or `::1`. Ollama defaults to `http://localhost:11434/v1`, but changing that address to a non-loopback host makes it a third-party endpoint. Remote LLM endpoints must use HTTPS. Review the selected provider's retention, training, privacy, and regional-processing terms before starting proofreading.
+An endpoint is normally classified as local only when its configured hostname is `localhost`, `127.0.0.1`, or `::1`. In the marked Docker runtime, `host.docker.internal` is also treated as the operator-controlled Docker host so host Ollama can use HTTP. Other non-loopback endpoints are third parties and must use HTTPS. Review the selected provider's retention, training, privacy, and regional-processing terms before starting proofreading.
 
 Proofreading suggestions never change a transcript automatically. Runs are bound to an immutable source version, and only explicitly selected suggestions are applied. Application creates a new transcript version; the source version remains available for export and restore.
 
-## Desktop Data Root
+## Desktop and Docker Data Roots
 
 The normal macOS desktop data root is:
 
@@ -47,6 +47,8 @@ Desktop file exports go to `~/Downloads/ASRbox Exports/` by default or to the cu
 
 A development backend uses the repository's `data/` directory unless `ASRBOX_DATA_DIR` is set.
 
+Docker stores the same classes of data under `/data`, normally backed by the `asrbox-data` named volume. Removing or recreating the application container does not remove that volume. `docker compose down -v` or an explicit `docker volume rm` permanently deletes it. Container backups and migrated volumes have the same sensitivity as desktop backups.
+
 ## Provider Credentials
 
 ASR and LLM provider API keys are masked in normal API responses but are currently stored as plaintext in `asrbox.db`. They are not encrypted with macOS Keychain. ASRbox backups include the database, so backup archives also contain provider credentials, proofreading runs, source-version references, reasons, and suggestion text.
@@ -57,7 +59,9 @@ Treat the data directory and every backup as sensitive. Do not attach them to pu
 
 The supported desktop backend binds to `127.0.0.1` and uses a random API token generated for each app launch. The token reduces access from unrelated local web pages, but it is not user authentication, disk encryption, or protection from software running as the same macOS user.
 
-Health and root metadata remain available without the token. A manually started development backend is unauthenticated unless `ASRBOX_API_TOKEN` is set. Exposing the backend to a LAN or the public internet is unsupported.
+Health and API metadata remain available without the token. A manually started development backend is unauthenticated unless `ASRBOX_API_TOKEN` is set.
+
+The supported Docker Compose configuration binds to host loopback by default. An operator can explicitly bind to a LAN interface and set a fixed `ASRBOX_API_TOKEN`; the Web UI stores an entered token only in browser session storage. This is not multi-user authentication, TLS, rate limiting, or a public-Internet security layer. Use a trusted LAN/VPN or an authenticated HTTPS reverse proxy and never expose a tokenless container beyond loopback.
 
 ## Backups and Diagnostics
 
@@ -85,6 +89,15 @@ Removing `ASRbox.app` alone does not remove models, tasks, exports, or backups.
 6. Remove ASRbox backup ZIP files copied elsewhere.
 
 These deletions are irreversible.
+
+## Complete Uninstall with Docker
+
+1. Export or back up transcripts and the `/data` volume you need.
+2. Run `docker compose down --remove-orphans` to remove the application container while preserving data.
+3. Remove the local image if desired.
+4. Only after checking the backup, remove the named volume with `docker volume rm asrbox-data`.
+
+See [Docker deployment](docker.md) for backup and restore commands. Volume deletion is irreversible.
 
 ## Reporting Privacy or Security Issues
 

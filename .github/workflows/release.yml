@@ -19,8 +19,45 @@ env:
   PYTHON_VERSION: "3.13"
 
 jobs:
+  docker:
+    name: Verify Docker deployment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: asrbox:local
+          cache-from: type=gha
+
+      - name: Verify Docker deployment
+        env:
+          ASRBOX_DOCKER_SKIP_BUILD: "1"
+        run: npm run test:docker
+
   macos-arm64:
     name: Build macOS Apple Silicon DMG
+    needs: docker
     runs-on: macos-15
     timeout-minutes: 120
 

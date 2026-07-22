@@ -94,3 +94,40 @@ jobs:
 
       - name: AI LLM browser regression tests
         run: npm run test:e2e:llm
+
+  docker:
+    name: Docker build and deployment smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: asrbox:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify Docker deployment
+        env:
+          ASRBOX_DOCKER_SKIP_BUILD: "1"
+        run: npm run test:docker
