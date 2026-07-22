@@ -2,6 +2,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ -x "$ROOT/.venv/bin/python" ]]; then
+  PYTHON="$ROOT/.venv/bin/python"
+else
+  PYTHON="$(command -v python3 || command -v python)"
+fi
 PROJECT="asrbox-smoke-${$}"
 PORT="${ASRBOX_DOCKER_TEST_PORT:-17504}"
 TOKEN="${ASRBOX_DOCKER_TEST_TOKEN:-asrbox-docker-smoke-token}"
@@ -37,7 +42,7 @@ assert_model_storage() {
   local expected_root="$1"
   local expected_status="$2"
   authorized_curl "${BASE_URL}/models/storage" | \
-    EXPECTED_ROOT="$expected_root" EXPECTED_STATUS="$expected_status" "$ROOT/.venv/bin/python" -c '
+    EXPECTED_ROOT="$expected_root" EXPECTED_STATUS="$expected_status" "$PYTHON" -c '
 import json
 import os
 import sys
@@ -68,7 +73,7 @@ relocate_model_storage() {
 
   for _attempt in $(seq 1 60); do
     local status
-    status="$(authorized_curl "${BASE_URL}/models/storage/relocation" | "$ROOT/.venv/bin/python" -c 'import json, sys; print(json.load(sys.stdin)["status"])')"
+    status="$(authorized_curl "${BASE_URL}/models/storage/relocation" | "$PYTHON" -c 'import json, sys; print(json.load(sys.stdin)["status"])')"
     case "$status" in
       complete)
         return 0
