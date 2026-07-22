@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -62,6 +63,31 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait(timeout=10)
+
+    with tempfile.TemporaryDirectory(prefix="asrbox-binary-worker-") as worker_dir:
+        worker_path = Path(worker_dir)
+        request_path = worker_path / "request.json"
+        result_path = worker_path / "result.json"
+        request_path.write_text(json.dumps({"model_name": "whisper-base", "inputs": []}), encoding="utf-8")
+        worker = subprocess.run(
+            [
+                str(binary),
+                "--data-dir",
+                data_dir,
+                "--local-worker-request",
+                str(request_path),
+                "--local-worker-result",
+                str(result_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            cwd=root,
+        )
+        assert worker.returncode == 1, worker.stdout + worker.stderr
+        worker_state = json.loads(result_path.read_text(encoding="utf-8"))
+        assert worker_state["status"] == "failed"
+        assert worker_state["error_type"] == "ValueError"
 
 
 def _wait_for_health(port: int, proc: subprocess.Popen) -> None:

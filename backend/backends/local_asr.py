@@ -117,16 +117,21 @@ class TransformersWhisperBackend:
     def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
         pipeline = self._pipelines.get(model_config.model_name)
         if pipeline is None:
+            import torch
             from transformers import pipeline as transformers_pipeline
 
             model_dir = _model_path(model_config.model_name)
+            device, dtype = _transformers_device(torch)
+            pipeline_options = {"device": device}
+            if dtype is not None:
+                pipeline_options["torch_dtype"] = dtype
             with local_hf_files_only():
                 pipeline = transformers_pipeline(
                     "automatic-speech-recognition",
                     model=str(model_dir),
                     tokenizer=str(model_dir),
                     feature_extractor=str(model_dir),
-                    device=-1,
+                    **pipeline_options,
                 )
             self._pipelines[model_config.model_name] = pipeline
 
@@ -154,6 +159,15 @@ class TransformersWhisperBackend:
 
     def unload(self, model_name: str) -> bool:
         return self._pipelines.pop(model_name, None) is not None
+
+
+def _transformers_device(torch_module) -> tuple[object, object | None]:
+    if torch_module.cuda.is_available():
+        return 0, torch_module.float16
+    mps = getattr(torch_module.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps", torch_module.float16
+    return -1, None
 
 
 def _faster_whisper_device() -> tuple[str, str]:

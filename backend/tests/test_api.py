@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 import zipfile
@@ -13,8 +14,12 @@ from fastapi.testclient import TestClient
 from backend.models import TranscriptSegment, TranscriptionResult
 
 
-def make_client(tmp_path: Path) -> TestClient:
+def make_client(tmp_path: Path, *, inline_local: bool = True) -> TestClient:
     os.environ["ASRBOX_DATA_DIR"] = str(tmp_path)
+    if inline_local:
+        os.environ["ASRBOX_INLINE_LOCAL_TRANSCRIPTION"] = "1"
+    else:
+        os.environ.pop("ASRBOX_INLINE_LOCAL_TRANSCRIPTION", None)
     from backend.app import create_app
 
     app = create_app()
@@ -859,7 +864,7 @@ def test_media_preprocess_generates_wav_metadata_and_rejects_unsupported_input(t
     assert "Unsupported media format" in failed["error"]
 
 
-def test_local_model_task_returns_before_transcription_finishes_and_advances_progress(
+def test_local_model_task_returns_before_transcription_finishes_without_inventing_progress(
     tmp_path: Path, monkeypatch
 ) -> None:
     started = threading.Event()
@@ -882,8 +887,6 @@ def test_local_model_task_returns_before_transcription_finishes_and_advances_pro
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
     monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", fake_prepare)
-    monkeypatch.setattr("backend.services.tasks.LOCAL_PROGRESS_INTERVAL_SECONDS", 0.02)
-
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
 
@@ -905,13 +908,16 @@ def test_local_model_task_returns_before_transcription_finishes_and_advances_pro
     task_id = response.json()["id"]
     assert started.wait(timeout=1)
 
-    progressing = wait_for_task(
+    transcribing = wait_for_task(
         client,
         task_id,
-        lambda task: task["status"] == "transcribing" and task["progress"] > 60,
-        "transcribing progress above 60",
+        lambda task: task["status"] == "transcribing",
+        "transcribing",
     )
-    assert progressing["normalized_audio_path"].endswith(".mp3")
+    assert transcribing["progress"] == 60
+    assert transcribing["normalized_audio_path"].endswith(".mp3")
+    time.sleep(0.05)
+    assert client.get(f"/tasks/{task_id}").json()["progress"] == 60
 
     release.set()
     completed = wait_for_task(client, task_id, lambda task: task["status"] == "completed", "completed")
@@ -1236,6 +1242,116 @@ def test_cancel_running_task_prevents_completed_result(tmp_path: Path, monkeypat
     task = wait_for_task(client, response["id"], lambda item: item["status"] == "cancelled", "cancelled")
     assert task["text"] is None
     assert task["segments"] == []
+
+
+def test_cancel_running_local_process_releases_next_queued_task(tmp_path: Path, monkeypatch) -> None:
+    helper = tmp_path / "local-worker-helper.py"
+    helper.write_text(
+        """
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+request_path = Path(sys.argv[1])
+result_path = Path(sys.argv[2])
+mode = sys.argv[3]
+marker_path = Path(sys.argv[4])
+request = json.loads(request_path.read_text(encoding="utf-8"))
+marker_path.write_text(str(os.getpid()), encoding="utf-8")
+
+def write(payload):
+    temporary = result_path.with_suffix(result_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload), encoding="utf-8")
+    os.replace(temporary, result_path)
+
+if mode == "slow":
+    write({"status": "running", "completed": 0, "total": len(request["inputs"]), "results": []})
+    time.sleep(60)
+else:
+    results = []
+    for index, _item in enumerate(request["inputs"]):
+        start = 0.0 if index == 0 else 2.5
+        results.append({
+            "text": f"chunk {index + 1}",
+            "language": "en",
+            "duration": 120.0,
+            "segments": [{"id": 1, "start": start, "end": start + 1.0, "text": f"chunk {index + 1}"}],
+            "model_name": request["model_name"],
+        })
+        status = "completed" if len(results) == len(request["inputs"]) else "running"
+        write({"status": status, "completed": len(results), "total": len(request["inputs"]), "results": results})
+        time.sleep(0.25)
+""".strip(),
+        encoding="utf-8",
+    )
+    first_started = tmp_path / "first-worker.pid"
+    second_started = tmp_path / "second-worker.pid"
+    command_count = 0
+
+    def fake_worker_command(request_path: Path, result_path: Path) -> list[str]:
+        nonlocal command_count
+        command_count += 1
+        is_first = command_count == 1
+        return [
+            sys.executable,
+            str(helper),
+            str(request_path),
+            str(result_path),
+            "slow" if is_first else "fast",
+            str(first_started if is_first else second_started),
+        ]
+
+    def fake_prepare(path: Path) -> tuple[Path, dict]:
+        return path, {"duration_ms": 121_000, "has_audio_stream": True}
+
+    def fake_split(audio_path: Path, output_dir: Path, duration_ms: int, **_kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        first = output_dir / "chunk-0001.wav"
+        second = output_dir / "chunk-0002.wav"
+        first.write_bytes(b"first")
+        second.write_bytes(b"second")
+        return [(first, 0, 120_000), (second, 118_000, duration_ms)]
+
+    monkeypatch.setattr("backend.services.tasks._local_worker_command", fake_worker_command)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", fake_prepare)
+    monkeypatch.setattr("backend.services.tasks.preflight_media", lambda *_args, **_kwargs: {"will_chunk": True, "chunk_count": 2, "warnings": []})
+    monkeypatch.setattr("backend.services.tasks.split_audio_chunks", fake_split)
+
+    client = make_client(tmp_path, inline_local=False)
+    client.put("/settings/asr", json={"max_concurrent_local_tasks": 1})
+    create_downloaded_model(tmp_path, "whisper-base")
+    first = client.post(
+        "/transcriptions",
+        files={"file": ("slow.wav", b"slow", "audio/wav")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    ).json()
+    second = client.post(
+        "/transcriptions",
+        files={"file": ("next.wav", b"next", "audio/wav")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    ).json()
+
+    wait_for_task(client, first["id"], lambda item: item["status"] == "transcribing", "first transcribing")
+    deadline = time.time() + 3
+    while not first_started.exists() and time.time() < deadline:
+        time.sleep(0.05)
+    assert first_started.exists()
+    first_pid = int(first_started.read_text(encoding="utf-8"))
+
+    cancelled = client.post(f"/tasks/{first['id']}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+
+    wait_for_task(client, second["id"], lambda item: item["status"] == "transcribing" and item["progress"] > 60, "second chunk progress")
+    completed = wait_for_task(client, second["id"], lambda item: item["status"] == "completed", "second completed")
+    assert completed["text"] == "chunk 1 chunk 2"
+    assert second_started.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(first_pid, 0)
+    first_chunks = client.get(f"/tasks/{first['id']}/chunks").json()
+    assert {chunk["status"] for chunk in first_chunks} <= {"completed", "cancelled"}
 
 
 def test_retranscribe_resets_task_and_runs_again(tmp_path: Path, monkeypatch) -> None:
@@ -1906,6 +2022,10 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert args.port == 17495
     assert args.parent_pid == 123
     assert args.keep_running_sentinel == "/tmp/asrbox.keep"
+
+    worker_args = parse_args(["--local-worker-request", "/tmp/request.json", "--local-worker-result", "/tmp/result.json"])
+    assert worker_args.local_worker_request == "/tmp/request.json"
+    assert worker_args.local_worker_result == "/tmp/result.json"
 
     version_args = parse_args(["--version"])
     assert version_args.version is True
