@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.0-beta.1`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.0-rc.2`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -72,7 +72,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.0-beta.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
+Download the Apple Silicon DMG from the [`v0.1.0-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.2) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
 
 Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 

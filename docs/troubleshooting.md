@@ -87,7 +87,7 @@ Current ASRbox loads audio for Transformers Whisper and Qwen3-ASR through the Tr
 
 If a packaged app still reports “Could not load libtorchcodec”:
 
-1. Confirm you are running a build containing the current `0.1.0-beta.1` source rather than an older app copy.
+1. Confirm you are running a build containing the current `0.1.0-rc.2` source rather than an older app copy.
 2. Quit ASRbox fully, replace the old `.app`, and reopen it.
 3. For a source build, reinstall `requirements-dev.lock` and `requirements-build.lock`, then rebuild with `npm run build:desktop`.
 4. Generate a diagnostic bundle and include the ASRbox version, Python version, model id, and sanitized traceback in an issue.
