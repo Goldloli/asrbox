@@ -50,10 +50,22 @@ def _model_path(model_name: str) -> Path:
     if marker.exists():
         try:
             snapshot_path = json.loads(marker.read_text(encoding="utf-8")).get("snapshot_path")
-            if snapshot_path and Path(snapshot_path).exists():
-                return Path(snapshot_path)
         except (json.JSONDecodeError, OSError):
-            pass
+            snapshot_path = None
+        if snapshot_path:
+            recorded = Path(snapshot_path)
+            if recorded.exists():
+                return recorded
+            # The marker stores an absolute snapshot path from the storage root that
+            # was active at download time. After a model-storage relocation that path
+            # is stale, so re-anchor the portion below the model directory under the
+            # current storage root before giving up on the snapshot layout.
+            if model_name in recorded.parts:
+                suffix = recorded.parts[recorded.parts.index(model_name) + 1 :]
+                if suffix:
+                    reanchored = model_dir.joinpath(*suffix)
+                    if reanchored.exists():
+                        return reanchored
     return model_dir
 
 
