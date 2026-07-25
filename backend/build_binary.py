@@ -32,8 +32,26 @@ BASE_HIDDEN_IMPORTS = [
 ]
 
 
+def _write_funasr_module_manifest(build_root: Path) -> Path:
+    """Record every funasr submodule for the frozen runtime hook.
+
+    funasr populates its model registry by walking package paths at import time,
+    which sees nothing under PyInstaller. The runtime hook pre-imports the modules
+    listed here so the registry decorators run in the frozen binary as well.
+    """
+    import funasr
+    import pkgutil
+
+    names = sorted(name for _, name, _ in pkgutil.walk_packages(funasr.__path__, "funasr."))
+    manifest = build_root / "funasr-modules.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps(names), encoding="utf-8")
+    return manifest
+
+
 def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
     root = Path(__file__).resolve().parent
+    funasr_manifest = _write_funasr_module_manifest(root.parent / "build")
     args = [
         sys.executable,
         "-m",
@@ -45,12 +63,18 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "--clean",
         "--collect-data",
         "funasr",
+        "--collect-submodules",
+        "funasr",
+        "--add-data",
+        f"{funasr_manifest}:.",
         "--exclude-module",
         "torchcodec",
         "--runtime-hook",
         str(root / "pyi_rth_numpy_torch.py"),
         "--runtime-hook",
         str(root / "pyi_rth_transformers_offline.py"),
+        "--runtime-hook",
+        str(root / "pyi_rth_funasr.py"),
     ]
     imports = list(BASE_HIDDEN_IMPORTS)
     if cuda:
