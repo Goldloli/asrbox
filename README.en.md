@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.2-rc.1`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.2-rc.2`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -72,7 +72,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.2-rc.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.1) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
+Download the Apple Silicon DMG from the [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
 
 Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 
@@ -84,7 +84,7 @@ Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-mem
 4. Follow progress, logs, and results under Tasks.
 5. Edit or export SRT, VTT, ASS, TXT, JSON, or Markdown.
 
-ASRbox registers 14 local models. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md).
+ASRbox registers 15 local models, including MOSS-Transcribe-Diarize for end-to-end speaker diarization. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md).
 
 ## AI subtitle proofreading
 

@@ -1,6 +1,6 @@
 {
   "name": "asrbox",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.2-rc.2",
   "private": true,
   "workspaces": [
     "app",
@@ -51,6 +51,6 @@
     "postcss": "^8.5.23"
   },
   "overrides": {
-    "postcss": "^8.5.18"
+    "postcss": "^8.5.23"
   }
 }

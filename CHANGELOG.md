@@ -4,6 +4,21 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.2-rc.2] - 2026-07-25
+
+### Added
+
+- MOSS-Transcribe-Diarize 0.9B local model (Apache 2.0): end-to-end transcription, segment timestamps, and `[S01]`-style speaker diarization in a single pass, with 50+ languages and up to roughly 90 minutes of audio per run. Speaker labels are produced natively by the engine and need no `HF_TOKEN` or separate diarization model; `max_new_tokens` scales with audio duration so long recordings are not truncated.
+- Detailed per-model introductions on the Models page: every registered model now has an expandable intro with capabilities, language coverage, recommended scenarios, and known limitations in Chinese and English, plus a "Speaker diarization" category filter.
+
+### Changed
+
+- Task pipeline preserves engine-native speaker labels: when a transcription result already carries speakers, pyannote post-processing (and its token requirement) is skipped instead of overwriting native labels.
+
+### Fixed
+
+- Privacy: `.beads/interactions.jsonl` (agent interaction records) is removed from version control and ignored going forward.
+
 ## [0.1.2-rc.1] - 2026-07-25
 
 ### Fixed

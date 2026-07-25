@@ -14,7 +14,7 @@ const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
-const appVersion = 'v0.1.2-rc.1';
+const appVersion = 'v0.1.2-rc.2';
 
 export function Sidebar() {
   const matchRoute = useMatchRoute();
