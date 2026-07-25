@@ -124,6 +124,55 @@ def test_short_local_worker_progress_accepts_one_result_without_chunk_rows() -> 
     assert published == 1
 
 
+def test_stalled_local_worker_is_terminated_and_reported(tmp_path: Path, monkeypatch) -> None:
+    import pytest
+
+    from backend.services import tasks
+    from backend.services.errors import ASRboxError
+
+    monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ASRBOX_LOCAL_WORKER_STALL_SECONDS", "1")
+    monkeypatch.setattr(
+        tasks.settings_service,
+        "get_settings",
+        lambda db: SimpleNamespace(vad=False, word_timestamps=False),
+    )
+    monkeypatch.setattr(
+        tasks,
+        "_local_worker_inputs",
+        lambda db, row, audio_path: ([{"audio_path": "chunk.wav", "start_ms": 0, "end_ms": 1000}], []),
+    )
+
+    terminated: list[str] = []
+
+    class HungProcess:
+        def __init__(self, *args, **kwargs) -> None:
+            self.returncode = None
+
+        def poll(self):
+            return None
+
+        def terminate(self) -> None:
+            terminated.append("terminate")
+
+        def kill(self) -> None:
+            terminated.append("kill")
+
+        def wait(self, timeout=None) -> int:
+            return 0
+
+    monkeypatch.setattr(tasks.subprocess, "Popen", lambda *args, **kwargs: HungProcess())
+
+    row = SimpleNamespace(id="stalled-task", model_name="whisper-base", language=None, options_json="{}")
+
+    with pytest.raises(ASRboxError) as excinfo:
+        tasks._transcribe_local_subprocess(None, row, Path("audio.wav"))
+
+    assert excinfo.value.code == "LOCAL_WORKER_STALLED"
+    assert excinfo.value.stage == "transcribing"
+    assert terminated
+
+
 @pytest.mark.parametrize(
     ("cuda_available", "mps_available", "expected_device", "accelerated"),
     [

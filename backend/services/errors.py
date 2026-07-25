@@ -7,6 +7,7 @@ ERROR_CODES: dict[str, str] = {
     "MODEL_NOT_DOWNLOADED": "Model files are not downloaded.",
     "MODEL_COMPATIBILITY_FAILED": "Downloaded model files are incomplete or incompatible.",
     "MODEL_LOAD_FAILED": "Model runtime failed to load the model.",
+    "LOCAL_WORKER_STALLED": "The local transcription worker stopped producing progress and was terminated.",
     "FFMPEG_FAILED": "ffmpeg failed while preparing media.",
     "FFPROBE_FAILED": "ffprobe failed while inspecting media.",
     "NO_AUDIO_STREAM": "The media file does not contain an audio stream.",

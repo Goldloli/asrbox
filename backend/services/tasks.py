@@ -50,6 +50,14 @@ LOCAL_CHUNK_THRESHOLD_MS = 2 * 60 * 1000
 LOCAL_CHUNK_WINDOW_MS = 2 * 60 * 1000
 LOCAL_CHUNK_OVERLAP_MS = 2 * 1000
 LOCAL_WORKER_POLL_SECONDS = 0.2
+DEFAULT_LOCAL_WORKER_STALL_SECONDS = 20 * 60
+
+
+def _local_worker_stall_seconds() -> int:
+    try:
+        return max(1, int(os.environ.get("ASRBOX_LOCAL_WORKER_STALL_SECONDS", DEFAULT_LOCAL_WORKER_STALL_SECONDS)))
+    except ValueError:
+        return DEFAULT_LOCAL_WORKER_STALL_SECONDS
 LOCAL_QUEUE = "local"
 PROVIDER_QUEUE = "provider"
 ACTIVE_TASK_STATUSES = {
@@ -700,6 +708,8 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
     published = 0
     process: subprocess.Popen | None = None
     stderr_file = stderr_path.open("w", encoding="utf-8")
+    stall_limit = _local_worker_stall_seconds()
+    last_progress_at = time.monotonic()
 
     def stderr_excerpt() -> str:
         stderr_file.flush()
@@ -725,7 +735,10 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
             state = _read_worker_state(result_path)
             if state:
                 results = state.get("results") if isinstance(state.get("results"), list) else []
+                published_before = published
                 published = _publish_local_worker_progress(db, row, chunks, results, published)
+                if published != published_before or state.get("status") in {"completed", "failed"}:
+                    last_progress_at = time.monotonic()
                 if state.get("status") == "completed":
                     process.wait(timeout=5)
                     return _combine_local_worker_results(row, inputs, results)
@@ -741,6 +754,16 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
                 state = _read_worker_state(result_path)
                 detail = str((state or {}).get("error") or f"Local transcription worker exited with code {return_code}")
                 raise ASRboxError("MODEL_LOAD_FAILED", detail, stage="transcribing", stderr_excerpt=stderr_excerpt())
+            if time.monotonic() - last_progress_at > stall_limit:
+                # A hung worker (e.g. a device-level inference deadlock) must not
+                # pin the task in transcribing and block the whole local queue.
+                _terminate_worker(process)
+                raise ASRboxError(
+                    "LOCAL_WORKER_STALLED",
+                    f"Local transcription worker produced no progress for {stall_limit} seconds and was terminated",
+                    stage="transcribing",
+                    stderr_excerpt=stderr_excerpt(),
+                )
             time.sleep(LOCAL_WORKER_POLL_SECONDS)
     finally:
         if process is not None:
