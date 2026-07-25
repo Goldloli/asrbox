@@ -4,6 +4,23 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-25
+
+### Added
+
+- Desktop media ingest modes: reference the original file in place (new default, no copy, no importing wait) or keep managed copies in the uploads folder. Browser and Docker uploads remain managed copies.
+- Configurable uploads and derived-audio directories with environment-variable locks, availability reporting, and Docker read-only presentation. Location changes apply to new work only; existing files keep working.
+- Per-task media ownership: task deletion, bulk deletion, and storage cleanup only remove ASRbox-managed files and never touch referenced originals.
+- Desktop relink: when a referenced source is moved or deleted, point the task at the file's new path and regenerate derived audio.
+- Optional automatic deletion of derived audio (normalized wav and chunks) after a successful transcription.
+- Optional documented Compose bind mount for `/data/uploads`, with external-disk examples for macOS and Windows.
+
+### Changed
+
+- Desktop drag-and-drop import now uses native Tauri drag events with real file paths, so dropped media follows the same reference/copy ingest mode as the file picker.
+- Derived audio is task-named and written under the configurable derived-audio directory instead of beside the source file.
+- Task responses expose a typed `source_kind` field; new typed media-storage settings routes and a desktop relink endpoint extend the maintained API.
+
 ## [0.1.0-rc.2] - 2026-07-22
 
 ### Added
