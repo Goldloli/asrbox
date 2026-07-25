@@ -1199,6 +1199,108 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
     assert request["language"] == "zh"
 
 
+def test_moss_transcribe_diarize_backend_parses_speaker_segments(monkeypatch) -> None:
+    from backend.backends.local_asr import MossTranscribeDiarizeBackend
+    from backend.backends.registry import get_model_config
+
+    calls: dict[str, object] = {}
+
+    def fake_build_messages(audio_path):
+        calls["audio_path"] = audio_path
+        return [{"role": "user", "content": []}]
+
+    def fake_generate(model, processor, messages, **kwargs):
+        calls["max_new_tokens"] = kwargs.get("max_new_tokens")
+        calls["do_sample"] = kwargs.get("do_sample")
+        return {"text": "[0.48][S01]Welcome everyone[1.66][12.26][S02]The pipeline is ready[13.81]"}
+
+    monkeypatch.setattr("moss_transcribe_diarize.inference_utils.build_transcription_messages", fake_build_messages)
+    monkeypatch.setattr("moss_transcribe_diarize.inference_utils.generate_transcription", fake_generate)
+
+    backend = MossTranscribeDiarizeBackend()
+    backend._processors["moss-transcribe-diarize"] = object()
+    backend._models["moss-transcribe-diarize"] = object()
+    result = backend.transcribe("audio.wav", get_model_config("moss-transcribe-diarize"), {})
+
+    assert calls["audio_path"] == "audio.wav"
+    assert calls["do_sample"] is False
+    # soundfile cannot stat the missing file, so the duration heuristic falls back.
+    assert calls["max_new_tokens"] == 8192
+    assert [segment.speaker for segment in result.segments] == ["S01", "S02"]
+    assert result.segments[0].start == 0.48
+    assert result.segments[0].end == 1.66
+    assert result.segments[1].text == "The pipeline is ready"
+    assert result.raw_result_summary["parsed_segments"] == 2
+
+    backend.transcribe("audio.wav", get_model_config("moss-transcribe-diarize"), {"max_new_tokens": 65536})
+    assert calls["max_new_tokens"] == 65536
+
+
+def test_moss_max_new_tokens_scales_with_audio_duration(monkeypatch) -> None:
+    from backend.backends import local_asr
+
+    class FakeInfo:
+        def __init__(self, duration: float) -> None:
+            self.duration = duration
+
+    monkeypatch.setattr("soundfile.info", lambda path: FakeInfo(120.0))
+    assert local_asr._moss_max_new_tokens("clip.wav", {}) == 4096
+    monkeypatch.setattr("soundfile.info", lambda path: FakeInfo(600.0))
+    assert local_asr._moss_max_new_tokens("clip.wav", {}) == 8000
+    monkeypatch.setattr("soundfile.info", lambda path: FakeInfo(5400.0))
+    assert local_asr._moss_max_new_tokens("clip.wav", {}) == 65536
+
+
+def test_moss_transcribe_diarize_compatibility_requires_remote_code_and_runtime(tmp_path: Path, monkeypatch) -> None:
+    client = make_client(tmp_path)
+    model_dir = create_downloaded_model(tmp_path, "moss-transcribe-diarize")
+    monkeypatch.setattr("backend.services.models.moss_transcribe_diarize_available", lambda: False)
+
+    missing = client.get("/models/moss-transcribe-diarize/compatibility").json()
+    assert missing["compatible"] is False
+    assert "remote code" in missing["missing"]
+    assert "moss-transcribe-diarize runtime" in missing["missing"]
+
+    (model_dir / "modeling_moss_transcribe_diarize.py").write_text("# remote code", encoding="utf-8")
+    monkeypatch.setattr("backend.services.models.moss_transcribe_diarize_available", lambda: True)
+    compatible = client.get("/models/moss-transcribe-diarize/compatibility").json()
+    assert compatible["compatible"] is True
+
+
+def test_native_speaker_labels_skip_pyannote_and_token_requirement(tmp_path: Path, monkeypatch) -> None:
+    def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        return TranscriptionResult(
+            text="你好 世界",
+            model_name=model_name,
+            segments=[
+                TranscriptSegment(id=1, start=0.0, end=1.2, text="你好", speaker="S01"),
+                TranscriptSegment(id=2, start=1.2, end=2.4, text="世界", speaker="S02"),
+            ],
+        )
+
+    def forbidden_diarization(*args, **kwargs):
+        raise AssertionError("pyannote diarization must not run when segments already carry speakers")
+
+    monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 2400}))
+    monkeypatch.setattr("backend.services.tasks.apply_diarization", forbidden_diarization)
+    monkeypatch.setattr("backend.services.models.moss_transcribe_diarize_available", lambda: True)
+    client = make_client(tmp_path)
+    model_dir = create_downloaded_model(tmp_path, "moss-transcribe-diarize")
+    (model_dir / "modeling_moss_transcribe_diarize.py").write_text("# remote code", encoding="utf-8")
+    client.put("/settings/asr", json={"diarization": True})
+
+    response = client.post(
+        "/transcriptions",
+        files={"file": ("meeting.wav", b"fake audio bytes", "audio/wav")},
+        data={"backend": "local", "model_name": "moss-transcribe-diarize"},
+    )
+    assert response.status_code == 200
+    task = wait_for_task(client, response.json()["id"], lambda item: item["status"] == "completed", "completed")
+    assert task["status"] == "completed"
+    assert {segment.get("speaker") for segment in task["segments"]} == {"S01", "S02"}
+
+
 def test_local_queue_limits_concurrency_and_cancelled_queued_task_does_not_run(tmp_path: Path, monkeypatch) -> None:
     started: list[str] = []
     release = threading.Event()

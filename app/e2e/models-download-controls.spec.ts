@@ -81,3 +81,43 @@ test('model page shows usable storage rows and download controls', async ({ page
   const firstStorageRowBox = await firstStorageRow.boundingBox();
   expect(firstStorageRowBox?.height).toBeGreaterThan(44);
 });
+
+test('model page expands detailed model intro for a natively diarizing model', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
+  });
+  await page.route('**/models/status', (route) => route.fulfill({
+    json: {
+      models: [
+        modelStatus({}),
+        modelStatus({
+          model_name: 'moss-transcribe-diarize',
+          display_name: 'MOSS Transcribe Diarize 0.9B',
+          engine: 'moss_transcribe_diarize',
+          source: 'modelscope',
+          repo_id: 'OpenMOSS-Team/MOSS-Transcribe-Diarize',
+          model_size: '0.9b',
+          size_mb: 1900,
+          supports_diarization: true,
+        }),
+      ],
+    },
+  }));
+  await page.route('**/models/active-downloads', (route) => route.fulfill({ json: [] }));
+  await page.route('**/models/storage', (route) => route.fulfill({
+    json: { models_dir: '/tmp/asrbox/models', used_bytes: 0, free_bytes: 0, total_bytes: 0, models: [] },
+  }));
+
+  await page.goto('/models');
+  await page.getByRole('button', { name: 'Speaker diarization' }).click();
+
+  const card = page.locator('article').filter({ hasText: 'MOSS Transcribe Diarize 0.9B' }).first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Model intro' }).click();
+
+  await expect(card.getByText('Capabilities')).toBeVisible();
+  await expect(card.getByText('End-to-end transcription + speaker diarization in one pass')).toBeVisible();
+  await expect(card.getByText('Language coverage')).toBeVisible();
+  await expect(card.getByText(/50\+ languages/)).toBeVisible();
+  await expect(card.getByText('Known limitations')).toBeVisible();
+});

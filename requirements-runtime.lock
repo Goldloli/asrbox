@@ -95,6 +95,7 @@ mlx-whisper==0.4.3
 modelscope==1.38.0
 modelscope-hub==0.1.5
 more-itertools==11.1.0
+moss-transcribe-diarize @ git+https://github.com/OpenMOSS/MOSS-Transcribe-Diarize.git@0e3d1403fd8f1f1c674e883ece96b9f630794ebe
 mpmath==1.3.0
 msgpack==1.2.1
 multidict==6.7.1

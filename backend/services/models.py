@@ -18,7 +18,7 @@ from backend.backends import ASRModelConfig, ModelSourceCandidate, get_all_model
 from backend.models import ASRModelStatus, ModelRecommendationRequest, ModelRecommendationResponse
 from backend.services.errors import ASRboxError
 from backend.services import model_storage
-from backend.services.platform import funasr_available, mlx_runtime_import_error, qwen3_asr_available, torchaudio_available
+from backend.services.platform import funasr_available, mlx_runtime_import_error, moss_transcribe_diarize_available, qwen3_asr_available, torchaudio_available
 from backend.utils.hf_progress import track_hf_download
 from backend.utils.progress import get_progress_manager
 
@@ -311,6 +311,19 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
             missing.append("weights")
         if not qwen3_asr_available():
             missing.append("transformers Qwen3-ASR support")
+    elif engine == "moss_transcribe_diarize":
+        if not _has_any(model_dir, ("config.json",)):
+            missing.append("config.json")
+        if not _has_any(model_dir, ("tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt")):
+            missing.append("tokenizer")
+        if not _has_any(model_dir, ("processor_config.json", "preprocessor_config.json", "chat_template.json", "chat_template.jinja")):
+            missing.append("processor/chat_template")
+        if not _has_glob(model_dir, ("*.py",)):
+            missing.append("remote code")
+        if not _has_weight_files(model_dir):
+            missing.append("weights")
+        if not moss_transcribe_diarize_available():
+            missing.append("moss-transcribe-diarize runtime")
     else:
         missing.append(f"unsupported engine: {engine}")
 

@@ -1,7 +1,8 @@
-import { DownloadCloud, HardDrive, Info, Pause, Play, RefreshCw, Square, Star, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronRight, DownloadCloud, HardDrive, Info, Pause, Play, RefreshCw, Square, Star, Trash2 } from 'lucide-react';
 import { type ModelProgress, type ModelStatus } from '../../lib/api';
 import { formatBytes, formatPercent } from '../../lib/format';
-import { isRecommendedModel, modelCategory } from '../../lib/modelCatalog';
+import { isRecommendedModel, modelCategory, type ModelDetails } from '../../lib/modelCatalog';
 import { useI18n } from '../../lib/i18n';
 import { ConfirmAction } from '../ConfirmAction';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, Progress } from '../weiui';
@@ -39,6 +40,7 @@ export function ModelListRow({
   pinned,
   description,
   bestFor,
+  details,
   onTogglePin,
   onDownload,
   onPause,
@@ -53,6 +55,7 @@ export function ModelListRow({
   pinned: boolean;
   description: string;
   bestFor: string;
+  details: ModelDetails;
   onTogglePin: () => void;
   onDownload: () => void;
   onPause: () => void;
@@ -63,6 +66,7 @@ export function ModelListRow({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
   const error = progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error;
   const isActive = model.downloading || Boolean(progress);
@@ -174,6 +178,52 @@ export function ModelListRow({
             </Button>
           )}
         </div>
+      </div>
+      <div className="grid gap-2">
+        <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setDetailsExpanded((current) => !current)}
+            aria-expanded={detailsExpanded}
+          >
+            {detailsExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+            {t('models.modelIntro')}
+          </Button>
+        </div>
+        {detailsExpanded && (
+          <div className="grid gap-3 rounded-lg border app-control px-3 py-3">
+            {details.capabilities.length > 0 && (
+              <div className="grid gap-1.5">
+                <p className="text-xs text-app-muted">{t('models.detailCapabilities')}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {details.capabilities.map((item) => <Badge key={item}>{item}</Badge>)}
+                </div>
+              </div>
+            )}
+            <div className="grid gap-1.5">
+              <p className="text-xs text-app-muted">{t('models.detailLanguages')}</p>
+              <p className="text-sm text-app-soft">{details.languages}</p>
+            </div>
+            {details.bestFor.length > 0 && (
+              <div className="grid gap-1.5">
+                <p className="text-xs text-app-muted">{t('models.bestFor')}</p>
+                <ul className="grid gap-1 text-sm text-app-soft">
+                  {details.bestFor.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            )}
+            {details.limitations.length > 0 && (
+              <div className="grid gap-1.5">
+                <p className="text-xs text-app-muted">{t('models.detailLimitations')}</p>
+                <ul className="grid gap-1 text-sm text-app-soft">
+                  {details.limitations.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {isActive && (
         <div className="grid gap-1">

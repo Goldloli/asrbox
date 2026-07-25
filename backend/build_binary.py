@@ -29,6 +29,9 @@ BASE_HIDDEN_IMPORTS = [
     "transformers.models.qwen3_asr.feature_extraction_qwen3_asr",
     "transformers.models.qwen3_asr.modeling_qwen3_asr",
     "transformers.models.qwen3_asr.processing_qwen3_asr",
+    "moss_transcribe_diarize",
+    "moss_transcribe_diarize.inference_utils",
+    "moss_transcribe_diarize.transcript_parser",
 ]
 
 

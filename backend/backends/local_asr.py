@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import re
 from typing import Protocol
@@ -448,12 +449,116 @@ class Qwen3ASRBackend:
         return removed
 
 
+def _moss_max_new_tokens(audio_path: str, options: dict) -> int:
+    override = options.get("max_new_tokens")
+    if override:
+        return int(override)
+    try:
+        import soundfile
+
+        duration_minutes = soundfile.info(audio_path).duration / 60
+    except Exception:
+        return 8192
+    # Long-form diarized output needs generous token headroom; the upstream
+    # serving guide recommends up to 65536 for ~90 minute recordings.
+    return min(65536, max(4096, math.ceil(duration_minutes * 800)))
+
+
+class MossTranscribeDiarizeBackend:
+    """End-to-end transcription + diarization via MOSS-Transcribe-Diarize."""
+
+    def __init__(self) -> None:
+        self._models: dict[str, object] = {}
+        self._processors: dict[str, object] = {}
+
+    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        processor = self._processors.get(model_config.model_name)
+        model = self._models.get(model_config.model_name)
+        if processor is None or model is None:
+            try:
+                import torch
+                from transformers import AutoModelForCausalLM, AutoProcessor
+                from moss_transcribe_diarize.inference_utils import resolve_device
+            except Exception as exc:
+                raise RuntimeError("transformers >= 5 and the moss-transcribe-diarize package are required") from exc
+
+            model_dir = _model_path(model_config.model_name)
+            device = resolve_device("auto")
+            dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+            with local_hf_files_only():
+                try:
+                    processor = AutoProcessor.from_pretrained(str(model_dir), trust_remote_code=True)
+                except Exception as exc:
+                    raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize processor: {exc}") from exc
+                load_kwargs = {"trust_remote_code": True, "dtype": "auto"}
+                try:
+                    model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
+                except TypeError:
+                    load_kwargs["torch_dtype"] = load_kwargs.pop("dtype")
+                    model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
+                except Exception as exc:
+                    raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize model: {exc}") from exc
+            model = model.to(dtype=dtype).to(device).eval()
+            self._processors[model_config.model_name] = processor
+            self._models[model_config.model_name] = model
+
+        from moss_transcribe_diarize import parse_transcript
+        from moss_transcribe_diarize.inference_utils import build_transcription_messages, generate_transcription
+
+        messages = build_transcription_messages(audio_path)
+        result = generate_transcription(
+            model,
+            processor,
+            messages,
+            max_new_tokens=_moss_max_new_tokens(audio_path, options),
+            do_sample=False,
+        )
+        text = str(result.get("text") or "").strip()
+        segments: list[TranscriptSegment] = []
+        if text:
+            try:
+                for parsed in parse_transcript(text):
+                    segment_text = str(parsed.text or "").strip()
+                    if not segment_text:
+                        continue
+                    segments.append(
+                        TranscriptSegment(
+                            id=len(segments) + 1,
+                            start=_seconds(parsed.start),
+                            end=_seconds(parsed.end),
+                            text=segment_text,
+                            speaker=str(parsed.speaker) if parsed.speaker else None,
+                        )
+                    )
+            except Exception:
+                segments = []
+        if not segments and text:
+            segments = [TranscriptSegment(id=1, start=0.0, end=0.0, text=text)]
+        return TranscriptionResult(
+            text=text or transcript_text_from_segments(segments),
+            language=options.get("language") or None,
+            duration=None,
+            segments=segments,
+            model_name=model_config.model_name,
+            raw_result_summary={"engine": "moss_transcribe_diarize", "parsed_segments": len(segments)},
+        )
+
+    def is_loaded(self, model_name: str) -> bool:
+        return model_name in self._models
+
+    def unload(self, model_name: str) -> bool:
+        removed = self._models.pop(model_name, None) is not None
+        self._processors.pop(model_name, None)
+        return removed
+
+
 _backends: dict[str, LocalASRBackend] = {
     "whisper_transformers": TransformersWhisperBackend(),
     "faster_whisper": FasterWhisperBackend(),
     "funasr": FunASRBackend(),
     "mlx_whisper": MLXWhisperBackend(),
     "qwen3_asr": Qwen3ASRBackend(),
+    "moss_transcribe_diarize": MossTranscribeDiarizeBackend(),
 }
 
 

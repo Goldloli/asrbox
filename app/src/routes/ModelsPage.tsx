@@ -6,7 +6,7 @@ import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuer
 import { formatBytes } from '../lib/format';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
-import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, type ModelCategory } from '../lib/modelCatalog';
+import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, modelDetails, type ModelCategory } from '../lib/modelCatalog';
 import { useI18n } from '../lib/i18n';
 import { BenchmarkCard, createModelGroups, ModelListRow, StorageMetric } from '../components/models/ModelManagement';
 
@@ -117,6 +117,7 @@ export function ModelsPage() {
     { value: 'apple', label: t('models.categoryApple') },
     { value: 'faster', label: t('models.categoryFaster') },
     { value: 'chinese', label: t('models.categoryChinese') },
+    { value: 'diarization', label: t('models.categoryDiarization') },
     { value: 'whisper', label: t('models.categoryWhisper') },
   ];
   const guideItems: Array<{ value: GuidePreference; label: string }> = [
@@ -171,6 +172,7 @@ export function ModelsPage() {
                       pinned={pinnedModelNames.includes(model.model_name)}
                       description={modelDescription(model, locale)}
                       bestFor={modelBestFor(model, locale)}
+                      details={modelDetails(model, locale)}
                       onTogglePin={() => togglePinnedModel(model.model_name)}
                       onDownload={() => download.mutate(model.model_name)}
                       onPause={() => pause.mutate(model.model_name)}

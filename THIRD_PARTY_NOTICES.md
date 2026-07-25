@@ -38,6 +38,7 @@ The source-built Docker image installs ffmpeg/ffprobe from Debian packages rathe
 | FunASR / ModelScope | Chinese ASR model ecosystem | Check upstream package and model licenses |
 | MLX Whisper | Apple Silicon local inference | Check upstream package license |
 | Pyannote Audio | Optional diarization path | Check upstream package and model licenses |
+| MOSS-Transcribe-Diarize | End-to-end transcription + diarization inference helpers | Apache 2.0 (package and model) |
 | OpenCC | Chinese text conversion | Check upstream package license |
 
 ## Models

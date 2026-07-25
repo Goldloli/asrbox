@@ -50,6 +50,28 @@ def qwen3_asr_available() -> bool:
     return qwen3_asr_import_error() is None
 
 
+def moss_transcribe_diarize_import_error() -> str | None:
+    if not module_available("moss_transcribe_diarize"):
+        return "moss_transcribe_diarize is not installed"
+    try:
+        from moss_transcribe_diarize import parse_transcript
+        from moss_transcribe_diarize.inference_utils import (
+            build_transcription_messages,
+            generate_transcription,
+            resolve_device,
+        )
+
+        if all((parse_transcript, build_transcription_messages, generate_transcription, resolve_device)):
+            return None
+        return "required moss_transcribe_diarize helpers are unavailable"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
+def moss_transcribe_diarize_available() -> bool:
+    return moss_transcribe_diarize_import_error() is None
+
+
 def mlx_runtime_import_errors() -> tuple[str | None, str | None]:
     core_error = module_import_error("mlx.core") if module_available("mlx.core") else "mlx.core is not installed"
     whisper_error = module_import_error("mlx_whisper") if module_available("mlx_whisper") else "mlx_whisper is not installed"
@@ -114,6 +136,10 @@ def detect_runtime() -> dict[str, Any]:
     qwen3_asr_runtime_available = qwen3_asr_error is None
     if module_available("transformers") and qwen3_asr_error is not None:
         warnings.append(f"Qwen3-ASR import failed: {qwen3_asr_error}")
+    moss_error = moss_transcribe_diarize_import_error()
+    moss_runtime_available = moss_error is None
+    if module_available("moss_transcribe_diarize") and moss_error is not None:
+        warnings.append(f"MOSS-Transcribe-Diarize import failed: {moss_error}")
     mlx_import_error, mlx_whisper_import_error = mlx_runtime_import_errors()
     if mlx_import_error:
         warnings.append(f"MLX import failed: {mlx_import_error}")
@@ -152,5 +178,6 @@ def detect_runtime() -> dict[str, Any]:
         "mlx_whisper_import_error": mlx_whisper_import_error,
         "qwen3_asr_available": qwen3_asr_runtime_available,
         "transformers_qwen3_asr_available": qwen3_asr_runtime_available,
+        "moss_transcribe_diarize_available": moss_runtime_available,
         "warnings": warnings,
     }

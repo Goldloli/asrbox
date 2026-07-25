@@ -55,6 +55,7 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
         assert runtime_data["data_dir"] == resolved_data_dir
         assert runtime_data["qwen3_asr_available"] is True
         assert runtime_data["funasr_available"] is True
+        assert runtime_data["moss_transcribe_diarize_available"] is True
         assert time.time() - start < 180
 
         shutdown = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=30)

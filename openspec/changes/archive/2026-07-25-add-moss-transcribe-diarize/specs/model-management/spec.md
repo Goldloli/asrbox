@@ -1,8 +1,5 @@
-# model-management Specification
+## MODIFIED Requirements
 
-## Purpose
-Defines the local ASR model catalog, its user-facing presentation, the download lifecycle, pre-execution compatibility, the model data boundary, and engine-native speaker diarization behavior.
-## Requirements
 ### Requirement: Registered local model catalog
 ASRbox SHALL expose the maintained local model catalog with its engine, source candidates, compatibility facts, storage estimate, and licensing guidance without bundling model weights in the application release. The catalog SHALL include end-to-end speaker-diarization models alongside conventional ASR engines.
 
@@ -16,26 +13,7 @@ The model management UI SHALL present detailed per-model facts: transcription ca
 - **WHEN** the user expands a model's details in the model management UI
 - **THEN** the application shows that model's capabilities, language coverage, recommended scenarios, and known limitations
 
-### Requirement: Controlled model download lifecycle
-Managed model downloads SHALL expose progress and supported pause, resume, stop, retry, redownload, and deletion actions with truthful process-local and on-disk state.
-
-#### Scenario: User stops a download
-- **WHEN** a user stops an active managed download
-- **THEN** the worker is cancelled while reusable completed or partial files remain available to the documented retry or cleanup actions
-
-### Requirement: Compatibility before execution
-Local transcription SHALL verify that the selected registered model has usable managed files and runtime support before execution.
-
-#### Scenario: Model files are incomplete or incompatible
-- **WHEN** the selected model cannot run in the current environment
-- **THEN** transcription fails with an actionable compatibility state instead of being reported as successful
-
-### Requirement: Model data boundary
-Downloaded weights, upstream caches, and incomplete model data SHALL remain outside the repository and packaged application artifacts.
-
-#### Scenario: Desktop release is built
-- **WHEN** release artifacts are assembled
-- **THEN** registered model metadata may be included but downloaded model weights and caches are excluded
+## ADDED Requirements
 
 ### Requirement: Engine-native speaker diarization
 Models registered with native diarization capability SHALL produce speaker-labelled transcript segments directly from the engine, without requiring a diarization token or a separate diarization model. When a transcription result already carries speaker labels, the task pipeline SHALL preserve those native labels and SHALL NOT apply task-level diarization post-processing over them.
@@ -47,4 +25,3 @@ Models registered with native diarization capability SHALL produce speaker-label
 #### Scenario: Native labels are not overwritten
 - **WHEN** a transcription result's segments already carry speaker labels and task-level diarization is enabled
 - **THEN** the pipeline skips diarization post-processing and keeps the engine-native labels
-

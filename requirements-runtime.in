@@ -10,6 +10,7 @@ modelscope
 torch==2.11.0
 torchaudio==2.11.0
 transformers @ git+https://github.com/huggingface/transformers.git@09835700ac3db4a08762a0a6f6960c346ebf7365
+moss-transcribe-diarize @ git+https://github.com/OpenMOSS/MOSS-Transcribe-Diarize.git@0e3d1403fd8f1f1c674e883ece96b9f630794ebe
 accelerate
 faster-whisper
 funasr

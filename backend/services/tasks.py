@@ -935,7 +935,9 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             and segments[0].end <= segments[0].start
         ):
             segments = [segments[0].model_copy(update={"end": row.duration_ms / 1000})]
-        if options.get("diarization", settings.diarization):
+        native_speaker_labels = any(segment.speaker for segment in segments)
+        diarization_requested = bool(options.get("diarization", settings.diarization))
+        if diarization_requested and not native_speaker_labels:
             token = options.get("diarization_token")
             if not token:
                 raise ASRboxError("DIARIZATION_TOKEN_MISSING", "Speaker diarization requires HF_TOKEN or diarization_token", stage="diarization")
@@ -955,7 +957,7 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             mode == "aggressive"
             or bool(options.get("merge_short_segments", False))
             or bool(options.get("traditional_to_simplified", False))
-            or bool(options.get("diarization", settings.diarization))
+            or (diarization_requested and not native_speaker_labels)
         )
         row.text = text_from_segments if segment_altering_options else (normalize_transcript_text(result.text) or text_from_segments)
         if row.duration_ms is None:

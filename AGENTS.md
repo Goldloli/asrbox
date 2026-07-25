@@ -59,6 +59,27 @@
 
 OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使用中文撰写；技术术语、标识符和代码保持原文。
 
+### 工件生成（openspec CLI）
+
+`/opsx:*` 斜杠命令的技能定义在 `.codex/skills/openspec-*/SKILL.md`，底层是 `openspec` CLI。无论由哪个 agent 执行，都遵循同一流程：
+
+1. `openspec new change <kebab-name>` 创建脚手架。
+2. 按 `openspec status --change <name> --json` 报告的依赖序（proposal → design + specs → tasks）逐个写工件；写每个工件前用 `openspec instructions <artifact> --change <name> --json` 取模板与规则。
+3. `openspec validate --changes <name>` 必须通过后再进入实现。
+
+工件格式约定：
+
+- proposal.md：`## 为什么` / `## 变更内容` / `## 能力（Capabilities）` / `## 影响`。Capabilities 中列出的每个能力都对应一个 `specs/<capability>/spec.md` delta 文件。
+- spec delta：用 `## ADDED Requirements` / `## MODIFIED Requirements` 分节；MODIFIED 必须整段重写该 requirement（含全部 scenario），不能只写差异。每个 requirement 至少一个 scenario，scenario 标题用四个 `#`（`#### Scenario:`），步骤用 `- **WHEN**` / `- **THEN**`。
+- design.md：`## 背景`（引用具体代码位置）/ `## 目标 / 非目标` / `## 决策`（含备选方案与理由）/ `## 风险` / `## 回滚`。
+- tasks.md：编号分组，任务必须是 `- [ ] X.Y` 复选框格式，apply 阶段据此跟踪进度；实现过程中即时勾选。
+
+### 归档与沉淀
+
+1. 实现与验证完成后，先把 tasks.md 全部勾选，再 `openspec archive <name> --yes`：delta 会合并进 `openspec/specs/` 主 spec，change 移入 `openspec/changes/archive/<date>-<name>/`。
+2. 归档后检查主 spec 的 `## Purpose`；如果仍是 `TBD`，补写一句话职责说明。
+3. 归档的同时更新受影响的面向用户文档（README、docs/、CHANGELOG），保持 spec、代码、文档三者一致。
+
 ## ASRbox 边界
 
 尊重现有的职责边界：
@@ -96,6 +117,7 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 - 前端依赖变更应更新 `bun.lock` 并运行依赖审计。
 - vendored binary 变更应更新 checksum、来源记录、license 和 notice。
 - 绝不提交 `.venv/`、`node_modules/`、cache、model weight、用户数据、构建产物、Tauri `target/`、PyInstaller 产物、DMG、凭据或签名数据。
+- 绝不提交 agent 交互与对话记录（如 `.beads/interactions.jsonl`）；任务跟踪数据本身通过 bd 的 Dolt remote 同步，不依赖工作树提交。
 
 ## 验证
 

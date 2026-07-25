@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox `0.1.0-rc.2` registers 14 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox registers 15 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -42,8 +42,9 @@ Sizes are registry estimates, not exact download promises.
 | `sensevoice-small` | FunASR | ModelScope | 900 MB | Yes |
 | `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | ModelScope, then Hugging Face | 1,600 MB | No |
 | `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | ModelScope, then Hugging Face | 3,900 MB | No |
+| `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | ModelScope, then Hugging Face | 1,900 MB | No |
 
-The estimates add up to roughly 26.3 GiB. A real all-model installation may use more or less space.
+The estimates add up to roughly 28.2 GiB. A real all-model installation may use more or less space.
 
 ## Choosing a Model
 
@@ -53,6 +54,7 @@ The estimates add up to roughly 26.3 GiB. A real all-model installation may use 
 - Docker/Linux CPU quick start: `faster-whisper-base` or `faster-whisper-small`; MLX is unavailable.
 - Chinese, Cantonese, English, Japanese, or Korean with a compact model: `sensevoice-small`.
 - Broad multilingual Qwen path: `qwen3-asr-0.6b`; use `qwen3-asr-1.7b` when additional model capacity is worth the memory and disk cost.
+- End-to-end speaker diarization without `HF_TOKEN` or a separate diarization model: `moss-transcribe-diarize`. It emits timestamped segments with `[S01]`-style speaker labels in one pass, supports 50+ languages and up to roughly 90 minutes of audio per run, and is Apache 2.0 licensed. It has no word-level timestamps and runs slowly on CPU for long recordings.
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
@@ -85,7 +87,7 @@ The Linux Docker runtime excludes Apple-only `mlx` and `mlx-whisper` packages. T
 
 ## Verification Status
 
-All 14 registered models completed transcription of a real MP4 excerpt in the maintainer's macOS Apple Silicon environment on 2026-07-13. Each run returned non-empty text and segments. Automated API tests cover download status, source fallback, pause/resume/stop/retry, compatibility, storage totals, and duplicate-weight filtering.
+The 14 models registered as of 2026-07-13 completed transcription of a real MP4 excerpt in the maintainer's macOS Apple Silicon environment on that date. Each run returned non-empty text and segments. `moss-transcribe-diarize` completed a real 6.8-minute two-person interview MP4 on 2026-07-25 in the same environment, returning 161 timestamped segments with three native speaker labels (`S01`–`S03`). Automated API tests cover download status, source fallback, pause/resume/stop/retry, compatibility, storage totals, and duplicate-weight filtering.
 
 This evidence verifies the tested dependency snapshot and machine. Docker build and smoke coverage verify runtime startup and compatibility reporting, not the accuracy or speed of all models on every Linux CPU. Future upstream revisions, media codecs, architectures, and hardware can behave differently.
 
