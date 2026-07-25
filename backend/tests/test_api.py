@@ -195,6 +195,7 @@ def test_runtime_status_reports_backend_capabilities(tmp_path: Path) -> None:
     assert "torchaudio_available" in body
     assert "qwen3_asr_available" in body
     assert "transformers_qwen3_asr_available" in body
+    assert "moss_transcribe_diarize_available" in body
 
 
 def wait_for_model_status(client: TestClient, model_name: str, key: str, value: object) -> dict:

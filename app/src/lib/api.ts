@@ -411,6 +411,7 @@ export interface RuntimeStatus {
   mlx_whisper_available: boolean;
   qwen3_asr_available: boolean;
   transformers_qwen3_asr_available: boolean;
+  moss_transcribe_diarize_available: boolean;
   data_dir: string;
   models_dir: string;
   free_disk_bytes?: number | null;

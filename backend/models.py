@@ -442,6 +442,7 @@ class RuntimeStatusResponse(BaseModel):
     mlx_whisper_import_error: str | None = None
     qwen3_asr_available: bool = False
     transformers_qwen3_asr_available: bool = False
+    moss_transcribe_diarize_available: bool = False
     data_dir: str
     models_dir: str
     free_disk_bytes: int | None = None
