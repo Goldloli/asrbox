@@ -11,6 +11,11 @@ export interface DesktopMediaFile {
   size: number;
 }
 
+export interface MediaDropHandlers {
+  onDrop: (paths: string[]) => void;
+  onActiveChange: (active: boolean) => void;
+}
+
 export interface DesktopCapabilities {
   runtime: DesktopRuntime;
   canOpenFileLocation: boolean;
@@ -28,6 +33,7 @@ export interface DesktopCapabilities {
   pickExecutableFile(): Promise<string | null>;
   pickMediaFiles(): Promise<DesktopMediaFile[]>;
   pickModelStorageDirectory(): Promise<string | null>;
+  listenMediaFileDrop(handlers: MediaDropHandlers): (() => void) | undefined;
   revealLogs(): Promise<void>;
   saveTextFile(filename: string, contents: string, directory?: string | null): Promise<string | null>;
 }
@@ -37,6 +43,9 @@ type TauriWindow = Window & {
   __TAURI__?: {
     core?: {
       invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+    };
+    event?: {
+      listen?: <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
     };
   };
 };
@@ -135,6 +144,33 @@ export const desktopCapabilities: DesktopCapabilities = {
     const result = tauriInvoke('pick_media_files');
     if (!result) return unavailable();
     return mediaFiles(await result);
+  },
+  listenMediaFileDrop(handlers: MediaDropHandlers) {
+    const listen = (window as TauriWindow).__TAURI__?.event?.listen;
+    if (!listen) return undefined;
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+    const register = async () => {
+      const drop = await listen<{ paths?: unknown }>('tauri://drag-drop', (event) => {
+        const paths = Array.isArray(event.payload?.paths) ? event.payload.paths.filter((item): item is string => typeof item === 'string') : [];
+        handlers.onActiveChange(false);
+        if (paths.length > 0) handlers.onDrop(paths);
+      });
+      const enter = await listen<unknown>('tauri://drag-enter', () => handlers.onActiveChange(true));
+      const leave = await listen<unknown>('tauri://drag-leave', () => handlers.onActiveChange(false));
+      if (cancelled) {
+        drop();
+        enter();
+        leave();
+        return;
+      }
+      unlisteners.push(drop, enter, leave);
+    };
+    void register();
+    return () => {
+      cancelled = true;
+      unlisteners.splice(0).forEach((unlisten) => unlisten());
+    };
   },
   async pickModelStorageDirectory() {
     const result = tauriInvoke('pick_model_storage_directory');

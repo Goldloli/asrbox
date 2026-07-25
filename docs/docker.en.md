@@ -55,6 +55,19 @@ The unified layout is `<root>/models` and `<root>/cache/{huggingface,modelscope,
 
 If `/model-storage` is not mounted, disconnected, or loses permissions, the UI reports the model storage location unavailable. Local-model operations stop without falling back to `/data` or redownloading. Restoring the same mount makes models discoverable again. If cleanup of the old location fails after a successful switch, verify the paths reported by the UI before manually deleting the duplicate; never delete both copies.
 
+### Separate uploads mount
+
+Browser uploads are always copied into `/data/uploads` inside the container; the Web UI cannot reference host files. To store ingested media on a larger disk, uncomment the optional `/data/uploads` bind mount in `compose.yaml` and set the host path in `.env`, preferably an external drive on macOS or the D: drive on Windows:
+
+```dotenv
+# macOS external drive
+ASRBOX_UPLOADS_HOST_PATH=/Volumes/<drive>/asrbox-uploads
+# Windows D: drive
+ASRBOX_UPLOADS_HOST_PATH=D:/asrbox-uploads
+```
+
+Create the host directory first and make it writable by container UID/GID `10001:10001`. The mount only affects media uploaded afterwards; files already in the named volume keep working from their original location and are not migrated. Configure it before the first upload so media does not land in the named volume first. The media storage section under Settings > Storage and diagnostics is read-only in Docker; location changes happen only through this mount. Deleting a task only removes its managed copy inside the container; ASRbox never touches host files outside the mounted directory.
+
 ## Data, backup, and restore
 
 `/data` contains the database, media, extracted audio, transcript versions, exports, models, caches, settings, and provider credentials. Compose stores it in the `asrbox-data` named volume.

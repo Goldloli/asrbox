@@ -80,6 +80,9 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("POST", "/tasks/{task_id}/postprocess"),
         ("POST", "/tasks/{task_id}/chunks/retry-failed"),
         ("POST", "/tasks/{task_id}/cleanup-artifacts"),
+        ("POST", "/tasks/{task_id}/relink"),
+        ("GET", "/settings/media-storage"),
+        ("PUT", "/settings/media-storage"),
     }
     assert expected <= routes
 
@@ -226,3 +229,33 @@ def test_stable_event_types_match_api_freeze() -> None:
         "runtime.warning",
         "storage.warning",
     }
+
+
+def test_media_ingest_storage_contract_is_typed(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    schema = client.app.openapi()
+    routes = schema["paths"]
+    media_storage_ref = routes["/settings/media-storage"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert media_storage_ref.endswith("MediaStorageSettingsResponse")
+    task_fields = schema["components"]["schemas"]["TranscriptionTaskResponse"]["properties"]
+    assert "source_kind" in task_fields
+    source_kind_types = {item.get("type") for item in task_fields["source_kind"].get("anyOf", [task_fields["source_kind"]])}
+    assert "string" in source_kind_types
+    fields = schema["components"]["schemas"]["MediaStorageSettingsResponse"]["properties"]
+    assert {
+        "ingest_mode",
+        "uploads_dir",
+        "derived_audio_dir",
+        "delete_derived_on_complete",
+        "uploads_dir_locked",
+        "derived_audio_dir_locked",
+        "uploads",
+        "derived_audio",
+        "runtime",
+    } <= fields.keys()
+
+    response = client.get("/settings/media-storage")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ingest_mode"] in {"reference", "copy"}
+    assert body["runtime"] in {"desktop", "container"}

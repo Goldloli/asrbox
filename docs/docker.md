@@ -57,6 +57,19 @@ ASRBOX_MODEL_STORAGE_ROOTS=/data,/model-storage
 
 如果 `/model-storage` 未挂载、磁盘断开或权限失效，页面显示“模型存储位置不可用”，本地模型操作会停止，且不会回退 `/data` 或重新下载。恢复同一挂载后会自动重新识别模型。迁移成功但旧目录清理失败时，根据页面列出的旧路径手动核对后再删除；不要同时删除新旧两份。
 
+### 单独挂载上传媒体目录
+
+浏览器上传的媒体始终会复制进容器内的 `/data/uploads`（Web 端无法引用宿主机文件）。如需让媒体文件落到大容量磁盘，取消 `compose.yaml` 中 `/data/uploads` 可选 bind mount 的注释，并在 `.env` 中设置宿主机路径，建议使用外置硬盘（macOS）或 D 盘（Windows）：
+
+```dotenv
+# macOS 外置硬盘
+ASRBOX_UPLOADS_HOST_PATH=/Volumes/<外置硬盘>/asrbox-uploads
+# Windows D 盘
+ASRBOX_UPLOADS_HOST_PATH=D:/asrbox-uploads
+```
+
+宿主机目录必须预先存在，并允许容器内 UID/GID `10001:10001` 读写。该挂载只影响之后上传的媒体；named volume 中已有的媒体仍从原位置读取和删除，不会被迁移。请在首次上传前配置好，避免媒体先写入 named volume。“设置 → 存储与诊断”中的媒体存储区域在 Docker 下为只读，路径调整只能通过这里的挂载完成。删除任务只会删除容器内的托管副本；即使配置了挂载，ASRbox 也不会触碰宿主机上该目录之外的任何文件。
+
 ## 数据、备份与恢复
 
 容器内 `/data` 包含数据库、媒体、音频、字幕版本、导出、模型、下载缓存、设置和 Provider 密钥。默认映射到 `asrbox-data` named volume。

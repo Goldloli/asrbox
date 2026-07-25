@@ -107,9 +107,10 @@ def cleanup(db: Session, *, delete_normalized: bool, delete_chunks: bool, delete
         referenced = {config.resolve_storage_path(row.audio_path) for row in db.query(TranscriptionTask).all()}
         referenced.update(config.resolve_storage_path(row.normalized_audio_path) for row in db.query(TranscriptionTask).all())
         referenced.discard(None)
-        for path in config.get_uploads_dir().glob("*.wav"):
-            if path not in referenced:
-                remove_file(path)
+        for directory in {config.get_uploads_dir(), config.get_derived_audio_dir()}:
+            for path in directory.glob("*.wav"):
+                if path not in referenced:
+                    remove_file(path)
 
     if delete_old_diagnostics:
         if not dry_run:

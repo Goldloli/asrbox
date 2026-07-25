@@ -36,7 +36,8 @@ The backend can store:
 | --- | --- |
 | `asrbox.db` | Tasks, transcript versions, settings, diagnostics metadata, ASR/LLM provider configuration, proofreading runs, and suggestions |
 | `models/<model-name>/` | Downloaded model files, markers, and model-local caches |
-| `uploads/` | Media managed by transcription tasks |
+| `uploads/` | Media managed by transcription tasks (location configurable) |
+| `derived-audio/` | Normalized audio and chunk files owned by individual tasks (location configurable) |
 | `audio/` | Extracted or normalized audio |
 | `cache/` | Intermediate task data |
 | `exports/` | Backend exports, diagnostics, and generated files |
@@ -44,6 +45,8 @@ The backend can store:
 | `restore-pending/` | Temporary restore data when applicable |
 
 Desktop file exports go to `~/Downloads/ASRbox Exports/` by default or to the custom directory selected in Settings. Those files are outside the app data root.
+
+By default the desktop app references imported media at its original location instead of copying it, so those tasks point at files outside the data root. ASRbox never writes into a referenced file's folder and never deletes, moves, or renames a referenced file; normalized audio and chunks for such tasks stay under the configurable `derived-audio/` location. A copy mode that stores media under `uploads/` remains available in Settings. Browser and Docker uploads are always copied into managed storage because the browser cannot reference local paths.
 
 A development backend uses the repository's `data/` directory unless `ASRBOX_DATA_DIR` is set.
 
@@ -67,13 +70,13 @@ The supported Docker Compose configuration binds to host loopback by default. An
 
 ## Backups and Diagnostics
 
-Backups can contain the SQLite database and therefore provider credentials, task metadata, filenames, transcript information, proofreading runs, and suggestions. Diagnostic bundles do not include LLM keys, proofreading prompts, transcript payloads sent for proofreading, raw LLM responses, or suggestion text. They can contain local paths, runtime data, ASR provider URLs, model ids, and sanitized error excerpts. Proofreading errors are stored and returned in sanitized form; ASRbox does not persist the prompt or raw provider response.
+Backups can contain the SQLite database and therefore provider credentials, task metadata, filenames, transcript information, proofreading runs, and suggestions. Backups cover ASRbox-managed data only; media that desktop tasks reference at its original location is not included and remains the user's own file. Diagnostic bundles do not include LLM keys, proofreading prompts, transcript payloads sent for proofreading, raw LLM responses, or suggestion text. They can contain local paths, runtime data, ASR provider URLs, model ids, and sanitized error excerpts. Proofreading errors are stored and returned in sanitized form; ASRbox does not persist the prompt or raw provider response.
 
 Inspect archives before sharing them. Remove private filenames, transcript content, media, tokens, credentials, and internal endpoints. Use a private security report for sensitive material.
 
 ## Deleting Tasks and Models
 
-Task deletion and artifact cleanup affect ASRbox-managed task files according to the selected action. Exported files saved outside the data root are not automatically removed.
+Task deletion and artifact cleanup affect ASRbox-managed task files according to the selected action. Deleting a task that references an original file never deletes that original; only its managed derived audio, chunks, and database records are removed. Deleting a task with a managed copy removes that copy from managed storage. Exported files saved outside the data root are not automatically removed.
 
 Deleting a model removes its directory under `models/<model-name>/`. Stopping a download does not delete reusable partial files; retry can reuse them. “Clean incomplete downloads” can remove an entire incomplete model directory and cannot be undone.
 

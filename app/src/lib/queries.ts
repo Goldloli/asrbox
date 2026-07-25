@@ -21,6 +21,7 @@ export const queryKeys = {
   proofreadingRuns: (taskId: string) => ['tasks', taskId, 'proofreading-runs'] as const,
   proofreadingRun: (taskId: string, runId: string) => ['tasks', taskId, 'proofreading-runs', runId] as const,
   settings: ['settings'] as const,
+  mediaStorageSettings: ['settings', 'media-storage'] as const,
   runtime: ['runtime-status'] as const,
 };
 
@@ -80,6 +81,10 @@ export function useLLMProvidersQuery() {
 
 export function useSettingsQuery() {
   return useQuery({ queryKey: queryKeys.settings, queryFn: () => apiClient.getSettings(), retry: 1 });
+}
+
+export function useMediaStorageSettingsQuery() {
+  return useQuery({ queryKey: queryKeys.mediaStorageSettings, queryFn: () => apiClient.getMediaStorageSettings(), retry: 1 });
 }
 
 export function useRuntimeQuery() {

@@ -577,7 +577,7 @@ def test_transcription_task_runs_and_exports_outputs(tmp_path: Path, monkeypatch
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1800}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1800}))
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
 
@@ -641,7 +641,7 @@ def test_transcription_without_timestamps_spans_audio_duration(tmp_path: Path, m
     )
     monkeypatch.setattr(
         "backend.services.tasks.prepare_media_for_asr",
-        lambda path: (path, {"duration_ms": 201_000}),
+        lambda path, **_: (path, {"duration_ms": 201_000}),
     )
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
@@ -658,7 +658,7 @@ def test_transcription_without_timestamps_spans_audio_duration(tmp_path: Path, m
 
 
 def test_clear_tasks_deletes_task_list(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
     monkeypatch.setattr(
         "backend.services.tasks.transcribe_with_local_model",
         lambda model_name, audio_path, options: TranscriptionResult(
@@ -693,7 +693,7 @@ def test_failed_task_records_error_code_and_diagnostics(tmp_path: Path, monkeypa
 
     monkeypatch.setattr(
         "backend.services.tasks.prepare_media_for_asr",
-        lambda path: (_ for _ in ()).throw(ASRboxError("NO_AUDIO_STREAM", "no audio", stage="preprocessing")),
+        lambda path, **_: (_ for _ in ()).throw(ASRboxError("NO_AUDIO_STREAM", "no audio", stage="preprocessing")),
     )
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
@@ -732,7 +732,7 @@ def test_bcut_provider_task_uses_provider_result_for_video(tmp_path: Path, monke
             ],
         )
 
-    def fake_prepare(path: Path) -> tuple[Path, dict]:
+    def fake_prepare(path: Path, **_) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
         return target, {"duration_ms": 3200}
@@ -770,7 +770,7 @@ def test_online_provider_remains_available_when_model_storage_is_disconnected(tm
         "backend.providers.bcut.BcutProvider.transcribe",
         lambda self, audio_path, options: TranscriptionResult(text="online", provider_id="bcut", segments=[]),
     )
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
     client = make_client(tmp_path)
     missing = tmp_path / "disconnected-models"
     config.set_model_storage_root(missing)
@@ -803,7 +803,7 @@ def test_local_model_task_uses_downloaded_model_result(tmp_path: Path, monkeypat
             ],
         )
 
-    def fake_prepare(path: Path) -> tuple[Path, dict]:
+    def fake_prepare(path: Path, **_) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
         return target, {"duration_ms": 2400}
@@ -877,7 +877,7 @@ def test_media_preprocess_generates_wav_metadata_and_rejects_unsupported_input(t
     assert task["normalized_audio_path"].endswith(".wav")
     assert task["duration_ms"] == 12340
     assert task["options"]["audio_metadata"]["audio_codec"] == "aac"
-    assert commands[0][-2:] == ["-y", str(tmp_path / "uploads" / f"{task['id']}.wav")]
+    assert commands[0][-2:] == ["-y", str(tmp_path / "derived-audio" / f"{task['id']}.wav")]
 
     unsupported = client.post(
         "/transcriptions",
@@ -904,7 +904,7 @@ def test_local_model_task_returns_before_transcription_finishes_without_inventin
             segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text="background local transcript")],
         )
 
-    def fake_prepare(path: Path) -> tuple[Path, dict]:
+    def fake_prepare(path: Path, **_) -> tuple[Path, dict]:
         target = path.with_suffix(".mp3")
         target.write_bytes(b"mp3")
         return target, {"duration_ms": 1000}
@@ -958,7 +958,7 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypa
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
     response = client.post(
@@ -1215,7 +1215,7 @@ def test_local_queue_limits_concurrency_and_cancelled_queued_task_does_not_run(t
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
 
     client = make_client(tmp_path)
     client.put("/settings/asr", json={"max_concurrent_local_tasks": 1})
@@ -1253,7 +1253,7 @@ def test_cancel_running_task_prevents_completed_result(tmp_path: Path, monkeypat
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
 
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
@@ -1327,7 +1327,7 @@ else:
             str(first_started if is_first else second_started),
         ]
 
-    def fake_prepare(path: Path) -> tuple[Path, dict]:
+    def fake_prepare(path: Path, **_) -> tuple[Path, dict]:
         return path, {"duration_ms": 121_000, "has_audio_stream": True}
 
     def fake_split(audio_path: Path, output_dir: Path, duration_ms: int, **_kwargs):
@@ -1391,7 +1391,7 @@ def test_retranscribe_resets_task_and_runs_again(tmp_path: Path, monkeypatch) ->
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
 
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
@@ -1447,7 +1447,7 @@ def test_batch_transcriptions_and_active_tasks_endpoint(tmp_path: Path, monkeypa
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
 
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
@@ -1495,7 +1495,7 @@ def test_long_audio_uses_chunk_pipeline_and_offsets_segments(tmp_path: Path, mon
             segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text=Path(audio_path).stem)],
         )
 
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 31 * 60 * 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 31 * 60 * 1000}))
     monkeypatch.setattr("backend.services.tasks.split_audio_chunks", fake_split)
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
 
@@ -1526,7 +1526,7 @@ def test_task_postprocess_updates_segments_and_exports_speaker_prefix(tmp_path: 
         )
 
     monkeypatch.setattr("backend.services.tasks.transcribe_with_local_model", fake_transcribe)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 2000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 2000}))
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
     created = client.post(
@@ -1560,7 +1560,7 @@ def test_segment_editing_creates_versions_and_can_restore(tmp_path: Path, monkey
             ],
         ),
     )
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 2000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 2000}))
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "whisper-base")
     created = client.post(
@@ -1621,11 +1621,13 @@ def test_preflight_and_storage_usage_endpoints(tmp_path: Path, monkeypatch) -> N
     assert "removed" in cleanup.json()
 
 
-def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path: Path, monkeypatch) -> None:
+def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path: Path, tmp_path_factory, monkeypatch) -> None:
+    from backend import config
     from backend.database import session as db_session
     from backend.services import tasks as task_service
 
-    source = tmp_path / "large-source.wav"
+    sources_dir = tmp_path_factory.mktemp("media-sources")
+    source = sources_dir / "large-source.wav"
     source.write_bytes(b"source-media")
     monkeypatch.setattr(task_service, "start_task_in_background", lambda _task_id: None)
     client = make_client(tmp_path)
@@ -1637,6 +1639,9 @@ def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path:
     assert blocked.status_code == 404
 
     monkeypatch.setenv("ASRBOX_DESKTOP_MODE", "1")
+
+    # Copy mode keeps the managed import flow: importing status, copy progress, copy into uploads.
+    config.update_media_storage_config(ingest_mode="copy")
     created = client.post(
         "/transcriptions/path",
         json={"paths": [str(source)], "backend": "local", "model_name": "whisper-base"},
@@ -1644,6 +1649,7 @@ def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path:
     assert created.status_code == 200
     task = created.json()["items"][0]
     assert task["status"] == "importing"
+    assert task["source_kind"] == "managed"
     assert "_ingest_source_path" not in task["options"]
     managed = tmp_path / task["audio_path"]
     assert not managed.exists()
@@ -1669,6 +1675,25 @@ def test_desktop_path_ingestion_is_guarded_and_reports_import_progress(tmp_path:
         db.close()
     assert managed.read_bytes() == b"source-media"
     assert source.read_bytes() == b"source-media"
+
+    # Reference mode queues immediately and points at the original file without copying it.
+    config.update_media_storage_config(ingest_mode="reference")
+    reference_source = sources_dir / "reference-source.wav"
+    reference_source.write_bytes(b"reference-media")
+    uploads_before = {path.name for path in (tmp_path / "uploads").glob("*")}
+    referenced = client.post(
+        "/transcriptions/path",
+        json={"paths": [str(reference_source)], "backend": "local", "model_name": "whisper-base"},
+    )
+    assert referenced.status_code == 200
+    reference_task = referenced.json()["items"][0]
+    assert reference_task["status"] == "queued"
+    assert reference_task["source_kind"] == "external"
+    assert reference_task["audio_path"] == str(reference_source)
+    assert "_source_kind" not in reference_task["options"]
+    assert "_ingest_source_path" not in reference_task["options"]
+    assert {path.name for path in (tmp_path / "uploads").glob("*")} == uploads_before
+    assert reference_source.read_bytes() == b"reference-media"
 
 
 def test_desktop_path_preflight_does_not_disclose_paths_outside_desktop_mode(tmp_path: Path) -> None:
@@ -1867,7 +1892,7 @@ def test_openai_compatible_provider_transcribes_and_masks_option_secrets(tmp_pat
         return FakeResponse()
 
     monkeypatch.setattr("backend.providers.http_providers.requests.post", fake_post)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1500}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1500}))
 
     client = make_client(tmp_path)
     provider = client.post(
@@ -1925,7 +1950,7 @@ def test_aliyun_provider_supports_submit_and_poll_flow(tmp_path: Path, monkeypat
 
     monkeypatch.setattr("backend.providers.http_providers.requests.post", fake_post)
     monkeypatch.setattr("backend.providers.http_providers.requests.get", fake_get)
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 900}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 900}))
 
     client = make_client(tmp_path)
     client.put(
@@ -1956,7 +1981,7 @@ def test_aliyun_provider_supports_submit_and_poll_flow(tmp_path: Path, monkeypat
 
 
 def test_batch_status_retry_and_export_zip(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
     monkeypatch.setattr(
         "backend.services.tasks.transcribe_with_local_model",
         lambda model_name, audio_path, options: TranscriptionResult(
@@ -1994,7 +2019,7 @@ def test_batch_status_retry_and_export_zip(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_task_logs_quality_runtime_and_storage_support_diagnostics(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path: (path, {"duration_ms": 120000}))
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 120000}))
     monkeypatch.setattr(
         "backend.services.tasks.transcribe_with_local_model",
         lambda model_name, audio_path, options: TranscriptionResult(
@@ -2040,7 +2065,7 @@ def test_task_logs_quality_runtime_and_storage_support_diagnostics(tmp_path: Pat
 
 
 def test_model_benchmark_and_provider_transcription_test(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("backend.services.media.prepare_media_for_asr", lambda path: (path, {"duration_ms": 1000}))
+    monkeypatch.setattr("backend.services.media.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1000}))
     monkeypatch.setattr(
         "backend.services.benchmarks.transcribe_with_local_model",
         lambda model_name, audio_path, options: TranscriptionResult(

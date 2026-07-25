@@ -146,6 +146,7 @@ def to_response(db: Session, row: TranscriptionTask) -> TranscriptionTaskRespons
         text=row.text,
         error=row.error,
         error_code=row.error_code,
+        source_kind=options.get("_source_kind", "managed"),
         options={key: value for key, value in options.items() if not key.startswith("_")},
         segments=_segments_for_task(db, row.id),
         created_at=row.created_at,
@@ -214,10 +215,12 @@ def _create_task_row(
     options: dict[str, Any] | None = None,
     batch_id: str | None = None,
     initial_status: str = "queued",
+    task_id: str | None = None,
 ) -> TranscriptionTaskResponse:
     stored_options = {"output_formats": output_formats, **(options or {})}
+    stored_options.setdefault("_source_kind", "managed")
     row = TranscriptionTask(
-        id=audio_path.stem,
+        id=task_id or audio_path.stem,
         filename=filename,
         source=backend,
         audio_path=config.to_storage_path(audio_path),
@@ -365,6 +368,21 @@ def create_task_from_path(
         raise FileNotFoundError(f"Audio file not found: {path}")
     source_path = source_path.resolve(strict=True)
     task_id = str(uuid.uuid4())
+    if config.get_media_ingest_mode() == config.INGEST_MODE_REFERENCE:
+        reference_options = {**(options or {}), "_source_kind": "external"}
+        return _create_task_row(
+            db,
+            filename=source_path.name,
+            audio_path=source_path,
+            backend=backend,
+            model_name=model_name,
+            provider_id=provider_id,
+            language=language,
+            output_formats=output_formats,
+            options=reference_options,
+            batch_id=batch_id,
+            task_id=task_id,
+        )
     target = config.get_uploads_dir() / f"{task_id}{source_path.suffix or '.audio'}"
     ingest_options = {
         **(options or {}),
@@ -383,6 +401,7 @@ def create_task_from_path(
         options=ingest_options,
         batch_id=batch_id,
         initial_status="importing",
+        task_id=task_id,
     )
 
 
@@ -435,7 +454,11 @@ def _prepare_task_media(db: Session, row: TranscriptionTask) -> Path:
     if audio_path is None:
         raise RuntimeError("Task audio file not found")
 
-    normalized_path, metadata = prepare_media_for_asr(audio_path)
+    normalized_path, metadata = prepare_media_for_asr(
+        audio_path,
+        output_dir=config.get_derived_audio_dir(),
+        output_name=f"{row.id}.wav",
+    )
     if normalized_path != audio_path:
         row.normalized_audio_path = config.to_storage_path(normalized_path)
     options = _read_options(row)
@@ -541,7 +564,7 @@ def _local_worker_inputs(db: Session, row: TranscriptionTask, audio_path: Path) 
     if not row.duration_ms or row.duration_ms <= LOCAL_CHUNK_THRESHOLD_MS:
         return [{"audio_path": str(audio_path), "start_ms": 0, "end_ms": row.duration_ms or 0}], []
 
-    chunks_dir = audio_path.parent / f"{row.id}_chunks"
+    chunks_dir = config.get_derived_audio_dir() / f"{row.id}_chunks"
     chunk_files = split_audio_chunks(
         audio_path,
         chunks_dir,
@@ -738,7 +761,7 @@ def _transcribe_chunks(db: Session, row: TranscriptionTask, normalized_path: Pat
     if row.duration_ms is None or row.duration_ms <= LONG_AUDIO_THRESHOLD_MS:
         return _transcribe_path_for_row(db, row, normalized_path)
 
-    chunks_dir = normalized_path.parent / f"{row.id}_chunks"
+    chunks_dir = config.get_derived_audio_dir() / f"{row.id}_chunks"
     chunk_files = split_audio_chunks(
         normalized_path,
         chunks_dir,
@@ -927,6 +950,11 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         _write_options(row, options)
         db.commit()
         version_service.create_version(db, row, version_type)
+        if config.delete_derived_audio_on_complete():
+            try:
+                cleanup_task_artifacts(db, row.id)
+            except Exception as exc:  # cleanup must not fail a completed task
+                task_logs.add_log(db, row.id, "cleanup", "warning", f"Derived-audio cleanup failed: {exc}", None)
         event_bus.publish("task.completed", {"id": row.id, "status": row.status, "progress": row.progress})
     except Exception as exc:
         db.refresh(row)
@@ -1106,9 +1134,11 @@ def delete_task(db: Session, task_id: str) -> bool:
     if row is None:
         return False
     task_runtime.request_cancel(task_id)
-    audio_path = config.resolve_storage_path(row.audio_path)
-    if audio_path:
-        audio_path.unlink(missing_ok=True)
+    # Externally referenced media belongs to the user; only managed copies are unlinked.
+    if _read_options(row).get("_source_kind", "managed") == "managed":
+        audio_path = config.resolve_storage_path(row.audio_path)
+        if audio_path:
+            audio_path.unlink(missing_ok=True)
     normalized_audio_path = config.resolve_storage_path(row.normalized_audio_path)
     if normalized_audio_path:
         normalized_audio_path.unlink(missing_ok=True)
@@ -1468,6 +1498,27 @@ def cleanup_task_artifacts(db: Session, task_id: str) -> dict[str, Any] | None:
     row.normalized_audio_path = None
     db.commit()
     return {"removed": removed, "errors": errors}
+
+
+def relink_task_media(db: Session, task_id: str, *, path: Path) -> TranscriptionTaskResponse | None:
+    row = get_task_row(db, task_id)
+    if row is None:
+        return None
+    source_path = Path(path).expanduser()
+    if not source_path.is_file():
+        raise FileNotFoundError(f"Audio file not found: {path}")
+    source_path = source_path.resolve(strict=True)
+    # Stale derived audio was generated from the previous source; invalidate it.
+    cleanup_task_artifacts(db, task_id)
+    row.audio_path = config.to_storage_path(source_path)
+    options = _read_options(row)
+    options["_source_kind"] = "external"
+    _write_options(row, options)
+    row.updated_at = _utc_now()
+    task_logs.add_log(db, row.id, "relink", "info", f"Task media relinked to {source_path}", {})
+    db.commit()
+    db.refresh(row)
+    return to_response(db, row)
 
 
 def create_batch_tasks(

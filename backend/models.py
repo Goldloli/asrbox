@@ -22,6 +22,9 @@ TaskStatus = Literal[
     "interrupted",
 ]
 
+TaskSourceKind = Literal["managed", "external"]
+MediaIngestMode = Literal["reference", "copy"]
+
 
 class DirectoryCheck(BaseModel):
     label: str
@@ -308,6 +311,37 @@ class ASRSettingsUpdate(BaseModel):
     ffprobe_path: str | None = None
 
 
+class MediaStorageLocation(BaseModel):
+    path: str
+    status: str
+    reason: str | None = None
+    available: bool
+    writable: bool
+
+
+class MediaStorageSettingsResponse(BaseModel):
+    ingest_mode: MediaIngestMode
+    uploads_dir: str
+    derived_audio_dir: str
+    delete_derived_on_complete: bool
+    uploads_dir_locked: bool
+    derived_audio_dir_locked: bool
+    uploads: MediaStorageLocation
+    derived_audio: MediaStorageLocation
+    runtime: Literal["desktop", "container"] = "desktop"
+
+
+class MediaStorageSettingsUpdate(BaseModel):
+    ingest_mode: MediaIngestMode | None = None
+    uploads_dir: str | None = None
+    derived_audio_dir: str | None = None
+    delete_derived_on_complete: bool | None = None
+
+
+class TaskRelinkRequest(BaseModel):
+    path: str = Field(min_length=1)
+
+
 class TaskRetranscribeRequest(BaseModel):
     backend: str | None = None
     model_name: str | None = None
@@ -350,6 +384,7 @@ class TranscriptionTaskResponse(BaseModel):
     text: str | None = None
     error: str | None = None
     error_code: str | None = None
+    source_kind: TaskSourceKind = "managed"
     options: dict[str, Any] = Field(default_factory=dict)
     segments: list[TranscriptSegment] = Field(default_factory=list)
     created_at: datetime

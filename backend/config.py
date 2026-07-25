@@ -11,6 +11,12 @@ DEFAULT_PORT = 17494
 MODEL_STORAGE_CONFIG_VERSION = 1
 MODEL_STORAGE_CONFIG_FILENAME = "model-storage.json"
 MODEL_CACHE_NAMES = ("huggingface", "modelscope", "torch", "xdg")
+MEDIA_STORAGE_CONFIG_VERSION = 1
+MEDIA_STORAGE_CONFIG_FILENAME = "media-storage.json"
+INGEST_MODE_REFERENCE = "reference"
+INGEST_MODE_COPY = "copy"
+INGEST_MODES = (INGEST_MODE_REFERENCE, INGEST_MODE_COPY)
+DEFAULT_INGEST_MODE = INGEST_MODE_REFERENCE
 
 
 def get_data_dir() -> Path:
@@ -29,8 +35,117 @@ def _ensure_dir(name: str) -> Path:
     return path
 
 
+def get_media_storage_config_path() -> Path:
+    return get_data_dir() / MEDIA_STORAGE_CONFIG_FILENAME
+
+
+def _read_media_storage_config() -> dict[str, Any]:
+    path = get_media_storage_config_path()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict) or payload.get("version") != MEDIA_STORAGE_CONFIG_VERSION:
+        return {}
+    return payload
+
+
+def _write_media_storage_config(payload: dict[str, Any]) -> None:
+    path = get_media_storage_config_path()
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _optional_configured_path(value: Any) -> Path | None:
+    if isinstance(value, str) and value.strip():
+        return Path(value).expanduser().absolute()
+    return None
+
+
+def get_media_ingest_mode() -> str:
+    mode = _read_media_storage_config().get("ingest_mode")
+    return mode if mode in INGEST_MODES else DEFAULT_INGEST_MODE
+
+
+def uploads_dir_is_locked() -> bool:
+    return bool(os.environ.get("ASRBOX_UPLOADS_DIR", "").strip())
+
+
+def derived_audio_dir_is_locked() -> bool:
+    return bool(os.environ.get("ASRBOX_DERIVED_AUDIO_DIR", "").strip())
+
+
+def resolve_uploads_dir() -> Path:
+    """Return the effective managed-uploads directory without creating it."""
+    enforced = os.environ.get("ASRBOX_UPLOADS_DIR", "").strip()
+    if enforced:
+        return Path(enforced).expanduser().absolute()
+    configured = _optional_configured_path(_read_media_storage_config().get("uploads_dir"))
+    if configured is not None:
+        return configured
+    return get_data_dir() / "uploads"
+
+
+def resolve_derived_audio_dir() -> Path:
+    """Return the effective derived-audio directory without creating it."""
+    enforced = os.environ.get("ASRBOX_DERIVED_AUDIO_DIR", "").strip()
+    if enforced:
+        return Path(enforced).expanduser().absolute()
+    configured = _optional_configured_path(_read_media_storage_config().get("derived_audio_dir"))
+    if configured is not None:
+        return configured
+    return get_data_dir() / "derived-audio"
+
+
+def delete_derived_audio_on_complete() -> bool:
+    return bool(_read_media_storage_config().get("delete_derived_on_complete"))
+
+
+def update_media_storage_config(
+    *,
+    ingest_mode: str | None = None,
+    uploads_dir: str | Path | None = None,
+    derived_audio_dir: str | Path | None = None,
+    delete_derived_on_complete: bool | None = None,
+) -> None:
+    payload = _read_media_storage_config()
+    payload["version"] = MEDIA_STORAGE_CONFIG_VERSION
+    if ingest_mode is not None:
+        if ingest_mode not in INGEST_MODES:
+            raise ValueError(f"Unsupported ingest mode: {ingest_mode}")
+        payload["ingest_mode"] = ingest_mode
+    if uploads_dir is not None:
+        if uploads_dir_is_locked():
+            raise ValueError("Uploads directory is locked by ASRBOX_UPLOADS_DIR")
+        payload["uploads_dir"] = str(Path(uploads_dir).expanduser().absolute())
+    if derived_audio_dir is not None:
+        if derived_audio_dir_is_locked():
+            raise ValueError("Derived-audio directory is locked by ASRBOX_DERIVED_AUDIO_DIR")
+        payload["derived_audio_dir"] = str(Path(derived_audio_dir).expanduser().absolute())
+    if delete_derived_on_complete is not None:
+        payload["delete_derived_on_complete"] = bool(delete_derived_on_complete)
+    _write_media_storage_config(payload)
+
+
 def get_uploads_dir() -> Path:
-    return _ensure_dir("uploads")
+    path = resolve_uploads_dir()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_derived_audio_dir() -> Path:
+    path = resolve_derived_audio_dir()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def get_audio_dir() -> Path:

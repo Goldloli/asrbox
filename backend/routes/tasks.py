@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, Response
@@ -8,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend import config
 from backend.database import get_db
-from backend.models import ActiveTasksResponse, TaskListResponse, TaskLogResponse, TaskPostprocessRequest, TaskQualityResponse, TaskRetranscribeRequest
+from backend.models import ActiveTasksResponse, TaskListResponse, TaskLogResponse, TaskPostprocessRequest, TaskQualityResponse, TaskRelinkRequest, TaskRetranscribeRequest
 from backend.models import SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest
 from backend.services import exports as export_service
 from backend.services import tasks as task_service
@@ -236,6 +238,19 @@ async def cleanup_task_artifacts(task_id: str, db: Session = Depends(get_db)):
     if result is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return result
+
+
+@router.post("/{task_id}/relink")
+async def relink_task(task_id: str, request: TaskRelinkRequest, db: Session = Depends(get_db)):
+    if os.environ.get("ASRBOX_DESKTOP_MODE") != "1":
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        task = task_service.relink_task_media(db, task_id, path=Path(request.path))
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 
 @router.delete("/{task_id}")

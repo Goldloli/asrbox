@@ -17,6 +17,7 @@ import { LLMProvidersPanel } from '../components/settings/LLMProvidersPanel';
 import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
 import { ModelStorageSettings } from '../components/settings/ModelStorageSettings';
+import { MediaStorageSettings } from '../components/settings/MediaStorageSettings';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 
 type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage';
@@ -436,6 +437,7 @@ export function SettingsPage() {
             }}
           />
           <ModelStorageSettings />
+          <MediaStorageSettings />
           <Panel className="overflow-hidden">
             <PanelHeader
               eyebrow={t('settings.storage')}

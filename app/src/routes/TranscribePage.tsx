@@ -24,6 +24,7 @@ import { desktopCapabilities, type DesktopMediaFile } from '../lib/desktopCapabi
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 const activeTaskStatuses = new Set(['queued', 'importing', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
+const MEDIA_PATH_PATTERN = /\.(aac|aif|aiff|flac|m4a|mkv|mov|mp3|mp4|ogg|opus|wav|webm|wma)$/i;
 
 export function TranscribePage() {
   const queryClient = useQueryClient();
@@ -58,6 +59,25 @@ export function TranscribePage() {
   useEffect(() => {
     if (!selectedTaskId && tasks[0]) setSelectedTaskId(tasks[0].id);
   }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    // Desktop: native drag events carry real file paths, so dropped media follows
+    // the same path ingestion (reference/copy) as the picker. Browsers keep HTML5 drop.
+    if (!desktopCapabilities.canPickMediaFiles) return;
+    return desktopCapabilities.listenMediaFileDrop({
+      onActiveChange: setDragActive,
+      onDrop: (paths) => {
+        const selected = paths
+          .filter((path) => MEDIA_PATH_PATTERN.test(path))
+          .map((path) => ({ path, name: path.split(/[\\/]/).pop() ?? path, size: 0 }));
+        if (selected.length > 0) {
+          setDesktopFiles(selected);
+          setFiles([]);
+          setPreflight(null);
+        }
+      },
+    });
+  }, []);
 
   useEffect(() => {
     const firstDownloaded = models.find((model) => model.downloaded && model.compatible !== false)?.model_name ?? models.find((model) => model.compatible !== false)?.model_name;
@@ -105,7 +125,7 @@ export function TranscribePage() {
 
   const droppedMediaFiles = (fileList: FileList) => Array.from(fileList).filter((file) => {
     if (file.type.startsWith('audio/') || file.type.startsWith('video/')) return true;
-    return /\.(aac|aif|aiff|flac|m4a|mkv|mov|mp3|mp4|ogg|opus|wav|webm|wma)$/i.test(file.name);
+    return MEDIA_PATH_PATTERN.test(file.name);
   });
 
   const preflightMutation = useMutation({

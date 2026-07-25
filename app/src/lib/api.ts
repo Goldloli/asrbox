@@ -31,6 +31,7 @@ export interface TranscriptionTask {
   source: string;
   audio_path: string;
   normalized_audio_path?: string | null;
+  source_kind: 'managed' | 'external';
   status: TaskStatus;
   progress: number;
   language?: string | null;
@@ -340,6 +341,30 @@ export interface ProofreadingApplyResult {
     created_at: string;
   };
 }
+
+export interface MediaStorageLocation {
+  path: string;
+  status: 'available' | 'read_only' | 'unavailable';
+  reason?: string | null;
+  available: boolean;
+  writable: boolean;
+}
+
+export interface MediaStorageSettings {
+  ingest_mode: 'reference' | 'copy';
+  uploads_dir: string;
+  derived_audio_dir: string;
+  delete_derived_on_complete: boolean;
+  uploads_dir_locked: boolean;
+  derived_audio_dir_locked: boolean;
+  uploads: MediaStorageLocation;
+  derived_audio: MediaStorageLocation;
+  runtime: 'desktop' | 'container';
+}
+
+export type MediaStorageSettingsUpdate = Partial<
+  Pick<MediaStorageSettings, 'ingest_mode' | 'uploads_dir' | 'derived_audio_dir' | 'delete_derived_on_complete'>
+>;
 
 export interface ASRSettings {
   id: number;
@@ -652,6 +677,13 @@ class ApiClient {
     });
   }
 
+  relinkTask(id: string, path: string) {
+    return this.request<TranscriptionTask>(`/tasks/${id}/relink`, {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+  }
+
   deleteTask(id: string) {
     return this.request<{ message: string }>(`/tasks/${id}`, { method: 'DELETE' });
   }
@@ -818,6 +850,17 @@ class ApiClient {
 
   updateSettings(data: Partial<ASRSettings>) {
     return this.request<ASRSettings>('/settings/asr', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  getMediaStorageSettings() {
+    return this.request<MediaStorageSettings>('/settings/media-storage');
+  }
+
+  updateMediaStorageSettings(data: MediaStorageSettingsUpdate) {
+    return this.request<MediaStorageSettings>('/settings/media-storage', {
       method: 'PUT',
       body: JSON.stringify(data),
     });

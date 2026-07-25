@@ -6,7 +6,7 @@ services:
     build:
       context: .
       args:
-        APP_VERSION: ${ASRBOX_VERSION:-0.1.0-rc.2}
+        APP_VERSION: ${ASRBOX_VERSION:-0.1.1}
     ports:
       - "${ASRBOX_BIND_ADDRESS:-127.0.0.1}:${ASRBOX_PORT:-17494}:17494"
     environment:
@@ -25,6 +25,14 @@ services:
       - asrbox-data:/data
       # Optional large-model bind mount. Uncomment and set an absolute host path in .env:
       # - ${ASRBOX_MODEL_STORAGE_HOST_PATH:?set ASRBOX_MODEL_STORAGE_HOST_PATH}:/model-storage
+      # Optional uploads bind mount for ingested media (browser uploads are always copied
+      # into the container). Point it at a large external disk so media does not fill the
+      # named volume, and set the host path in .env:
+      #   macOS (external drive): ASRBOX_UPLOADS_HOST_PATH=/Volumes/<drive>/asrbox-uploads
+      #   Windows (D: drive):     ASRBOX_UPLOADS_HOST_PATH=D:/asrbox-uploads
+      # The host directory must be writable by container UID/GID 10001:10001.
+      # Set this before the first ingest; media already stored in the named volume stays there.
+      # - ${ASRBOX_UPLOADS_HOST_PATH:?set ASRBOX_UPLOADS_HOST_PATH}:/data/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

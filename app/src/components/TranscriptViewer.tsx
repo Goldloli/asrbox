@@ -1,7 +1,10 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Clipboard, FileText, Pause, Pencil, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
+import { Activity, Clipboard, FileText, FolderOpen, Pause, Pencil, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type TranscriptionTask } from '../lib/api';
+import { desktopCapabilities } from '../lib/desktopCapabilities';
+import { queryKeys } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
 import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
@@ -213,6 +216,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         <WaveformAudioPlayer
           taskId={task.id}
           title={task.filename}
+          sourceKind={task.source_kind}
           seekTarget={seekTarget}
           onSeekHandled={() => setSeekTarget(null)}
         />
@@ -311,23 +315,54 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
 function WaveformAudioPlayer({
   taskId,
   title,
+  sourceKind,
   seekTarget,
   onSeekHandled,
 }: {
   taskId: string;
   title: string;
+  sourceKind?: TranscriptionTask['source_kind'];
   seekTarget: number | null;
   onSeekHandled: () => void;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
-  const audioUrl = apiClient.taskAudioUrl(taskId);
+  const [audioReloadKey, setAudioReloadKey] = useState(0);
+  const audioUrl = useMemo(() => {
+    const base = apiClient.taskAudioUrl(taskId);
+    if (audioReloadKey === 0) return base;
+    return `${base}${base.includes('?') ? '&' : '?'}reload=${audioReloadKey}`;
+  }, [taskId, audioReloadKey]);
   const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+
+  const relink = useMutation({
+    mutationFn: (path: string) => apiClient.relinkTask(taskId, path),
+    onSuccess: () => {
+      toast.success(t('toast.taskRelinked'));
+      queryClient.invalidateQueries({ queryKey: queryKeys.task(taskId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      setAudioReloadKey((key) => key + 1);
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
+
+  const relinkFromPicker = async () => {
+    try {
+      const files = await desktopCapabilities.pickMediaFiles();
+      const file = files[0];
+      if (!file) return;
+      relink.mutate(file.path);
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -476,6 +511,15 @@ function WaveformAudioPlayer({
             </div>
           )}
         </button>
+        {waveformStatus === 'error' && sourceKind === 'external' && desktopCapabilities.canPickMediaFiles ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2">
+            <p className="text-sm text-[var(--app-danger)]">{t('transcript.sourceMissing')}</p>
+            <Button size="sm" variant="secondary" onClick={relinkFromPicker} disabled={relink.isPending}>
+              <FolderOpen className="size-4" />
+              {relink.isPending ? t('transcript.relinking') : t('transcript.relinkSource')}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

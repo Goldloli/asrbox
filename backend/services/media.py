@@ -56,7 +56,7 @@ def probe_media(path: Path) -> dict:
     }
 
 
-def prepare_media_for_asr(path: Path) -> tuple[Path, dict]:
+def prepare_media_for_asr(path: Path, *, output_dir: Path | None = None, output_name: str | None = None) -> tuple[Path, dict]:
     if path.suffix.lower() not in SUPPORTED_MEDIA_EXTENSIONS:
         raise ASRboxError("UNSUPPORTED_MEDIA_FORMAT", f"Unsupported media format: {path.suffix or 'unknown'}", stage="preprocessing")
 
@@ -66,7 +66,11 @@ def prepare_media_for_asr(path: Path) -> tuple[Path, dict]:
     if path.suffix.lower() == ".wav":
         return path, metadata
 
-    target = path.with_suffix(".wav")
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        target = output_dir / (output_name or f"{path.stem}.wav")
+    else:
+        target = path.with_suffix(".wav")
     ffmpeg = resolve_tools(check_version=False)["ffmpeg"]
     command = [
         ffmpeg.path or "ffmpeg",
