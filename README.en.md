@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.0-beta.1`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.0-rc.2`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -31,6 +31,12 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 
+### LLM proofreading
+
+Connect Ollama or any OpenAI-compatible LLM to automatically check subtitles for typos, omissions, and obvious recognition errors, with ready-to-apply fix suggestions:
+
+![LLM proofreading demo](assets/asrbox-llm-proofread.gif)
+
 ## Docker deployment
 
 Docker Engine 24+ and Docker Compose v2 are required. Allow at least 8 GB RAM and 15 GB free space; larger models need more.
@@ -51,6 +57,8 @@ docker compose logs -f asrbox
 
 The `asrbox-data` volume contains the database, media, transcripts, settings, models, and caches. `docker compose down` preserves it; `docker compose down -v` permanently removes it.
 
+Models and Hugging Face, ModelScope, and Torch caches can be moved as one storage root from Settings > Storage and diagnostics. Desktop can select a local or mounted removable disk. Docker operators must first mount a host directory in `compose.yaml` and declare its container mount point with `ASRBOX_MODEL_STORAGE_ROOTS`; the Web UI displays container paths only. See the [Docker guide](docs/docker.en.md) for configuration and recovery.
+
 For a phone or another trusted LAN device, set these values in `.env`:
 
 ```dotenv
@@ -64,7 +72,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.0-beta.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
+Download the Apple Silicon DMG from the [`v0.1.0-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.2) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
 
 Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 

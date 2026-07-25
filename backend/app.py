@@ -9,19 +9,24 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend import __version__
+from backend import __version__, config
 from backend.database import init_db
 from backend.database import session as db_session
 from backend.routes import register_routers
 from backend.services.tasks import mark_interrupted_tasks
+from backend.services.errors import ASRboxError
 
 API_DOCUMENT_PATHS = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    config.configure_model_cache_environment()
     init_db()
     _mark_interrupted_tasks()
+    from backend.services import model_storage
+
+    model_storage.recover_interrupted_relocation()
     yield
 
 
@@ -48,6 +53,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(ASRboxError)
+    async def handle_asrbox_error(_request: Request, exc: ASRboxError):
+        return JSONResponse(
+            {"detail": exc.message, "error_code": exc.code, "stage": exc.stage},
+            status_code=409,
+        )
 
     @app.middleware("http")
     async def require_loopback_token(request: Request, call_next):

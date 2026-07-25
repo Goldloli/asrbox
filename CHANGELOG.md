@@ -4,9 +4,12 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.0-rc.2] - 2026-07-22
+
 ### Added
 
 - Source-built Linux CPU Docker deployment with a multi-stage non-root image, same-origin Web UI/API, ffmpeg, health checks, and persistent `/data` volume.
+- Model storage relocation settings with selectable target roots, adopt mode, shared-cache handling, and progress polling.
 - Loopback-only Compose defaults with configurable host port, bind address, API token, and host-Ollama connectivity.
 - Docker image, health, persistence, token, deep-link, desktop-browser, and mobile-browser smoke coverage in CI and Release verification.
 - Dedicated AI workspace for LLM subtitle proofreading, provider presets/testing, ordered suggestions, individually collapsible correct ranges, and explicit versioned application.
@@ -83,6 +86,7 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-rc.2...HEAD
+[0.1.0-rc.2]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...v0.1.0-rc.2
 [0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1
 [0.1.0-rc.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.1

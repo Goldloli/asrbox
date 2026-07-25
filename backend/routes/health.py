@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from backend import __version__, config
 from backend.models import DirectoryCheck, FilesystemHealthResponse, HealthResponse
 from backend.services.tasks import list_tasks
+from backend.services import model_storage
 from backend.database.session import SessionLocal
 
 router = APIRouter()
@@ -57,6 +58,10 @@ async def filesystem_health():
     for label, path in directories.items():
         error = None
         writable = False
+        if label == "models" and not model_storage.inspect_storage()["available"]:
+            healthy = False
+            checks.append(DirectoryCheck(label=label, path=str(path), exists=False, writable=False, error="MODEL_STORAGE_UNAVAILABLE"))
+            continue
         try:
             path.mkdir(parents=True, exist_ok=True)
             probe = path / ".asrbox_probe"

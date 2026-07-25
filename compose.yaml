@@ -6,7 +6,7 @@ services:
     build:
       context: .
       args:
-        APP_VERSION: ${ASRBOX_VERSION:-0.1.0-beta.1}
+        APP_VERSION: ${ASRBOX_VERSION:-0.1.0-rc.2}
     ports:
       - "${ASRBOX_BIND_ADDRESS:-127.0.0.1}:${ASRBOX_PORT:-17494}:17494"
     environment:
@@ -18,8 +18,13 @@ services:
       MODELSCOPE_CACHE: /data/cache/modelscope
       TORCH_HOME: /data/cache/torch
       XDG_CACHE_HOME: /data/cache
+      # Comma-separated container mount points shown by the Web model-storage selector.
+      # After adding the optional bind mount below, use: /data,/model-storage
+      ASRBOX_MODEL_STORAGE_ROOTS: ${ASRBOX_MODEL_STORAGE_ROOTS:-/data}
     volumes:
       - asrbox-data:/data
+      # Optional large-model bind mount. Uncomment and set an absolute host path in .env:
+      # - ${ASRBOX_MODEL_STORAGE_HOST_PATH:?set ASRBOX_MODEL_STORAGE_HOST_PATH}:/model-storage
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

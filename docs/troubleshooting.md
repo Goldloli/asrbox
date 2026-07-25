@@ -41,6 +41,13 @@ If the Docker page loads but reports the backend offline, confirm the API token 
 
 Do not use `docker compose down -v` as a troubleshooting reset unless permanent data loss is intended.
 
+## Model Storage Location Is Unavailable
+
+- Desktop: reconnect the same external disk and confirm it is mounted at the configured full path. ASRbox intentionally does not fall back to the system disk or classify those models as never downloaded.
+- Docker: check that the host bind mount still appears at the configured container path, then run `docker compose config` and `docker compose exec asrbox ls -ld /model-storage`. The Web UI cannot inspect or open the host-side path.
+- Confirm the selected directory and every parent are real directories rather than symbolic links. Network filesystems are warning-only and are not guaranteed reliable.
+- If a completed migration reports manual cleanup, verify that the new root is active and models work before deleting the listed old duplicate. A failed or cancelled migration keeps the old root authoritative.
+
 ## macOS Blocks the App
 
 The public-beta DMG is not signed or notarized.
@@ -80,7 +87,7 @@ Current ASRbox loads audio for Transformers Whisper and Qwen3-ASR through the Tr
 
 If a packaged app still reports “Could not load libtorchcodec”:
 
-1. Confirm you are running a build containing the current `0.1.0-beta.1` source rather than an older app copy.
+1. Confirm you are running a build containing the current `0.1.0-rc.2` source rather than an older app copy.
 2. Quit ASRbox fully, replace the old `.app`, and reopen it.
 3. For a source build, reinstall `requirements-dev.lock` and `requirements-build.lock`, then rebuild with `npm run build:desktop`.
 4. Generate a diagnostic bundle and include the ASRbox version, Python version, model id, and sanitized traceback in an issue.

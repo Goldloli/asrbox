@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import ctypes
 import os
+import sys
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Callable
 
 
 DEFAULT_MAX_UPLOAD_BYTES = 20 * 1024 * 1024 * 1024
@@ -64,3 +66,51 @@ def save_upload(
         destination.unlink(missing_ok=True)
         raise
     return written
+
+
+def _try_clone_file(source: Path, destination: Path) -> bool:
+    if sys.platform != "darwin":
+        return False
+    try:
+        clonefile = ctypes.CDLL(None, use_errno=True).clonefile
+        clonefile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+        clonefile.restype = ctypes.c_int
+        cloned = clonefile(os.fsencode(source), os.fsencode(destination), 0) == 0
+        if not cloned:
+            destination.unlink(missing_ok=True)
+        return cloned
+    except (AttributeError, OSError):
+        return False
+
+
+def copy_local_path(
+    source: Path,
+    destination: Path,
+    *,
+    on_progress: Callable[[int, int], None] | None = None,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> int:
+    source = source.resolve(strict=True)
+    total = source.stat().st_size
+    temporary = destination.with_name(f"{destination.name}.importing")
+    temporary.unlink(missing_ok=True)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if on_progress:
+        on_progress(0, total)
+    try:
+        if _try_clone_file(source, temporary):
+            if on_progress:
+                on_progress(total, total)
+        else:
+            copied = 0
+            with source.open("rb") as input_file, temporary.open("xb") as output_file:
+                while chunk := input_file.read(chunk_size):
+                    output_file.write(chunk)
+                    copied += len(chunk)
+                    if on_progress:
+                        on_progress(copied, total)
+        os.replace(temporary, destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return total

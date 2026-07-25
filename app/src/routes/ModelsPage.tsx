@@ -23,6 +23,7 @@ export function ModelsPage() {
   const modelsQuery = useModelsQuery();
   const downloadsQuery = useActiveDownloadsQuery();
   const storageQuery = useModelStorageQuery();
+  const storageUnavailable = storageQuery.data?.status === 'unavailable' || storageQuery.data?.status === 'migrating' || storageQuery.data?.status === 'read_only';
   const models = modelsQuery.data?.models ?? [];
   const downloads = getActiveDownloadItems(downloadsQuery.data);
   const progressByModel = useMemo(
@@ -102,10 +103,10 @@ export function ModelsPage() {
       return modelCategory(model) === category;
     })
     .sort((a, b) => Number(pinnedModelNames.includes(b.model_name)) - Number(pinnedModelNames.includes(a.model_name)));
-  const recommendedDownloadModel = models.find((model) => isRecommendedModel(model) && !model.downloaded) ?? models.find((model) => !model.downloaded);
+  const recommendedDownloadModel = models.find((model) => isRecommendedModel(model) && model.downloaded === false) ?? models.find((model) => model.downloaded === false);
   const guideCategory = guidePreference === 'general' ? 'recommended' : guidePreference;
   const guideRecommendedModel =
-    models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && !model.downloaded) ??
+    models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && model.downloaded === false) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
   const benchmarkModels = visibleModels.slice(0, 4);
   const modelGroups = createModelGroups(visibleModels, progressByModel, pinnedModelNames, t);
@@ -138,7 +139,7 @@ export function ModelsPage() {
         <PanelHeader
           eyebrow={t('models.eyebrow')}
           title={t('models.title')}
-          description={`${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}
+          description={storageUnavailable ? t('settings.modelStorageUnavailable') : `${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}
           action={
             <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')} aria-label={t('common.refresh')}>
               <RefreshCw className="size-4" />
@@ -190,7 +191,7 @@ export function ModelsPage() {
               body={t('models.noModelsBody')}
               action={
                 recommendedDownloadModel ? (
-                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)}>
+                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)} disabled={storageUnavailable}>
                     <DownloadCloud className="size-4" />
                     {t('models.downloadRecommended')}
                   </Button>
@@ -229,8 +230,8 @@ export function ModelsPage() {
               <article className="grid gap-3 rounded-xl border app-control px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-app">{guideRecommendedModel.display_name}</span>
-                  <Badge tone={guideRecommendedModel.downloaded ? 'success' : 'accent'}>
-                    {guideRecommendedModel.downloaded ? t('common.downloaded') : t('models.recommended')}
+                  <Badge tone={storageUnavailable ? 'danger' : guideRecommendedModel.downloaded ? 'success' : 'accent'}>
+                    {storageUnavailable ? t('settings.modelStorageUnavailable') : guideRecommendedModel.downloaded ? t('common.downloaded') : t('models.recommended')}
                   </Badge>
                 </div>
                 <p className="text-sm leading-6 text-app-muted">{modelDescription(guideRecommendedModel, locale)}</p>
@@ -239,8 +240,8 @@ export function ModelsPage() {
                   <Button size="sm" variant="secondary" onClick={() => setCategory(guideCategory)}>
                     {t('models.showMatches')}
                   </Button>
-                  {!guideRecommendedModel.downloaded && (
-                    <Button size="sm" onClick={() => download.mutate(guideRecommendedModel.model_name)}>
+                  {guideRecommendedModel.downloaded === false && (
+                    <Button size="sm" onClick={() => download.mutate(guideRecommendedModel.model_name)} disabled={storageUnavailable}>
                       <DownloadCloud className="size-4" />
                       {t('common.download')}
                     </Button>
@@ -302,7 +303,7 @@ export function ModelsPage() {
                 title={t('models.noActiveDownloads')}
                 body={t('models.downloadProgress')}
                 action={recommendedDownloadModel && (
-                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)}>
+                  <Button onClick={() => download.mutate(recommendedDownloadModel.model_name)} disabled={storageUnavailable}>
                     <DownloadCloud className="size-4" />
                     {t('models.downloadRecommended')}
                   </Button>
@@ -313,7 +314,7 @@ export function ModelsPage() {
         </Panel>
 
         <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('settings.storage')} title={t('models.storage')} description={storageQuery.data?.models_dir ?? t('models.storageUnavailable')} />
+          <PanelHeader eyebrow={t('settings.storage')} title={t('models.storage')} description={storageUnavailable ? t('settings.modelStorageUnavailable') : storageQuery.data?.models_dir ?? t('models.storageUnavailable')} />
           <div className="grid gap-4 p-5">
             {storageQuery.error && <ErrorState title={t('common.unableToLoad')} error={storageQuery.error} />}
             <div className="grid grid-cols-2 gap-2">

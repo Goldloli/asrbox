@@ -14,7 +14,7 @@ RUN bun run build:web
 
 FROM python:3.13-slim-bookworm AS runtime
 
-ARG APP_VERSION=0.1.0-beta.1
+ARG APP_VERSION=0.1.0-rc.2
 LABEL org.opencontainers.image.title="ASRbox" \
       org.opencontainers.image.description="Local-first transcription and LLM subtitle proofreading workspace" \
       org.opencontainers.image.source="https://github.com/Goldloli/asrbox" \
@@ -31,6 +31,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MODELSCOPE_CACHE=/data/cache/modelscope \
     TORCH_HOME=/data/cache/torch \
     XDG_CACHE_HOME=/data/cache \
+    ASRBOX_MODEL_STORAGE_ROOTS=/data \
     HOME=/data/home
 
 RUN apt-get update \

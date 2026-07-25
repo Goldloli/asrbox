@@ -16,6 +16,7 @@ import { ProvidersPage } from './ProvidersPage';
 import { LLMProvidersPanel } from '../components/settings/LLMProvidersPanel';
 import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
+import { ModelStorageSettings } from '../components/settings/ModelStorageSettings';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 
 type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage';
@@ -434,6 +435,7 @@ export function SettingsPage() {
               activeTasksQuery.refetch();
             }}
           />
+          <ModelStorageSettings />
           <Panel className="overflow-hidden">
             <PanelHeader
               eyebrow={t('settings.storage')}

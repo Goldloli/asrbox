@@ -37,6 +37,8 @@ fn main() {
             open_file_location,
             pick_executable_file,
             pick_export_directory,
+            pick_media_files,
+            pick_model_storage_directory,
             reveal_logs,
             save_text_file
         ])
@@ -114,6 +116,7 @@ async fn start_server(
     ];
     let mut server_envs = ffmpeg_env(&app);
     server_envs.push(("ASRBOX_API_TOKEN".to_string(), api_token.clone()));
+    server_envs.push(("ASRBOX_DESKTOP_MODE".to_string(), "1".to_string()));
 
     #[cfg(debug_assertions)]
     let spawn_result = {
@@ -289,6 +292,57 @@ async fn pick_export_directory(app: tauri::AppHandle) -> Result<Option<String>, 
 }
 
 #[tauri::command]
+async fn pick_model_storage_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    pick_export_directory(app).await
+}
+
+#[derive(serde::Serialize)]
+struct SelectedMediaFile {
+    path: String,
+    name: String,
+    size: u64,
+}
+
+#[tauri::command]
+async fn pick_media_files(app: tauri::AppHandle) -> Result<Vec<SelectedMediaFile>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter(
+            "Audio and video",
+            &[
+                "aac", "aif", "aiff", "flac", "m4a", "mkv", "mov", "mp3", "mp4", "ogg",
+                "opus", "wav", "webm", "wma",
+            ],
+        )
+        .pick_files(move |files| {
+            let result = files
+                .unwrap_or_default()
+                .into_iter()
+                .map(|file| {
+                    let path = file
+                        .into_path()
+                        .map_err(|error| format!("Failed to read selected media path: {error}"))?;
+                    let metadata = std::fs::metadata(&path).map_err(|error| {
+                        format!("Failed to inspect selected media {}: {error}", path.display())
+                    })?;
+                    Ok(SelectedMediaFile {
+                        name: path
+                            .file_name()
+                            .map(|name| name.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "media".to_string()),
+                        path: path.to_string_lossy().to_string(),
+                        size: metadata.len(),
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>();
+            let _ = tx.send(result);
+        });
+    rx.await
+        .map_err(|_| "Media picker was closed before returning a result".to_string())?
+}
+
+#[tauri::command]
 async fn pick_executable_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog().file().pick_file(move |file| {
@@ -331,7 +385,11 @@ fn save_text_file(
     contents: String,
     directory: Option<String>,
 ) -> Result<String, String> {
-    let export_dir = match directory.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+    let export_dir = match directory
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         Some(value) => PathBuf::from(value),
         None => app
             .path()

@@ -50,6 +50,21 @@ def qwen3_asr_available() -> bool:
     return qwen3_asr_import_error() is None
 
 
+def mlx_runtime_import_errors() -> tuple[str | None, str | None]:
+    core_error = module_import_error("mlx.core") if module_available("mlx.core") else "mlx.core is not installed"
+    whisper_error = module_import_error("mlx_whisper") if module_available("mlx_whisper") else "mlx_whisper is not installed"
+    return core_error, whisper_error
+
+
+def mlx_runtime_import_error() -> str | None:
+    core_error, whisper_error = mlx_runtime_import_errors()
+    if core_error:
+        return f"mlx.core import failed: {core_error}"
+    if whisper_error:
+        return f"mlx_whisper import failed: {whisper_error}"
+    return None
+
+
 def detect_runtime() -> dict[str, Any]:
     warnings: list[str] = []
     torch_available = module_available("torch")
@@ -99,6 +114,11 @@ def detect_runtime() -> dict[str, Any]:
     qwen3_asr_runtime_available = qwen3_asr_error is None
     if module_available("transformers") and qwen3_asr_error is not None:
         warnings.append(f"Qwen3-ASR import failed: {qwen3_asr_error}")
+    mlx_import_error, mlx_whisper_import_error = mlx_runtime_import_errors()
+    if mlx_import_error:
+        warnings.append(f"MLX import failed: {mlx_import_error}")
+    if mlx_whisper_import_error:
+        warnings.append(f"MLX Whisper import failed: {mlx_whisper_import_error}")
 
     return {
         "python_version": sys.version.split()[0],
@@ -126,8 +146,10 @@ def detect_runtime() -> dict[str, Any]:
         "huggingface_hub_available": module_available("huggingface_hub"),
         "pyannote_available": pyannote_available,
         "diarization_ready": diarization_ready,
-        "mlx_available": module_available("mlx"),
-        "mlx_whisper_available": module_available("mlx_whisper"),
+        "mlx_available": mlx_import_error is None,
+        "mlx_whisper_available": mlx_import_error is None and mlx_whisper_import_error is None,
+        "mlx_import_error": mlx_import_error,
+        "mlx_whisper_import_error": mlx_whisper_import_error,
         "qwen3_asr_available": qwen3_asr_runtime_available,
         "transformers_qwen3_asr_available": qwen3_asr_runtime_available,
         "warnings": warnings,

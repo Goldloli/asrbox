@@ -60,8 +60,8 @@ export function DiagnosticsHealthCenter({
           <HealthMetric
             icon={<HardDrive className="size-4" />}
             title={t('settings.modelAvailability')}
-            value={`${downloadedModelCount}/${modelCount} ${t('models.descriptionDownloaded')}`}
-            tone={downloadedModelCount > 0 ? 'success' : 'warning'}
+            value={storage?.available === false ? t('settings.modelStorageUnavailable') : `${downloadedModelCount}/${modelCount} ${t('models.descriptionDownloaded')}`}
+            tone={storage?.available === false ? 'danger' : downloadedModelCount > 0 ? 'success' : 'warning'}
           />
           <HealthMetric
             icon={<Database className="size-4" />}

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 ERROR_CODES: dict[str, str] = {
+    "MODEL_STORAGE_UNAVAILABLE": "The configured model storage location is unavailable.",
+    "MODEL_STORAGE_READ_ONLY": "The configured model storage location is not writable.",
+    "MODEL_STORAGE_MIGRATING": "Model storage relocation is in progress.",
     "MODEL_NOT_DOWNLOADED": "Model files are not downloaded.",
     "MODEL_COMPATIBILITY_FAILED": "Downloaded model files are incomplete or incompatible.",
     "MODEL_LOAD_FAILED": "Model runtime failed to load the model.",

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM="$(rustc --print host-tuple 2>/dev/null || echo unknown)"
+BUILD_ARGS=()
 
 cd "$ROOT"
 
@@ -11,6 +12,7 @@ case "$PLATFORM" in
     FFMPEG_VENDOR="third_party/ffmpeg/darwin-arm64"
     FFMPEG_NAME="ffmpeg"
     FFPROBE_NAME="ffprobe"
+    BUILD_ARGS+=(--mlx)
     ;;
   x86_64-pc-windows-msvc|x86_64-pc-windows-gnu)
     FFMPEG_VENDOR="third_party/ffmpeg/win32-x64"
@@ -29,7 +31,20 @@ if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
   exit 1
 fi
 
-.venv/bin/python backend/build_binary.py
+.venv/bin/python backend/build_binary.py "${BUILD_ARGS[@]}"
+
+if [ "$PLATFORM" = "aarch64-apple-darwin" ]; then
+  MLX_METALLIB="dist/asrbox-server/_internal/mlx/lib/mlx.metallib"
+  MLX_BUNDLE_METALLIB="dist/asrbox-server/_internal/mlx.metallib"
+  if [ ! -f "$MLX_METALLIB" ]; then
+    echo "MLX metallib is missing from the PyInstaller output: $MLX_METALLIB" >&2
+    exit 1
+  fi
+
+  # Tauri dereferences MLX's top-level dylib symlink, so libmlx loads its
+  # metallib beside the copied dylib instead of from mlx/lib.
+  cp "$MLX_METALLIB" "$MLX_BUNDLE_METALLIB"
+fi
 
 mkdir -p tauri/src-tauri/binaries
 

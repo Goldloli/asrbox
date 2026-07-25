@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox `0.1.0-beta.1` registers 14 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox `0.1.0-rc.2` registers 14 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 

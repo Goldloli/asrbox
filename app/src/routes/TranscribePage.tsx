@@ -20,9 +20,10 @@ import {
   type TranscriptionLanguage,
 } from '../lib/transcriptionOptions';
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
+import { desktopCapabilities, type DesktopMediaFile } from '../lib/desktopCapabilities';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
-const activeTaskStatuses = new Set(['queued', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
+const activeTaskStatuses = new Set(['queued', 'importing', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
 
 export function TranscribePage() {
   const queryClient = useQueryClient();
@@ -31,6 +32,8 @@ export function TranscribePage() {
   const desktopServer = useDesktopServerControl();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [desktopFiles, setDesktopFiles] = useState<DesktopMediaFile[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [backend, setBackend] = useState('local');
   const [modelName, setModelName] = useState('whisper-base');
   const [providerId, setProviderId] = useState('');
@@ -47,14 +50,19 @@ export function TranscribePage() {
   const models = modelsQuery.data?.models ?? [];
   const providers = providersQuery.data?.items ?? [];
   const recentTasks = tasks.slice(0, 5);
+  const selectedFileCount = desktopFiles.length || files.length;
+  const selectedFilename = desktopFiles[0]?.name ?? files[0]?.name;
+  const selectedModel = models.find((model) => model.model_name === modelName);
+  const selectedModelIncompatible = backend === 'local' && selectedModel?.compatible === false;
 
   useEffect(() => {
     if (!selectedTaskId && tasks[0]) setSelectedTaskId(tasks[0].id);
   }, [selectedTaskId, tasks]);
 
   useEffect(() => {
-    const firstDownloaded = models.find((model) => model.downloaded)?.model_name ?? models[0]?.model_name;
-    if (firstDownloaded && !models.some((model) => model.model_name === modelName)) setModelName(firstDownloaded);
+    const firstDownloaded = models.find((model) => model.downloaded && model.compatible !== false)?.model_name ?? models.find((model) => model.compatible !== false)?.model_name;
+    const current = models.find((model) => model.model_name === modelName);
+    if (firstDownloaded && (!current || current.compatible === false)) setModelName(firstDownloaded);
   }, [modelName, models]);
 
   useEffect(() => {
@@ -74,7 +82,25 @@ export function TranscribePage() {
 
   const selectFiles = (nextFiles: File[]) => {
     setFiles(nextFiles);
+    setDesktopFiles([]);
     setPreflight(null);
+  };
+
+  const chooseMediaFiles = async () => {
+    if (!desktopCapabilities.canPickMediaFiles) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const selected = await desktopCapabilities.pickMediaFiles();
+      if (selected.length > 0) {
+        setDesktopFiles(selected);
+        setFiles([]);
+        setPreflight(null);
+      }
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
   };
 
   const droppedMediaFiles = (fileList: FileList) => Array.from(fileList).filter((file) => {
@@ -84,24 +110,24 @@ export function TranscribePage() {
 
   const preflightMutation = useMutation({
     mutationFn: async () => {
+      if (desktopFiles[0]) return apiClient.preflightPath(desktopFiles[0].path);
       if (!files[0]) throw new Error(t('transcribe.chooseFirst'));
-      return apiClient.preflightTranscription(files[0]);
+      setUploadProgress(0);
+      return apiClient.preflightTranscription(files[0], setUploadProgress);
     },
     onSuccess: (result) => {
       setPreflight(result);
       toast.success(t('toast.preflightComplete'), result.filename);
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+    onSettled: () => setUploadProgress(null),
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (files.length === 0) throw new Error(t('transcribe.chooseAtLeastOne'));
-      const firstCheck = await apiClient.preflightTranscription(files[0]);
-      setPreflight(firstCheck);
-      if (!firstCheck.supported_format || !firstCheck.has_audio_stream) {
-        throw new Error(firstCheck.warnings[0] || t('transcribe.unsupported'));
-      }
+      if (selectedFileCount === 0) throw new Error(t('transcribe.chooseAtLeastOne'));
+      if (selectedModelIncompatible) throw new Error(selectedModel?.compatibility_error || t('common.incompatible'));
+      if (preflight && (!preflight.supported_format || !preflight.has_audio_stream)) throw new Error(preflight.warnings[0] || t('transcribe.unsupported'));
       const payload = {
         backend,
         modelName: backend === 'local' ? modelName : undefined,
@@ -110,16 +136,21 @@ export function TranscribePage() {
         outputFormats: formats,
         ...postprocessOptions(language),
       };
-      if (files.length === 1) return apiClient.createTranscription({ file: files[0], ...payload });
-      return apiClient.createBatchTranscription({ files, ...payload });
+      if (desktopFiles.length > 0) {
+        return apiClient.createPathTranscriptions({ paths: desktopFiles.map((file) => file.path), ...payload });
+      }
+      setUploadProgress(0);
+      if (files.length === 1) return apiClient.createTranscription({ file: files[0], ...payload, onUploadProgress: setUploadProgress });
+      return apiClient.createBatchTranscription({ files, ...payload, onUploadProgress: setUploadProgress });
     },
     onSuccess: (result) => {
       const task = 'id' in result ? result : result.items?.[0] ?? result.tasks?.[0];
       if (task) setSelectedTaskId(task.id);
       refreshTasks();
-      toast.success(t('toast.transcriptionStarted'), files.length > 1 ? `${files.length} ${t('transcribe.filesSelected')}` : files[0]?.name);
+      toast.success(t('toast.transcriptionStarted'), selectedFileCount > 1 ? `${selectedFileCount} ${t('transcribe.filesSelected')}` : selectedFilename);
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+    onSettled: () => setUploadProgress(null),
   });
 
   const clearTasksMutation = useMutation({
@@ -197,9 +228,9 @@ export function TranscribePage() {
     {
       key: 'file',
       label: t('onboarding.chooseFile'),
-      done: files.length > 0,
+      done: selectedFileCount > 0,
       action: (
-        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
+        <Button variant="ghost" size="sm" onClick={() => void chooseMediaFiles()}>
           <FileAudio className="size-4" />
           {t('transcribe.chooseFile')}
         </Button>
@@ -227,6 +258,12 @@ export function TranscribePage() {
               'grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6',
               dragActive && 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]',
             )}
+            onClick={(event) => {
+              if (desktopCapabilities.canPickMediaFiles) {
+                event.preventDefault();
+                void chooseMediaFiles();
+              }
+            }}
             onDragEnter={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -255,13 +292,13 @@ export function TranscribePage() {
           >
             <div className="grid justify-items-center gap-3">
               <div className="grid size-10 place-items-center rounded-xl border app-control text-app-accent sm:size-12">
-                {files.length > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
+                {selectedFileCount > 1 ? <Files className="size-5" /> : <FileAudio className="size-5" />}
               </div>
               <div>
                 <p className="text-sm font-medium text-app">
-                  {dragActive ? t('transcribe.dropFiles') : files.length ? `${files.length} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
+                  {dragActive ? t('transcribe.dropFiles') : selectedFileCount ? `${selectedFileCount} ${t('transcribe.filesSelected')}` : t('transcribe.chooseFile')}
                 </p>
-                <p className="mt-1 text-xs text-app-muted">{dragActive ? t('transcribe.dropHint') : files[0]?.name ?? t('transcribe.fileHint')}</p>
+                <p className="mt-1 text-xs text-app-muted">{dragActive ? t('transcribe.dropHint') : selectedFilename ?? t('transcribe.fileHint')}</p>
               </div>
             </div>
             <input
@@ -283,22 +320,32 @@ export function TranscribePage() {
                   <Button
                     variant="secondary"
                     onClick={() => preflightMutation.mutate()}
-                    disabled={!files[0] || preflightMutation.isPending}
+                    disabled={selectedFileCount === 0 || preflightMutation.isPending}
                     className="w-full"
-                    title={!files[0] ? t('transcribe.preflightDisabled') : t('transcribe.preflightHelp')}
+                    title={selectedFileCount === 0 ? t('transcribe.preflightDisabled') : t('transcribe.preflightHelp')}
                   >
                     <ShieldAlert className="size-4" />
                     {t('transcribe.preflight')}
                   </Button>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>{files[0] ? t('transcribe.preflightHelp') : t('transcribe.preflightDisabled')}</TooltipContent>
+              <TooltipContent>{selectedFileCount > 0 ? t('transcribe.preflightHelp') : t('transcribe.preflightDisabled')}</TooltipContent>
             </Tooltip>
-            <Button onClick={() => createMutation.mutate()} disabled={files.length === 0 || createMutation.isPending}>
+            <Button onClick={() => createMutation.mutate()} disabled={selectedFileCount === 0 || createMutation.isPending || selectedModelIncompatible}>
               <Play className="size-4" />
-              {createMutation.isPending ? t('transcribe.starting') : files.length > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
+              {createMutation.isPending ? t('transcribe.starting') : selectedFileCount > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
             </Button>
           </div>
+
+          {uploadProgress !== null && (
+            <div className="grid gap-2 rounded-lg border app-control px-3 py-2">
+              <div className="flex items-center justify-between gap-3 text-xs text-app-muted">
+                <span>{t('transcribe.uploading')}</span>
+                <span>{formatPercent(uploadProgress)}</span>
+              </div>
+              <Progress value={uploadProgress} />
+            </div>
+          )}
 
           {preflight && (
             <div className="grid gap-3 rounded-xl border app-control p-4">
@@ -437,7 +484,8 @@ export function TranscribePage() {
                 onValueChange={setModelName}
                 options={(models.length ? models : [{ model_name: modelName, display_name: modelName }]).map((model) => ({
                   value: model.model_name,
-                  label: `${model.display_name}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}`,
+                  label: `${model.display_name}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
+                  disabled: 'compatible' in model && model.compatible === false,
                 }))}
               />
             </Field>

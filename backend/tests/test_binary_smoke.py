@@ -26,6 +26,16 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
         binary = binary / ("asrbox-server.exe" if os.name == "nt" else "asrbox-server")
     assert binary.is_file()
 
+    if sys.platform == "darwin" and os.environ.get("ASRBOX_BINARY_MLX") == "1":
+        mlx_check = subprocess.run(
+            [str(binary), "--runtime-check", "mlx"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=root,
+        )
+        assert mlx_check.returncode == 0, mlx_check.stdout + mlx_check.stderr
+
     port = int(os.environ.get("ASRBOX_BINARY_SMOKE_PORT", "17594"))
     data_dir = tempfile.mkdtemp(prefix="asrbox-binary-smoke-")
     resolved_data_dir = str(Path(data_dir).resolve())

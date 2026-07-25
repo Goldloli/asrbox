@@ -56,7 +56,17 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
     if cuda:
         imports.extend(["nvidia", "torch.cuda"])
     if mlx:
-        imports.append("mlx_whisper")
+        imports.extend(["mlx._reprlib_fix", "mlx.core", "mlx.nn", "mlx_whisper"])
+        args.extend(
+            [
+                "--collect-binaries",
+                "mlx",
+                "--collect-data",
+                "mlx",
+                "--collect-data",
+                "mlx_whisper",
+            ]
+        )
     for name in imports:
         args.extend(["--hidden-import", name])
     args.append(str(root / "server.py"))

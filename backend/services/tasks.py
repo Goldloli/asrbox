@@ -38,7 +38,7 @@ from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
 from backend.services.transcribe import transcribe_with_local_model
-from backend.services.uploads import save_upload
+from backend.services.uploads import copy_local_path, save_upload
 from backend.utils.events import event_bus
 from backend.utils.transcript_text import normalize_transcript_text
 from backend.utils.transcript_text import transcript_text_from_segments
@@ -54,6 +54,7 @@ LOCAL_QUEUE = "local"
 PROVIDER_QUEUE = "provider"
 ACTIVE_TASK_STATUSES = {
     "queued",
+    "importing",
     "preprocessing",
     "waiting_model",
     "downloading_model",
@@ -145,7 +146,7 @@ def to_response(db: Session, row: TranscriptionTask) -> TranscriptionTaskRespons
         text=row.text,
         error=row.error,
         error_code=row.error_code,
-        options=options,
+        options={key: value for key, value in options.items() if not key.startswith("_")},
         segments=_segments_for_task(db, row.id),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -212,6 +213,7 @@ def _create_task_row(
     output_formats: list[str],
     options: dict[str, Any] | None = None,
     batch_id: str | None = None,
+    initial_status: str = "queued",
 ) -> TranscriptionTaskResponse:
     stored_options = {"output_formats": output_formats, **(options or {})}
     row = TranscriptionTask(
@@ -219,7 +221,7 @@ def _create_task_row(
         filename=filename,
         source=backend,
         audio_path=config.to_storage_path(audio_path),
-        status="queued",
+        status=initial_status,
         progress=0,
         language=language,
         model_name=model_name,
@@ -356,16 +358,19 @@ def create_task_from_path(
     language: str | None,
     output_formats: list[str],
     options: dict[str, Any] | None = None,
+    batch_id: str | None = None,
 ) -> TranscriptionTaskResponse:
     source_path = Path(path).expanduser()
-    if not source_path.exists():
-        resolved = config.resolve_storage_path(str(path))
-        source_path = resolved if resolved else source_path
-    if not source_path.exists() or not source_path.is_file():
+    if not source_path.is_file():
         raise FileNotFoundError(f"Audio file not found: {path}")
+    source_path = source_path.resolve(strict=True)
     task_id = str(uuid.uuid4())
     target = config.get_uploads_dir() / f"{task_id}{source_path.suffix or '.audio'}"
-    shutil.copyfile(source_path, target)
+    ingest_options = {
+        **(options or {}),
+        "_ingest_source_path": str(source_path),
+        "_ingest_source_size": source_path.stat().st_size,
+    }
     return _create_task_row(
         db,
         filename=source_path.name,
@@ -375,8 +380,54 @@ def create_task_from_path(
         provider_id=provider_id,
         language=language,
         output_formats=output_formats,
-        options=options,
+        options=ingest_options,
+        batch_id=batch_id,
+        initial_status="importing",
     )
+
+
+def _import_task_media(db: Session, row: TranscriptionTask) -> None:
+    options = _read_options(row)
+    source_value = options.get("_ingest_source_path")
+    if not source_value:
+        return
+    source = Path(str(source_value))
+    destination = config.resolve_storage_path(row.audio_path)
+    if destination is None:
+        raise ASRboxError("MEDIA_IMPORT_FAILED", "Managed media destination is unavailable", stage="importing")
+
+    _set_task_state(db, row, "importing", 0)
+    last_progress = -1
+
+    def update_progress(copied: int, total: int) -> None:
+        nonlocal last_progress
+        _raise_if_cancelled(row.id)
+        progress = 9 if total <= 0 else min(9, int(copied / total * 9))
+        if progress == last_progress:
+            return
+        last_progress = progress
+        row.progress = progress
+        row.updated_at = _utc_now()
+        db.commit()
+        event_bus.publish(
+            "task.updated",
+            {"id": row.id, "status": row.status, "progress": row.progress, "error": None, "error_code": None},
+        )
+
+    try:
+        copy_local_path(source, destination, on_progress=update_progress)
+    except ASRboxError:
+        raise
+    except Exception as exc:
+        raise ASRboxError(
+            "MEDIA_IMPORT_FAILED",
+            f"Failed to import {source.name}: {exc}",
+            stage="importing",
+        ) from exc
+    options.pop("_ingest_source_path", None)
+    options.pop("_ingest_source_size", None)
+    _write_options(row, options)
+    db.commit()
 
 
 def _prepare_task_media(db: Session, row: TranscriptionTask) -> Path:
@@ -805,6 +856,7 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         row.error = None
         _set_error_code(row, None)
         task_logs.add_log(db, row.id, "queued", "info", "Task picked by worker")
+        _import_task_media(db, row)
         _set_task_state(db, row, "preprocessing", 10)
         _raise_if_cancelled(row.id)
         normalized_path = _prepare_task_media(db, row)

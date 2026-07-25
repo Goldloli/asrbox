@@ -40,6 +40,21 @@ docker compose logs -f asrbox
 
 Run `docker compose up -d` after changing `.env`.
 
+### Separate model-storage mount
+
+Models and download caches default to `/data/models` and `/data/cache`. To use a larger disk, stop active local transcription and model downloads, uncomment the optional bind mount in `compose.yaml`, and set:
+
+```dotenv
+ASRBOX_MODEL_STORAGE_HOST_PATH=/host/large-disk/asrbox-models
+ASRBOX_MODEL_STORAGE_ROOTS=/data,/model-storage
+```
+
+Create the host directory first and make it writable by container UID/GID `10001:10001`. Recreate the container, open Settings > Storage and diagnostics, select the allowed `/model-storage` mount, and choose either moving current models or adopting models already in the target. The Web UI displays and copies container paths; a browser cannot select or open directories on the Docker host.
+
+The unified layout is `<root>/models` and `<root>/cache/{huggingface,modelscope,torch,xdg}`. A move temporarily keeps two copies and therefore needs enough destination space. ASRbox copies and verifies before switching and only then cleans the old location. Target conflicts are never overwritten. Detected global shared caches require a separate confirmation.
+
+If `/model-storage` is not mounted, disconnected, or loses permissions, the UI reports the model storage location unavailable. Local-model operations stop without falling back to `/data` or redownloading. Restoring the same mount makes models discoverable again. If cleanup of the old location fails after a successful switch, verify the paths reported by the UI before manually deleting the duplicate; never delete both copies.
+
 ## Data, backup, and restore
 
 `/data` contains the database, media, extracted audio, transcript versions, exports, models, caches, settings, and provider credentials. Compose stores it in the `asrbox-data` named volume.

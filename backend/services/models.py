@@ -6,6 +6,7 @@ import platform
 import queue
 import shutil
 import threading
+import uuid
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +17,8 @@ from backend.backends.local_asr import is_model_loaded, unload_model as unload_l
 from backend.backends import ASRModelConfig, ModelSourceCandidate, get_all_model_configs, get_model_config
 from backend.models import ASRModelStatus, ModelRecommendationRequest, ModelRecommendationResponse
 from backend.services.errors import ASRboxError
-from backend.services.platform import funasr_available, qwen3_asr_available, torchaudio_available
+from backend.services import model_storage
+from backend.services.platform import funasr_available, mlx_runtime_import_error, qwen3_asr_available, torchaudio_available
 from backend.utils.hf_progress import track_hf_download
 from backend.utils.progress import get_progress_manager
 
@@ -162,7 +164,7 @@ def _huggingface_cache_info(model_config: ASRModelConfig) -> dict[str, Any]:
     try:
         from huggingface_hub import scan_cache_dir
 
-        cache_info = scan_cache_dir()
+        cache_info = scan_cache_dir(config.get_model_cache_dir("huggingface") / "hub")
     except Exception:
         return {"detected": False, "size_mb": None, "path": None}
     for repo in cache_info.repos:
@@ -251,6 +253,10 @@ def _is_local_model_downloaded(model_name: str) -> bool:
     return (model_dir / "model.json").exists() and _has_weight_files(model_dir) and not _has_incomplete_files(model_dir)
 
 
+def is_model_directory_valid(model_name: str, model_dir: Path) -> bool:
+    return get_model_config(model_name) is not None and (model_dir / "model.json").exists() and _has_weight_files(model_dir) and not _has_incomplete_files(model_dir)
+
+
 def check_model_compatibility(model_name: str) -> dict[str, Any]:
     model_config = get_model_config(model_name)
     model_dir = _model_dir(model_name)
@@ -321,24 +327,26 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
 def _model_runtime_error(model_config: ASRModelConfig) -> str | None:
     if model_config.engine != "mlx_whisper":
         return None
-    if platform.system() == "Darwin" and platform.machine().lower() in {"arm64", "aarch64"}:
-        return None
-    return "MLX Whisper requires the macOS Apple Silicon desktop runtime and is unavailable in Linux containers"
+    if platform.system() != "Darwin" or platform.machine().lower() not in {"arm64", "aarch64"}:
+        return "MLX Whisper requires the macOS Apple Silicon desktop runtime and is unavailable in Linux containers"
+    return mlx_runtime_import_error()
 
 
 def list_model_statuses() -> list[ASRModelStatus]:
     statuses: list[ASRModelStatus] = []
+    storage = model_storage.inspect_storage()
+    storage_available = bool(storage["available"])
     progress = get_progress_manager()
     for item in get_all_model_configs():
         progress_state = progress.get_progress(item.model_name)
-        downloaded = is_model_downloaded(item.model_name)
+        downloaded = is_model_downloaded(item.model_name) if storage_available else None
         error = None if downloaded else _download_errors.get(item.model_name)
         if progress_state and progress_state.get("status") == "error":
             error = None if downloaded else progress_state.get("error") or error
-        size_on_disk_mb = round(_directory_size(_model_dir(item.model_name)) / (1024 * 1024), 2)
-        marker = _read_model_marker(item.model_name)
-        cache = _cache_info(item)
-        compatibility = check_model_compatibility(item.model_name)
+        size_on_disk_mb = round(_directory_size(_model_dir(item.model_name)) / (1024 * 1024), 2) if storage_available else 0
+        marker = _read_model_marker(item.model_name) if storage_available else {}
+        cache = _cache_info(item) if storage_available else {"detected": False, "size_mb": 0, "path": None}
+        compatibility = check_model_compatibility(item.model_name) if storage_available else {"downloaded": False, "compatible": False, "message": "模型存储位置不可用"}
         runtime_error = _model_runtime_error(item)
         statuses.append(
             ASRModelStatus(
@@ -371,6 +379,8 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 installed_source=marker.get("source"),
                 installed_repo_id=marker.get("repo_id"),
                 last_verified_at=marker.get("last_verified_at") or marker.get("installed_at"),
+                storage_status="migrating" if model_storage.relocation_active() else storage["status"],
+                storage_error="模型存储位置不可用" if not storage_available else None,
             )
         )
     return statuses
@@ -407,6 +417,7 @@ def _download_huggingface_snapshot(model_config: ASRModelConfig, model_dir: Path
     ):
         return snapshot_download(
             repo_id=model_config.repo_id,
+            cache_dir=str(config.get_model_cache_dir("huggingface") / "hub"),
             local_dir=str(model_dir),
             allow_patterns=model_config.allow_patterns,
             ignore_patterns=HF_DUPLICATE_WEIGHT_IGNORE_PATTERNS,
@@ -431,7 +442,11 @@ def _download_modelscope_snapshot(model_config: ASRModelConfig, model_dir: Path)
         get_progress_manager(),
         checkpoint=lambda: _download_checkpoint(model_config.model_name),
     ):
-        return snapshot_download(model_id=model_config.repo_id, cache_dir=str(model_dir))
+        return snapshot_download(
+            model_id=model_config.repo_id,
+            cache_dir=str(config.get_model_cache_dir("modelscope")),
+            local_dir=str(model_dir),
+        )
 
 
 def _run_download(model_config: ASRModelConfig) -> None:
@@ -441,6 +456,7 @@ def _run_download(model_config: ASRModelConfig) -> None:
     stop_progress = threading.Event()
     progress_thread: threading.Thread | None = None
     try:
+        model_storage.require_storage(writable=True)
         _download_checkpoint(model_name)
         model_dir.mkdir(parents=True, exist_ok=True)
         progress_thread = _start_directory_progress_tracker(model_config, model_dir, stop_progress)
@@ -547,6 +563,7 @@ def _ensure_download_worker() -> None:
 
 
 def download_model(model_name: str) -> str:
+    model_storage.require_storage(writable=True)
     model_config = get_model_config(model_name)
     if model_config is None:
         raise ValueError(f"Unknown model: {model_name}")
@@ -580,6 +597,7 @@ def download_model(model_name: str) -> str:
 
 
 def redownload_model(model_name: str) -> str:
+    model_storage.require_storage(writable=True)
     model_config = get_model_config(model_name)
     if model_config is None:
         raise ValueError(f"Unknown model: {model_name}")
@@ -595,6 +613,7 @@ def unload_model(model_name: str) -> bool:
 
 
 def delete_model(model_name: str) -> None:
+    model_storage.require_storage(writable=True)
     unload_model(model_name)
     shutil.rmtree(_model_dir(model_name), ignore_errors=True)
     with _state_lock:
@@ -675,6 +694,7 @@ def retry_download(model_name: str) -> str:
 
 
 def storage_summary() -> dict[str, Any]:
+    storage = model_storage.inspect_storage()
     items = []
     total = 0
     for item in get_all_model_configs():
@@ -688,20 +708,40 @@ def storage_summary() -> dict[str, Any]:
                 "exists": model_dir.exists(),
                 "size_bytes": size_bytes,
                 "size_on_disk_mb": round(size_bytes / (1024 * 1024), 2),
-                "downloaded": is_model_downloaded(item.model_name),
+                "downloaded": is_model_downloaded(item.model_name) if storage["available"] else None,
             }
         )
-    try:
-        usage = shutil.disk_usage(config.get_models_dir())
-        free_disk_bytes = usage.free
-        total_disk_bytes = usage.total
-    except OSError:
-        free_disk_bytes = None
-        total_disk_bytes = None
+    free_disk_bytes = storage["free_bytes"]
+    total_disk_bytes = storage["total_bytes"]
+    cache_usage = [
+        {
+            "name": name,
+            "path": storage["cache_dirs"][name],
+            "size_bytes": size,
+            "shared": False,
+            "selected": True,
+            "warning": None,
+        }
+        for name, size in storage["cache_usage"].items()
+    ]
     return {
+        "root": storage["root"],
         "models_dir": str(config.get_models_dir()),
         "models": items,
-        "used_bytes": total,
+        "status": "migrating" if model_storage.relocation_active() else storage["status"],
+        "reason": storage["reason"],
+        "detail": storage["detail"],
+        "available": storage["available"],
+        "writable": storage["writable"],
+        "cache_dirs": storage["cache_dirs"],
+        "cache_usage": cache_usage,
+        "cache_bytes": storage["cache_bytes"],
+        "allowed_roots": storage["allowed_roots"],
+        "root_locked": storage["root_locked"],
+        "runtime": storage["runtime"],
+        "network_filesystem": storage["network_filesystem"],
+        "filesystem_type": storage["filesystem_type"],
+        "used_bytes": total + storage["cache_bytes"],
         "free_bytes": free_disk_bytes,
         "total_bytes": total_disk_bytes,
         "total_size_mb": round(total / (1024 * 1024), 2),
@@ -710,6 +750,7 @@ def storage_summary() -> dict[str, Any]:
 
 
 def cleanup_incomplete() -> dict[str, Any]:
+    model_storage.require_storage(writable=True)
     removed: list[str] = []
     errors: list[str] = []
     models_dir = config.get_models_dir()
@@ -731,6 +772,8 @@ def cleanup_incomplete() -> dict[str, Any]:
 
 def migrate_models(source: Path | None = None, destination: Path | None = None) -> dict[str, Any]:
     global _migration_progress
+    if destination is None:
+        model_storage.require_storage(writable=True)
     source_dir = source or config.get_models_dir()
     destination_dir = destination or config.get_models_dir()
     destination_dir.mkdir(parents=True, exist_ok=True)
@@ -740,20 +783,34 @@ def migrate_models(source: Path | None = None, destination: Path | None = None) 
         return {"source": str(source_dir), "destination": str(destination_dir), "moved": moved, "errors": ["source does not exist"]}
     items = [item for item in source_dir.iterdir() if item.is_dir()]
     _migration_progress = {"status": "running", "progress": 0, "current": 0, "total": len(items), "message": "Migrating models", "errors": []}
-    for index, item in enumerate(items, 1):
-        target = destination_dir / item.name
-        if item.resolve() == target.resolve():
-            _migration_progress.update({"current": index, "progress": round(index / max(len(items), 1) * 100, 2), "message": f"Skipped {item.name}"})
-            continue
-        try:
-            if target.exists():
-                shutil.rmtree(target)
-            shutil.move(str(item), str(target))
-            moved += 1
-            _migration_progress.update({"current": index, "progress": round(index / max(len(items), 1) * 100, 2), "message": f"Migrated {item.name}"})
-        except OSError as exc:
-            errors.append(f"{item.name}: {exc}")
-            _migration_progress["errors"] = errors
+    staging = destination_dir / f".asrbox-legacy-migration-{uuid.uuid4().hex}"
+    try:
+        conflicts = [item.name for item in items if item.resolve() != (destination_dir / item.name).resolve() and (destination_dir / item.name).exists()]
+        if conflicts:
+            raise FileExistsError(f"target entries exist: {', '.join(conflicts)}")
+        staging.mkdir()
+        for index, item in enumerate(items, 1):
+            target = destination_dir / item.name
+            if item.resolve() == target.resolve():
+                continue
+            staged = staging / item.name
+            shutil.copytree(item, staged)
+            if _directory_size(item) != _directory_size(staged):
+                raise OSError(f"verification failed: {item.name}")
+            _migration_progress.update({"current": index, "progress": round(index / max(len(items), 1) * 100, 2), "message": f"Verified {item.name}"})
+        for item in items:
+            staged = staging / item.name
+            if staged.exists():
+                os.replace(staged, destination_dir / item.name)
+        for item in items:
+            if item.resolve() != (destination_dir / item.name).resolve():
+                shutil.rmtree(item)
+                moved += 1
+    except OSError as exc:
+        errors.append(str(exc))
+        _migration_progress["errors"] = errors
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     _migration_progress.update({"status": "complete" if not errors else "error", "progress": 100, "current": len(items), "message": "Migration complete", "errors": errors, "completed_at": _utc_iso()})
     return {"source": str(source_dir), "destination": str(destination_dir), "moved": moved, "errors": errors, "verification": verify_models()}
 
@@ -763,6 +820,7 @@ def migration_progress() -> dict[str, Any]:
 
 
 def ensure_model_ready(model_name: str) -> None:
+    model_storage.require_storage()
     if get_model_config(model_name) is None:
         raise ValueError(f"Unknown model: {model_name}")
     if not is_model_downloaded(model_name):
@@ -773,6 +831,7 @@ def ensure_model_ready(model_name: str) -> None:
 
 
 def verify_models() -> list[dict[str, Any]]:
+    model_storage.require_storage()
     return [check_model_compatibility(item.model_name) for item in get_all_model_configs()]
 
 
