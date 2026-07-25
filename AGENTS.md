@@ -57,6 +57,8 @@
 
 `AGENTS.md` 不是产品规格。已经接受的行为属于 `openspec/specs/`；提议中的行为属于 `openspec/changes/`。
 
+OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使用中文撰写；技术术语、标识符和代码保持原文。
+
 ## ASRbox 边界
 
 尊重现有的职责边界：
