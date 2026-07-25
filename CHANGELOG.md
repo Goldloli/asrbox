@@ -4,6 +4,14 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.2-rc.1] - 2026-07-25
+
+### Fixed
+
+- Model loading after model-storage relocation: markers recorded absolute snapshot paths that went stale after a move, so Qwen3-ASR failed with "Unrecognized processing class" and FunASR received an unloadable path. Snapshot paths are now re-anchored under the current storage root.
+- FunASR models (SenseVoice) failed in the packaged app because its model registry stayed empty under PyInstaller. The frozen backend now bundles all funasr submodules and pre-imports them at startup, with a source-inspection stub for frozen modules.
+- A hung local transcription worker no longer pins a task in transcribing forever and stalls the local queue: it is terminated after a configurable no-progress window (`ASRBOX_LOCAL_WORKER_STALL_SECONDS`, default 20 minutes) and the task fails as `LOCAL_WORKER_STALLED` with completed chunks kept retryable.
+
 ## [0.1.1] - 2026-07-25
 
 ### Added
