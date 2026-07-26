@@ -72,7 +72,19 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) and verify `SHA256SUMS.txt`. The package is unsigned and unnotarized, so first launch requires right-clicking the app and choosing Open, or allowing it under System Settings → Privacy & Security.
+Download the Apple Silicon DMG from the [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) and verify `SHA256SUMS.txt`.
+
+The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **“ASRbox.app” is damaged and can't be opened**:
+
+![macOS reporting “ASRbox.app is damaged and can't be opened”](assets/macos-app-damaged.png)
+
+This is Gatekeeper's standard response to unsigned apps — the file is not actually damaged. After dragging the app into Applications, clear the download quarantine attribute once in Terminal:
+
+```bash
+xattr -cr /Applications/ASRbox.app
+```
+
+Alternatively, right-click the app and choose Open on first launch, or allow it under System Settings → Privacy & Security.
 
 Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 

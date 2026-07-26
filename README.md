@@ -72,7 +72,19 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。当前包未签名、未公证，首次打开需要右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。
+从 [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+
+当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **“ASRbox.app”已损坏，无法打开**：
+
+![macOS 提示“ASRbox.app 已损坏，无法打开”](assets/macos-app-damaged.png)
+
+这是 Gatekeeper 对未签名应用的常见提示，并非文件真的损坏。把应用拖入“应用程序”后，在终端执行一次以下命令，清除下载文件的隔离属性即可正常打开：
+
+```bash
+xattr -cr /Applications/ASRbox.app
+```
+
+也可以在首次打开时右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。
 
 桌面端在 `127.0.0.1:17494` 启动内置后端，每次启动生成仅在内存中的 API token；退出应用会停止 sidecar。删除应用不会删除任务、模型或备份。
 
