@@ -92,7 +92,7 @@ export function ModelStorageSettings() {
   const jobActive = job?.status === 'running' || job?.status === 'cancelling';
 
   return (
-    <Panel className="overflow-hidden xl:col-span-2">
+    <Panel className="overflow-hidden">
       <PanelHeader
         eyebrow={t('settings.storage')}
         title={t('settings.modelStorageTitle')}

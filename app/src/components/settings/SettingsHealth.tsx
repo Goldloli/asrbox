@@ -74,6 +74,7 @@ export function DiagnosticsHealthCenter({
             title={t('settings.recentErrors')}
             value={recentError || t('settings.noRecentErrors')}
             tone={recentError ? 'danger' : 'neutral'}
+            clamp
           />
         </div>
 
@@ -123,11 +124,13 @@ function HealthMetric({
   title,
   value,
   tone,
+  clamp = false,
 }: {
   icon: ReactNode;
   title: string;
   value: string;
   tone: 'neutral' | 'success' | 'warning' | 'danger';
+  clamp?: boolean;
 }) {
   return (
     <div className="grid gap-2 rounded-lg border app-control px-3 py-3">
@@ -135,7 +138,7 @@ function HealthMetric({
         <span className="text-xs font-medium text-app-muted">{title}</span>
         <Badge tone={tone}>{icon}</Badge>
       </div>
-      <p className="break-words text-sm font-medium text-app">{value}</p>
+      <p className={clamp ? 'line-clamp-3 break-words text-sm font-medium text-app' : 'break-words text-sm font-medium text-app'} title={clamp ? value : undefined}>{value}</p>
     </div>
   );
 }
