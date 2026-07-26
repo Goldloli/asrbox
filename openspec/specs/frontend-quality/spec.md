@@ -1,7 +1,7 @@
 # frontend-quality Specification
 
 ## Purpose
-TBD - created by archiving change normalize-project-documentation. Update Purpose after archive.
+规定前端质量基线：工作台工作流层级、响应式不重叠布局、可访问的交互状态、前端验证要求与活动任务停止控制。
 ## Requirements
 ### Requirement: Workbench workflow hierarchy
 Each primary route SHALL present a clear main work area and visible next action appropriate to its state without requiring decorative or nested panels to explain the interface.
@@ -30,4 +30,11 @@ User-visible frontend changes SHALL pass TypeScript checking, the production Web
 #### Scenario: Frontend behavior changes
 - **WHEN** a change affects a maintained user workflow
 - **THEN** automated verification covers the changed behavior and representative layout states before acceptance
+
+### Requirement: Active task stop control
+The primary transcription workspace SHALL provide an accessible, confirmed stop control for the selected active transcription and SHALL prevent duplicate cancellation requests while the action is pending.
+
+#### Scenario: User stops a task from the transcription workspace
+- **WHEN** the selected task is queued or running and the user confirms the stop action
+- **THEN** the interface requests cancellation, refreshes active task state, and reports success or a diagnosable error
 

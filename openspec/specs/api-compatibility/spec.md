@@ -1,7 +1,7 @@
 # api-compatibility Specification
 
 ## Purpose
-TBD - created by archiving change normalize-project-documentation. Update Purpose after archive.
+规定前后端 API contract 的协调变更规则、精确的 API 发现机制，以及内部实现字段与带类型客户端之间的隔离。
 ## Requirements
 ### Requirement: Coordinated client contract
 Backend routes, request and response models, and event payloads consumed by the React or Tauri clients SHALL change together with their typed consumers, contract tests, and affected product specifications.

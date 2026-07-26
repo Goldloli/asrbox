@@ -77,8 +77,9 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 ### 归档与沉淀
 
 1. 实现与验证完成后，先把 tasks.md 全部勾选，再 `openspec archive <name> --yes`：delta 会合并进 `openspec/specs/` 主 spec，change 移入 `openspec/changes/archive/<date>-<name>/`。
-2. 归档后检查主 spec 的 `## Purpose`；如果仍是 `TBD`，补写一句话职责说明。
-3. 归档的同时更新受影响的面向用户文档（README、docs/、CHANGELOG），保持 spec、代码、文档三者一致。
+2. 实现完成后应及时归档，不要长期挂起。挂起期间若有后续 change 改动了同一 requirement，归档会因 delta 过期被拒（`current spec contains scenario(s) not present in the modified block`）。此时先把 delta 的 MODIFIED 块刷新为并集——保留主 spec 现有全部 scenario、合入本 change 的新增 scenario、合并 requirement 正文——再重新归档；不得以丢弃 scenario 的方式强行归档。
+3. 归档后检查主 spec 的 `## Purpose`；如果仍是 `TBD`，补写一句话职责说明。
+4. 归档的同时更新受影响的面向用户文档（README、docs/、CHANGELOG），保持 spec、代码、文档三者一致。
 
 ## ASRbox 边界
 
@@ -98,6 +99,7 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 - 字幕版本是不可变快照；恢复操作会创建可审计的新版本，而不是重写历史。
 - 前端代码使用带类型的响应，不得依赖内部 `options_json` key。
 - 受维护的路由、字段和事件只有在同步更新 OpenSpec、producer、typed consumer、contract test 和项目负责维护的文档后才能变更。
+- 新增响应字段必须同时声明到 FastAPI 的 `response_model`（pydantic 模型）：service 层产出但模型未声明的字段会被静默丢弃，且必须在 API 测试中断言该字段存在（binary smoke 等发布门禁不覆盖全部字段）。
 - 除非使用经过批准且许可合规的 fixture，否则用户媒体、字幕、模型、数据库、备份和诊断不得进入仓库或发布包。
 
 对于可选或容易失败的功能，应优先采用增量、隔离的行为。除非已经批准的 spec 明确修改了相关 contract，否则新的后处理能力不得让成功转写依赖外部服务。

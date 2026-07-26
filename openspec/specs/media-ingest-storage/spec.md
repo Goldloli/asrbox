@@ -1,7 +1,7 @@
 # media-ingest-storage Specification
 
 ## Purpose
-TBD - created by archiving change configurable-media-ingest-storage. Update Purpose after archive.
+规定桌面端媒体摄取模式选择、任务级媒体所有权与删除安全、可配置的媒体存储位置、任务持有的派生音频，以及明确的源缺失状态与桌面端 relink。
 ## Requirements
 ### Requirement: 可选择的桌面端媒体摄取模式
 桌面端媒体摄取 SHALL 提供持久化的 `reference` 模式（默认）：任务直接引用原文件路径、不产生复制；以及 `copy` 模式：保留托管复制管线及其 `importing` 进度状态。浏览器与移动端 Web 摄取 SHALL 保持托管复制，不受该设置影响。

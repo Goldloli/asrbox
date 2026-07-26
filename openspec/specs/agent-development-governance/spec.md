@@ -1,7 +1,7 @@
 # agent-development-governance Specification
 
 ## Purpose
-TBD - created by archiving change refactor-project-agent-guidance. Update Purpose after archive.
+规定仓库内 coding agent 的开发治理：权威来源层级、OpenSpec 使用分级、变更契约、实现范围纪律、稳定边界协调、验证分级，以及敏感与生成数据的保护。
 ## Requirements
 ### Requirement: Canonical project guidance
 The repository SHALL provide a root `AGENTS.md` that contains ASRbox-specific development rules and routes agents to accepted OpenSpec capabilities, generated or executable contracts, and focused audience documentation instead of duplicating product behavior or relying on retired planning snapshots.

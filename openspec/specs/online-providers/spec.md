@@ -1,7 +1,7 @@
 # online-providers Specification
 
 ## Purpose
-TBD - created by archiving change normalize-project-documentation. Update Purpose after archive.
+规定在线 ASR 提供商的显式选择、在线数据披露、凭据处理边界与提供商故障隔离。
 ## Requirements
 ### Requirement: Explicit provider selection
 Online transcription SHALL require an existing enabled provider configuration and SHALL identify provider failures separately from local model failures.

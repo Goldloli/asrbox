@@ -1,7 +1,7 @@
 # export-formats Specification
 
 ## Purpose
-TBD - created by archiving change normalize-project-documentation. Update Purpose after archive.
+规定受支持的字幕导出格式集合、带时间轴字幕的完整性约束，以及历史字幕版本的导出行为。
 ## Requirements
 ### Requirement: Supported export formats
 ASRbox SHALL export transcript content in TXT, SRT, VTT, ASS, JSON, and Markdown using the current transcript segments and the semantics appropriate to each format.
