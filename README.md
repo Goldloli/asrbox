@@ -8,7 +8,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.2-rc.2`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.3`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -72,7 +72,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.3` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.3) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
 
 当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **“ASRbox.app”已损坏，无法打开**：
 

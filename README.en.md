@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.2-rc.2`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.3`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -72,7 +72,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.2-rc.2` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.2-rc.2) and verify `SHA256SUMS.txt`.
+Download the Apple Silicon DMG from the [`v0.1.3` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.3) and verify `SHA256SUMS.txt`.
 
 The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **“ASRbox.app” is damaged and can't be opened**:
 

@@ -4,6 +4,34 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-26
+
+首个 0.1.1 之后的稳定版，包含 0.1.2-rc.1 与 0.1.2-rc.2 的全部内容及以下新增修复。
+
+### Added
+
+- MOSS-Transcribe-Diarize 0.9B local model (Apache 2.0): end-to-end transcription, segment timestamps, and `[S01]`-style speaker diarization in a single pass, with 50+ languages and up to roughly 90 minutes of audio per run. Speaker labels are produced natively by the engine and need no `HF_TOKEN` or separate diarization model; `max_new_tokens` scales with audio duration so long recordings are not truncated.
+- Detailed per-model introductions on the Models page: every registered model now has an expandable intro with capabilities, language coverage, recommended scenarios, and known limitations in Chinese and English, plus a "Speaker diarization" category filter.
+- README: unsigned-build guidance for the macOS "ASRbox.app is damaged" Gatekeeper dialog, with the one-time `xattr -cr /Applications/ASRbox.app` fix and a screenshot (Chinese and English).
+
+### Changed
+
+- Task pipeline preserves engine-native speaker labels: when a transcription result already carries speakers, pyannote post-processing (and its token requirement) is skipped instead of overwriting native labels.
+- Runtime status now exposes `moss_transcribe_diarize_available`; the field is declared on the response model, asserted in API tests, and typed in the frontend client.
+
+### Fixed
+
+- Model loading after model-storage relocation: snapshot paths recorded as absolute went stale after a move, so Qwen3-ASR failed with "Unrecognized processing class" and FunASR received an unloadable path. Snapshot paths are now re-anchored under the current storage root.
+- FunASR models (SenseVoice) failed in the packaged app because its model registry stayed empty under PyInstaller. The frozen backend now bundles all funasr submodules and pre-imports them at startup.
+- A hung local transcription worker no longer pins a task in transcribing forever: it is terminated after a configurable no-progress window (`ASRBOX_LOCAL_WORKER_STALL_SECONDS`, default 20 minutes) and the task fails as `LOCAL_WORKER_STALLED` with completed chunks kept retryable.
+- Settings Storage & Diagnostics tab: the two-column grid lost its right rail because both storage panels forced full-width spans, leaving empty holes; the recent-error card now clamps long errors to three lines with the full text on hover.
+
+### Chore
+
+- Privacy: `.beads/interactions.jsonl` (agent interaction records) removed from version control and ignored going forward; commit history scrubbed of personal paths and the author's personal email.
+- Committed frontend-audit screenshots removed; the audit output directory is now ignored.
+- OpenSpec: five shipped changes archived into the main specs (stale deltas refreshed as unions), and all specs now carry a one-line Purpose.
+
 ## [0.1.2-rc.2] - 2026-07-25
 
 ### Added
