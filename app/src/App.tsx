@@ -9,6 +9,7 @@ import { useDesktopServerControl } from './lib/useDesktopServerControl';
 import { useUiStore } from './stores/uiStore';
 import { useI18n } from './lib/i18n';
 import asrboxIcon from './assets/asrbox-icon.png';
+import { AppUpdateRuntime } from './components/AppUpdateRuntime';
 
 const queryClient = new QueryClient();
 
@@ -144,6 +145,7 @@ export default function App() {
       <TooltipProvider>
         <ToastProvider>
           <ThemeRuntime />
+          <AppUpdateRuntime />
           <AppRuntime />
         </ToastProvider>
       </TooltipProvider>

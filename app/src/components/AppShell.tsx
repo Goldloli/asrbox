@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, PlugZap, Radio } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, PackageCheck, PlugZap, Radio } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
@@ -14,6 +14,7 @@ import { formatBytes, formatPercent } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { getActiveDownloadItems, getActiveTaskItems } from '../lib/api';
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
+import { useAppUpdateStore } from '../stores/appUpdateStore';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
@@ -126,6 +127,8 @@ function BottomTaskBar() {
   const topTask = activeTasks[0];
   const topDownload = downloads[0];
   const hasError = activeTasksQuery.isError || downloadsQuery.isError;
+  const appUpdate = useAppUpdateStore((state) => state.download);
+  const appUpdateActive = ['preparing', 'downloading', 'verifying', 'cancelling'].includes(appUpdate.status);
 
   return (
     <footer className="app-shell-surface flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-t app-border px-3">
@@ -151,6 +154,17 @@ function BottomTaskBar() {
           <span>{t('status.noModelDownload')}</span>
         )}
       </Link>
+      {appUpdateActive && (
+        <Link
+          to="/settings"
+          search={{ tab: 'about' }}
+          className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app"
+        >
+          <PackageCheck className="size-3.5" />
+          <span className="max-w-40 truncate text-app-soft">{appUpdate.filename ?? t('about.applicationUpdate')}</span>
+          <span className="shrink-0">{formatPercent(appUpdate.progress)}</span>
+        </Link>
+      )}
       <TaskCenterDrawer />
       {hasError && (
         <Link

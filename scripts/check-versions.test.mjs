@@ -8,7 +8,7 @@ import { checkVersions, validateReleaseTag } from "./check-versions.mjs";
 
 async function fixture(version, backendVersion = version) {
   const root = await mkdtemp(path.join(tmpdir(), "asrbox-versions-"));
-  for (const directory of ["app", "app/src/components", "web", "tauri", "tauri/src-tauri", "backend"]) {
+  for (const directory of ["app", "web", "tauri", "tauri/src-tauri", "backend"]) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   for (const file of ["package.json", "app/package.json", "web/package.json", "tauri/package.json"]) {
@@ -17,7 +17,11 @@ async function fixture(version, backendVersion = version) {
   await writeFile(path.join(root, "tauri/src-tauri/Cargo.toml"), `[package]\nversion = "${version}"\n`);
   await writeFile(path.join(root, "tauri/src-tauri/tauri.conf.json"), JSON.stringify({ version }));
   await writeFile(path.join(root, "backend/__init__.py"), `__version__ = "${backendVersion}"\n`);
-  await writeFile(path.join(root, "app/src/components/Sidebar.tsx"), `const appVersion = 'v${version}';\n`);
+  await writeFile(
+    path.join(root, "web/vite.config.ts"),
+    "const applicationVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;\n"
+      + "define: { __ASRBOX_VERSION__: JSON.stringify(applicationVersion) },\n",
+  );
   return root;
 }
 
@@ -31,9 +35,9 @@ test("rejects a mismatched version", async () => {
   await assert.rejects(checkVersions(root), /Version mismatch/);
 });
 
-test("rejects a stale version displayed in the desktop shell", async () => {
+test("rejects a missing frontend build-version binding", async () => {
   const root = await fixture("0.1.0-beta.1");
-  await writeFile(path.join(root, "app/src/components/Sidebar.tsx"), "const appVersion = 'v0.1.0';\n");
+  await writeFile(path.join(root, "web/vite.config.ts"), "define: {},\n");
   await assert.rejects(checkVersions(root), /Version mismatch/);
 });
 

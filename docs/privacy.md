@@ -6,7 +6,15 @@ ASRbox is local-first, but its privacy boundary depends on whether a task uses a
 
 With a local model, ASRbox processes media through the local backend. Model inference, transcript editing, subtitle generation, and export rendering do not require sending the media to an ASR service.
 
-Model downloads still contact Hugging Face or ModelScope. Dependency installation, update checks performed outside ASRbox, and links opened by the user have their own network behavior.
+Model downloads still contact Hugging Face or ModelScope. Desktop update checks contact GitHub as described below. Dependency installation and links opened by the user have their own network behavior.
+
+## Application Update Checks and Downloads
+
+The desktop app can contact the GitHub Releases API for the fixed `Goldloli/asrbox` repository. Automatic checks are enabled by default, begin about 10 seconds after startup, and are throttled to no more than once every 24 hours. They disclose normal connection metadata such as the user's IP address and ASRbox user agent to GitHub. Disabling automatic checks prevents background update requests; a manual check still makes the same request.
+
+Update checks send no media, transcripts, task data, provider credentials, model data, or local file paths. Release notes are returned as bounded plain text. In-app update notifications use only ASRbox Toast messages and navigation badges; no operating-system notification is sent.
+
+When the user explicitly starts an update download, the desktop app downloads the matching package and `SHA256SUMS.txt` from the official GitHub Release into the system Downloads directory. A temporary `.part` file is removed after cancellation or failure. A completed package remains outside the ASRbox data root and is not removed when the application is uninstalled. Web and Docker builds do not download desktop installers.
 
 ## Online Provider Mode
 

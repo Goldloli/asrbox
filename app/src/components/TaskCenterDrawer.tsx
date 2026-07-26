@@ -1,11 +1,15 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { DownloadCloud, FileAudio, ListChecks, X } from 'lucide-react';
+import { Children, type ReactNode } from 'react';
+import { DownloadCloud, FileAudio, FolderOpen, ListChecks, PackageCheck, X } from 'lucide-react';
 import { Button, Progress } from './weiui';
 import { getActiveDownloadItems, getActiveTaskItems, type ModelProgress, type TranscriptionTask } from '../lib/api';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
-import { formatPercent } from '../lib/format';
+import { formatBytes, formatPercent } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { ResultItemContent } from './ResultItem';
+import { cancelAppUpdateDownload, startAppUpdateDownload, useAppUpdateStore } from '../stores/appUpdateStore';
+import { useUiStore } from '../stores/uiStore';
+import { desktopCapabilities, type AppUpdateDownloadState } from '../lib/desktopCapabilities';
 
 export function TaskCenterDrawer() {
   const { t, statusLabel } = useI18n();
@@ -17,6 +21,9 @@ export function TaskCenterDrawer() {
   const downloads = getActiveDownloadItems(downloadsQuery.data);
   const failedTasks = tasks.filter((task) => task.status === 'failed' || task.status === 'failed_resumable');
   const completedTasks = tasks.filter((task) => task.status === 'completed');
+  const appUpdateDownload = useAppUpdateStore((state) => state.download);
+  const updateChannel = useUiStore((state) => state.updateChannel);
+  const showAppUpdate = appUpdateDownload.status !== 'idle';
 
   return (
     <DialogPrimitive.Root>
@@ -34,7 +41,7 @@ export function TaskCenterDrawer() {
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-app-accent">{t('taskCenter.eyebrow')}</p>
               <DialogPrimitive.Title className="text-lg font-semibold">{t('taskCenter.title')}</DialogPrimitive.Title>
               <DialogPrimitive.Description className="mt-1 text-sm text-app-muted">
-                {activeTasks.length} {t('tasks.active')} · {downloads.length} {t('status.modelDownload')}
+                {activeTasks.length} {t('tasks.active')} · {downloads.length + (showAppUpdate ? 1 : 0)} {t('taskCenter.downloads')}
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close className="grid size-8 place-items-center rounded-lg text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
@@ -47,6 +54,7 @@ export function TaskCenterDrawer() {
             </TaskSection>
             <TaskSection title={t('taskCenter.downloads')} empty={t('status.noModelDownload')}>
               {downloads.slice(0, 6).map((download) => <TaskCenterDownload key={download.model_name} download={download} />)}
+              {showAppUpdate && <TaskCenterAppUpdate key="application-update" download={appUpdateDownload} channel={updateChannel} />}
             </TaskSection>
             <TaskSection title={t('taskCenter.failedTasks')} empty={t('taskCenter.noFailedTasks')}>
               {failedTasks.slice(0, 6).map((task) => <TaskCenterTask key={task.id} task={task} statusLabel={statusLabel(task.status)} />)}
@@ -61,8 +69,57 @@ export function TaskCenterDrawer() {
   );
 }
 
-function TaskSection({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
-  const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
+function TaskCenterAppUpdate({
+  download,
+  channel,
+}: {
+  download: AppUpdateDownloadState;
+  channel: 'stable' | 'prerelease';
+}) {
+  const { t } = useI18n();
+  const active = ['preparing', 'downloading', 'verifying', 'cancelling'].includes(download.status);
+  const retry = () => {
+    if (!download.version) return;
+    void startAppUpdateDownload(download.version, channel).catch(() => undefined);
+  };
+  return (
+    <div className="grid gap-2 rounded-lg border app-border bg-[var(--app-control)] px-3 py-3">
+      <ResultItemContent
+        icon={<PackageCheck className="size-4" />}
+        title={t('about.applicationUpdate')}
+        description={`${download.filename ?? download.version ?? 'ASRbox'} · ${formatBytes(download.downloadedBytes)}`}
+        meta={download.status}
+        tone={download.status === 'error' ? 'danger' : download.status === 'completed' ? 'success' : 'warning'}
+      />
+      {(active || download.progress != null) && <Progress value={download.progress} />}
+      {download.error && <p className="break-words text-xs text-[var(--app-danger)]">{download.error}</p>}
+      <div className="flex flex-wrap gap-2">
+        {active && (
+          <Button size="sm" variant="secondary" onClick={() => void cancelAppUpdateDownload().catch(() => undefined)} disabled={download.status === 'cancelling'}>
+            {t('common.cancel')}
+          </Button>
+        )}
+        {(download.status === 'error' || download.status === 'cancelled') && download.version && (
+          <Button size="sm" variant="secondary" onClick={retry}>{t('common.retry')}</Button>
+        )}
+        {download.status === 'completed' && (
+          <>
+            <Button size="sm" onClick={() => void desktopCapabilities.openDownloadedUpdate().catch(() => undefined)}>
+              {t('about.openInstaller')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => void desktopCapabilities.openUpdateFileLocation().catch(() => undefined)}>
+              <FolderOpen className="size-4" />
+              {t('about.openFileLocation')}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskSection({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {
+  const hasItems = Children.toArray(children).length > 0;
   return (
     <section className="grid gap-2">
       <h2 className="text-sm font-semibold text-app">{title}</h2>

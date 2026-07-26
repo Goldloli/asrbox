@@ -8,14 +8,14 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.3`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.4`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
 | macOS 桌面端 | Apple Silicon，Tauri 2 + 内置 FastAPI sidecar |
 | Docker Web | Linux CPU 容器，网页与 API 同源，数据持久化到 `/data` |
 | Windows / Linux 原生桌面端 | 暂未提供 |
-| 签名、公证、自动更新 | 暂未提供 |
+| 签名、公证、自动安装更新 | 暂未提供；桌面端支持应用内检查并下载更新，安装仍由用户完成 |
 | 模型权重 | 按需下载，不包含在 DMG 或 Docker 镜像中 |
 
 重要素材请保留原件，升级前先备份。Provider 密钥目前保存在本地 SQLite 数据库中，未接入系统钥匙串。Docker 默认只允许本机访问，不应直接暴露到公网。
@@ -25,6 +25,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 拖入单个或多个音频、视频，预检音轨、格式、时长和分段策略。
 - 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Qwen3-ASR，或在线 ASR Provider 转写。
 - 暂停、继续、停止、重试和删除模型下载，查看运行时兼容性与磁盘占用。
+- 在“设置 → 关于”查看版本、作者与支持入口，选择稳定版或预发布版，并检查和下载桌面更新。
 - 查看、搜索、替换、编辑、播放和复制转写结果。
 - 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本。
 - 导出 TXT、SRT、VTT、ASS、JSON 和 Markdown。
@@ -72,7 +73,11 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.3` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.3) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.4` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.4) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+
+桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把 DMG 下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
+
+下载完成不等于自动安装。请先完成转写和模型下载等任务，正常退出 ASRbox，再打开 DMG 手动替换旧应用。Web 版只显示构建版本和 GitHub Releases 入口，不会把桌面安装包下载到服务器。
 
 当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **“ASRbox.app”已损坏，无法打开**：
 
@@ -119,7 +124,7 @@ ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MO
 
 Docker 数据统一位于容器 `/data`，由 `asrbox-data` volume 持久化。这里可能包含原始媒体、提取音频、字幕版本、导出、模型、日志和 Provider 密钥，备份时应按敏感数据处理。
 
-本地 ASR 不会把媒体发送给 ASR 服务，但下载模型仍会访问 Hugging Face 或 ModelScope。在线 ASR 会把媒体或音频发送给所选第三方。LLM 核对只发送字幕段落文字、段落编号和有限相邻上下文，不发送音频或文件路径；远程 LLM 仍属于第三方处理。
+本地 ASR 不会把媒体发送给 ASR 服务，但下载模型仍会访问 Hugging Face 或 ModelScope，桌面自动或手动检查更新会访问 GitHub。在线 ASR 会把媒体或音频发送给所选第三方。LLM 核对只发送字幕段落文字、段落编号和有限相邻上下文，不发送音频或文件路径；远程 LLM 仍属于第三方处理。
 
 详见[隐私与本地数据](docs/privacy.md)和[安全政策](SECURITY.md)。
 

@@ -8,6 +8,9 @@ export type DensityMode = 'comfortable' | 'compact';
 export type SidebarMode = 'icons' | 'expanded';
 export type FontScale = 'standard' | 'large';
 export type ReducedMotionMode = 'system' | 'reduce' | 'normal';
+export type UpdateChannel = 'stable' | 'prerelease';
+
+const defaultUpdateChannel: UpdateChannel = __ASRBOX_VERSION__.includes('-') ? 'prerelease' : 'stable';
 
 function detectLocale(): Locale {
   if (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en')) {
@@ -26,6 +29,9 @@ interface UiStore {
   exportDirectory: string | null;
   lastLLMProviderId: string | null;
   shortcuts: ShortcutMap;
+  updateChannel: UpdateChannel;
+  autoCheckUpdates: boolean;
+  updateNotifications: boolean;
   setLocale: (locale: Locale) => void;
   setTheme: (theme: ThemeMode) => void;
   setDensity: (density: DensityMode) => void;
@@ -35,6 +41,9 @@ interface UiStore {
   setExportDirectory: (exportDirectory: string | null) => void;
   setLastLLMProviderId: (providerId: string | null) => void;
   setShortcut: (action: ShortcutAction, shortcut: string) => void;
+  setUpdateChannel: (channel: UpdateChannel) => void;
+  setAutoCheckUpdates: (enabled: boolean) => void;
+  setUpdateNotifications: (enabled: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>()(
@@ -49,6 +58,9 @@ export const useUiStore = create<UiStore>()(
       exportDirectory: null,
       lastLLMProviderId: null,
       shortcuts: defaultShortcuts,
+      updateChannel: defaultUpdateChannel,
+      autoCheckUpdates: true,
+      updateNotifications: true,
       setLocale: (locale) => set({ locale }),
       setTheme: (theme) => set({ theme }),
       setDensity: (density) => set({ density }),
@@ -60,6 +72,9 @@ export const useUiStore = create<UiStore>()(
       setShortcut: (action, shortcut) => set((state) => ({
         shortcuts: { ...defaultShortcuts, ...state.shortcuts, [action]: normalizeShortcut(shortcut) },
       })),
+      setUpdateChannel: (updateChannel) => set({ updateChannel }),
+      setAutoCheckUpdates: (autoCheckUpdates) => set({ autoCheckUpdates }),
+      setUpdateNotifications: (updateNotifications) => set({ updateNotifications }),
     }),
     { name: 'asrbox-ui' },
   ),

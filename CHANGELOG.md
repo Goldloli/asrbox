@@ -4,6 +4,13 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-26
+
+### Added
+
+- Settings now includes an About tab with build/platform identity, author and support links, stable/prerelease selection, optional background checks, in-app notifications, and settings import/export coverage.
+- macOS desktop can check the fixed official GitHub Releases source and download the matching Apple Silicon DMG with global progress, cancel/retry controls, and same-release SHA-256 verification. Installation remains a manual, unsigned and unnotarized replacement; Web builds provide a Releases link only.
+
 ## [0.1.3] - 2026-07-26
 
 首个 0.1.1 之后的稳定版，包含 0.1.2-rc.1 与 0.1.2-rc.2 的全部内容及以下新增修复。

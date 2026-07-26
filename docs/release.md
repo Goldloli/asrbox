@@ -1,8 +1,8 @@
 # Release Process
 
-ASRbox currently publishes macOS Apple Silicon desktop prereleases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic updates, and built-in public-hosting security are not part of `0.1.3`.
+ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.4`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
 
-Current release: [`v0.1.3`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.3). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
+Current release: [`v0.1.4`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.4). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
 
 ## Version Sources
 
@@ -108,7 +108,9 @@ Before publishing or immediately after downloading the Release assets:
 7. Download a small model, exercise pause/resume/stop/retry, and complete a transcription.
 8. Export TXT, SRT, VTT, ASS, JSON, and Markdown.
 9. Quit and confirm the backend releases port `17494`.
-10. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
+10. From Settings → About, verify stable/prerelease selection, manual checking, the update-notification controls, and the expected new-version/no-update/error states.
+11. For a release newer than the test build, download the DMG in-app, verify progress/cancel/retry, confirm the final file matches `SHA256SUMS.txt`, and confirm “Open DMG” and “Open file location” target the verified file.
+12. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
 
 ## Release Page Notes
 
@@ -118,6 +120,7 @@ Release notes must state:
 - Prerelease status.
 - Unsigned and unnotarized package.
 - Checksum verification instructions.
+- In-app checking and download are optional conveniences; replacement remains manual and the Web build only links to Releases.
 - Models download separately and can require substantial disk and memory.
 - Data persists after deleting the app.
 - Known security/privacy limitations, especially plaintext provider keys.

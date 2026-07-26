@@ -1,6 +1,6 @@
 {
   "name": "asrbox",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "workspaces": [
     "app",
@@ -25,6 +25,7 @@
     "verify:release-assets": "./scripts/verify-release-assets.sh",
     "test:e2e:smoke": "playwright test app/e2e/public-beta-smoke.spec.ts",
     "test:e2e:llm": "playwright test app/e2e/llm-proofreading.spec.ts",
+    "test:e2e:about": "playwright test app/e2e/about-updates.spec.ts",
     "check:open-source": "./scripts/check-open-source-readiness.sh",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",
     "test:backend": ".venv/bin/python -m pytest backend/tests -q --ignore=backend/tests/test_binary_smoke.py",

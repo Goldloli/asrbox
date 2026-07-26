@@ -8,14 +8,14 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.3`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.4`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
 | macOS desktop | Apple Silicon, Tauri 2 with a bundled FastAPI sidecar |
 | Docker Web | Linux CPU container, same-origin UI/API, persistent `/data` |
 | Native Windows/Linux desktop | Not available |
-| Signing, notarization, auto-update | Not available |
+| Signing, notarization, automatic installation | Not available; desktop can check for and download updates, but installation remains manual |
 | Model weights | Downloaded on demand; not included in the DMG or image |
 
 Keep originals of important media and back up before upgrades. Provider secrets are currently stored in local SQLite rather than an OS keychain. Docker binds to host loopback by default and must not be exposed directly to the public Internet.
@@ -25,6 +25,7 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Preflight and transcribe one or many audio/video files.
 - Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Qwen3-ASR, or an online ASR provider.
 - Pause, resume, stop, retry, and remove model downloads while inspecting compatibility and storage.
+- View version, author, and support links under Settings → About, select stable or prerelease updates, and check for desktop releases.
 - Search, replace, edit, play, and copy transcript content.
 - Preserve transcription, retranscription, manual edit, restore, post-processing, and AI-applied versions.
 - Export TXT, SRT, VTT, ASS, JSON, and Markdown.
@@ -72,7 +73,11 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.3` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.3) and verify `SHA256SUMS.txt`.
+Download the Apple Silicon DMG from the [`v0.1.4` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.4) and verify `SHA256SUMS.txt`.
+
+Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the DMG to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
+
+A completed download is not an automatic installation. Finish active transcription and model-download work, quit ASRbox normally, then open the DMG and replace the old application manually. Web builds show their build version and a GitHub Releases link only; they never download a desktop installer to the server.
 
 The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **“ASRbox.app” is damaged and can't be opened**:
 
@@ -119,7 +124,7 @@ Desktop data defaults to:
 
 Docker keeps all managed state under `/data` in the `asrbox-data` volume. Treat backups as sensitive: they may contain media, transcripts, exports, logs, models, and provider credentials.
 
-Local ASR does not send media to an ASR service, although model downloads contact Hugging Face or ModelScope. Online ASR sends media or extracted audio to the selected third party. LLM proofreading sends segment text, identifiers, and limited neighboring context, never audio or file paths; remote LLMs are still third-party processing.
+Local ASR does not send media to an ASR service, although model downloads contact Hugging Face or ModelScope and desktop update checks contact GitHub. Online ASR sends media or extracted audio to the selected third party. LLM proofreading sends segment text, identifiers, and limited neighboring context, never audio or file paths; remote LLMs are still third-party processing.
 
 Read [privacy and local data](docs/privacy.md) and the [security policy](SECURITY.md).
 

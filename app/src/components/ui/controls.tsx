@@ -145,12 +145,21 @@ export function Select({
   );
 }
 
-export function Switch({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) {
+export function Switch({
+  checked,
+  onCheckedChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <SwitchPrimitive.Root
       checked={checked}
       onCheckedChange={onCheckedChange}
-      className="relative h-6 w-10 rounded-full border app-control transition data-[state=checked]:bg-[var(--app-accent)]"
+      disabled={disabled}
+      className="relative h-6 w-10 rounded-full border app-control transition data-[state=checked]:bg-[var(--app-accent)] disabled:cursor-not-allowed disabled:opacity-45"
     >
       <SwitchPrimitive.Thumb className="block size-5 translate-x-0.5 rounded-full bg-[var(--app-switch-thumb)] transition data-[state=checked]:translate-x-[18px] data-[state=checked]:bg-[var(--app-accent-contrast)]" />
     </SwitchPrimitive.Root>

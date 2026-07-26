@@ -8,6 +8,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+mod update;
+
 const SERVER_PORT: u16 = 17494;
 const SERVER_URL: &str = "http://127.0.0.1:17494";
 
@@ -30,6 +32,7 @@ fn main() {
             child: Mutex::new(None),
             api_token: generate_api_token(),
         })
+        .manage(update::AppUpdateState::default())
         .invoke_handler(tauri::generate_handler![
             start_server,
             stop_server,
@@ -40,7 +43,15 @@ fn main() {
             pick_media_files,
             pick_model_storage_directory,
             reveal_logs,
-            save_text_file
+            save_text_file,
+            update::get_app_version,
+            update::check_app_update,
+            update::get_app_update_download_state,
+            update::start_app_update_download,
+            update::cancel_app_update_download,
+            update::open_downloaded_update,
+            update::open_update_file_location,
+            update::open_about_link
         ])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -311,8 +322,8 @@ async fn pick_media_files(app: tauri::AppHandle) -> Result<Vec<SelectedMediaFile
         .add_filter(
             "Audio and video",
             &[
-                "aac", "aif", "aiff", "flac", "m4a", "mkv", "mov", "mp3", "mp4", "ogg",
-                "opus", "wav", "webm", "wma",
+                "aac", "aif", "aiff", "flac", "m4a", "mkv", "mov", "mp3", "mp4", "ogg", "opus",
+                "wav", "webm", "wma",
             ],
         )
         .pick_files(move |files| {
@@ -324,7 +335,10 @@ async fn pick_media_files(app: tauri::AppHandle) -> Result<Vec<SelectedMediaFile
                         .into_path()
                         .map_err(|error| format!("Failed to read selected media path: {error}"))?;
                     let metadata = std::fs::metadata(&path).map_err(|error| {
-                        format!("Failed to inspect selected media {}: {error}", path.display())
+                        format!(
+                            "Failed to inspect selected media {}: {error}",
+                            path.display()
+                        )
                     })?;
                     Ok(SelectedMediaFile {
                         name: path

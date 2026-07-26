@@ -4,6 +4,8 @@ import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
 import asrboxIcon from '../assets/asrbox-icon-256.png';
+import { useAppUpdateStore } from '../stores/appUpdateStore';
+import { useUiStore } from '../stores/uiStore';
 
 const mobileNav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon?: LucideIcon; brand?: boolean }> = [
   { to: '/', labelKey: 'nav.transcribe', brand: true },
@@ -16,6 +18,11 @@ const mobileNav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI
 export function MobileNav() {
   const matchRoute = useMatchRoute();
   const { t } = useI18n();
+  const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
+  const updateNotifications = useUiStore((state) => state.updateNotifications);
+  const hasUpdate = useAppUpdateStore((state) => Boolean(state.checkResult?.updateAvailable))
+    && autoCheckUpdates
+    && updateNotifications;
 
   return (
     <nav className="app-shell-surface grid h-16 shrink-0 grid-cols-5 border-t app-border md:hidden">
@@ -45,11 +52,14 @@ export function MobileNav() {
               Icon && (
                 <span
                   className={cn(
-                    'grid size-8 place-items-center rounded-lg border border-transparent',
+                    'relative grid size-8 place-items-center rounded-lg border border-transparent',
                     active && 'border-[var(--app-accent)] bg-[var(--app-accent-soft)]',
                   )}
                 >
                   <Icon className="size-4" strokeWidth={1.8} />
+                  {item.to === '/settings' && hasUpdate && (
+                    <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-[var(--app-accent)]" aria-label={t('about.newVersion')} />
+                  )}
                 </span>
               )
             )}

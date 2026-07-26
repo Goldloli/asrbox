@@ -19,13 +19,15 @@ import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/setti
 import { ModelStorageSettings } from '../components/settings/ModelStorageSettings';
 import { MediaStorageSettings } from '../components/settings/MediaStorageSettings';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
+import { AboutSettings } from '../components/settings/AboutSettings';
+import { useAppUpdateStore } from '../stores/appUpdateStore';
 
-type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage';
+type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage' | 'about';
 
 const shortcutActions: ShortcutAction[] = ['newTranscription', 'globalSearch', 'settings', 'commandPalette'];
 
 function normalizeSettingsTab(value: unknown): SettingsTab {
-  return value === 'transcription' || value === 'providers' || value === 'llm' || value === 'storage' ? value : 'general';
+  return value === 'transcription' || value === 'providers' || value === 'llm' || value === 'storage' || value === 'about' ? value : 'general';
 }
 
 export function SettingsPage() {
@@ -40,6 +42,9 @@ export function SettingsPage() {
   const reducedMotion = useUiStore((state) => state.reducedMotion);
   const exportDirectory = useUiStore((state) => state.exportDirectory);
   const shortcuts = useUiStore((state) => state.shortcuts);
+  const updateChannel = useUiStore((state) => state.updateChannel);
+  const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
+  const updateNotifications = useUiStore((state) => state.updateNotifications);
   const setLocale = useUiStore((state) => state.setLocale);
   const setTheme = useUiStore((state) => state.setTheme);
   const setDensity = useUiStore((state) => state.setDensity);
@@ -48,6 +53,10 @@ export function SettingsPage() {
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
   const setExportDirectory = useUiStore((state) => state.setExportDirectory);
   const setShortcut = useUiStore((state) => state.setShortcut);
+  const setUpdateChannel = useUiStore((state) => state.setUpdateChannel);
+  const setAutoCheckUpdates = useUiStore((state) => state.setAutoCheckUpdates);
+  const setUpdateNotifications = useUiStore((state) => state.setUpdateNotifications);
+  const hasUpdate = useAppUpdateStore((state) => Boolean(state.checkResult?.updateAvailable));
   const { serverUrl, apiToken, setServerUrl, setApiToken } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const healthQuery = useHealthQuery();
@@ -161,7 +170,19 @@ export function SettingsPage() {
     const payload = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      ui: { locale, theme, density, sidebarMode, fontScale, reducedMotion, exportDirectory, shortcuts },
+      ui: {
+        locale,
+        theme,
+        density,
+        sidebarMode,
+        fontScale,
+        reducedMotion,
+        exportDirectory,
+        shortcuts,
+        updateChannel,
+        autoCheckUpdates,
+        updateNotifications,
+      },
       server: { serverUrl },
     };
     const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
@@ -184,6 +205,9 @@ export function SettingsPage() {
       if (ui.fontScale === 'standard' || ui.fontScale === 'large') setFontScale(ui.fontScale);
       if (ui.reducedMotion === 'system' || ui.reducedMotion === 'reduce' || ui.reducedMotion === 'normal') setReducedMotion(ui.reducedMotion);
       if (typeof ui.exportDirectory === 'string' || ui.exportDirectory === null) setExportDirectory(ui.exportDirectory);
+      if (ui.updateChannel === 'stable' || ui.updateChannel === 'prerelease') setUpdateChannel(ui.updateChannel);
+      if (typeof ui.autoCheckUpdates === 'boolean') setAutoCheckUpdates(ui.autoCheckUpdates);
+      if (typeof ui.updateNotifications === 'boolean') setUpdateNotifications(ui.updateNotifications);
       if (ui.shortcuts && typeof ui.shortcuts === 'object') {
         Object.entries(ui.shortcuts as Partial<Record<ShortcutAction, unknown>>).forEach(([action, shortcut]) => {
           if (typeof shortcut === 'string' && shortcutActions.includes(action as ShortcutAction)) setShortcut(action as ShortcutAction, shortcut);
@@ -207,6 +231,12 @@ export function SettingsPage() {
             <TabsTrigger value="providers">{t('settings.tabProviders')}</TabsTrigger>
             <TabsTrigger value="llm">{t('settings.tabLLMProviders')}</TabsTrigger>
             <TabsTrigger value="storage">{t('settings.tabStorage')}</TabsTrigger>
+            <TabsTrigger value="about" className="relative">
+              {t('settings.tabAbout')}
+              {hasUpdate && autoCheckUpdates && updateNotifications && (
+                <span className="ml-2 size-2 rounded-full bg-[var(--app-accent)]" aria-label={t('about.newVersion')} />
+              )}
+            </TabsTrigger>
           </TabsList>
         </div>
       </Panel>
@@ -579,6 +609,10 @@ export function SettingsPage() {
             </div>
           </Panel>
         </section>
+      </TabsContent>
+
+      <TabsContent value="about">
+        <AboutSettings />
       </TabsContent>
     </Tabs>
   );

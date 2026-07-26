@@ -6,6 +6,7 @@ import { cn } from '../lib/cn';
 import { Tooltip, TooltipContent, TooltipTrigger } from './weiui';
 import asrboxIcon from '../assets/asrbox-icon-256.png';
 import { useUiStore } from '../stores/uiStore';
+import { useAppUpdateStore } from '../stores/appUpdateStore';
 
 const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: LucideIcon }> = [
   { to: '/', labelKey: 'nav.transcribe', icon: Mic2 },
@@ -14,14 +15,19 @@ const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
-const appVersion = 'v0.1.3';
-
 export function Sidebar() {
   const matchRoute = useMatchRoute();
   const navigate = useNavigate();
   const { t } = useI18n();
   const sidebarMode = useUiStore((state) => state.sidebarMode);
+  const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
+  const updateNotifications = useUiStore((state) => state.updateNotifications);
+  const version = useAppUpdateStore((state) => state.versionInfo.version);
+  const hasUpdate = useAppUpdateStore((state) => Boolean(state.checkResult?.updateAvailable))
+    && autoCheckUpdates
+    && updateNotifications;
   const expanded = sidebarMode === 'expanded';
+  const appVersion = `v${version}`;
 
   return (
     <aside className={cn(
@@ -59,7 +65,7 @@ export function Sidebar() {
                 <Link
                   to={item.to}
                   className={cn(
-                    'rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30',
+                    'relative rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30',
                     expanded ? 'flex h-11 items-center gap-3 px-3' : 'grid size-11 place-items-center',
                     active
                       ? 'border-[var(--app-accent)] bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] shadow-inner shadow-[var(--app-shadow)]'
@@ -68,6 +74,9 @@ export function Sidebar() {
                 >
                   <Icon size={20} strokeWidth={1.8} />
                   {expanded && <span className="text-sm font-medium">{t(item.labelKey)}</span>}
+                  {item.to === '/settings' && hasUpdate && (
+                    <span className={cn('absolute size-2 rounded-full bg-[var(--app-accent)]', expanded ? 'right-3 top-2.5' : 'right-1.5 top-1.5')} aria-label={t('about.newVersion')} />
+                  )}
                 </Link>
               </TooltipTrigger>
               <TooltipContent>{t(item.labelKey)}</TooltipContent>
@@ -81,7 +90,7 @@ export function Sidebar() {
             'mb-1 rounded-lg border app-control px-2 py-1.5 text-[10px] font-semibold uppercase text-app-muted',
             expanded ? 'text-center tracking-[0.04em]' : 'w-11 text-center tracking-[0.16em]',
           )}>
-            {expanded ? `${appVersion} · Local` : 'v0.1'}
+            {expanded ? `${appVersion} · Local` : appVersion}
           </div>
         </TooltipTrigger>
         <TooltipContent>{`ASRbox ${appVersion}`}</TooltipContent>

@@ -1,17 +1,19 @@
 [package]
 name = "asrbox"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
 rand = "0.9"
+semver = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["time"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["fs", "io-util", "time"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
