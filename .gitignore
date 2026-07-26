@@ -13,7 +13,7 @@ dist/
 build/
 *.spec
 data/
-frontend-audit-screenshots/95-gate/
+frontend-audit-screenshots/
 playwright-report/
 test-results/
 release-assets/
