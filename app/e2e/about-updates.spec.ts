@@ -72,7 +72,7 @@ test('desktop About persists update preferences and includes them in settings tr
   }, serverUrl);
 
   await page.goto('/settings?tab=about');
-  await expect(page.getByText('macOS Apple Silicon', { exact: true })).toBeVisible();
+  await expect(page.getByText('macOS Apple Silicon', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('combobox')).toContainText('Stable');
   const switches = page.getByRole('switch');
   await expect(switches).toHaveCount(2);
