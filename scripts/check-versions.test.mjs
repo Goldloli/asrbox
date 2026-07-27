@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,7 +8,7 @@ import { checkVersions, validateReleaseTag } from "./check-versions.mjs";
 
 async function fixture(version, backendVersion = version) {
   const root = await mkdtemp(path.join(tmpdir(), "asrbox-versions-"));
-  for (const directory of ["app", "web", "tauri", "tauri/src-tauri", "backend"]) {
+  for (const directory of ["app", "web", "tauri", "tauri/src-tauri", "backend", "docs/releases"]) {
     await mkdir(path.join(root, directory), { recursive: true });
   }
   for (const file of ["package.json", "app/package.json", "web/package.json", "tauri/package.json"]) {
@@ -17,6 +17,42 @@ async function fixture(version, backendVersion = version) {
   await writeFile(path.join(root, "tauri/src-tauri/Cargo.toml"), `[package]\nversion = "${version}"\n`);
   await writeFile(path.join(root, "tauri/src-tauri/tauri.conf.json"), JSON.stringify({ version }));
   await writeFile(path.join(root, "backend/__init__.py"), `__version__ = "${backendVersion}"\n`);
+  await writeFile(path.join(root, "Dockerfile"), `ARG APP_VERSION=${version}\n`);
+  await writeFile(
+    path.join(root, "compose.yaml"),
+    `services:\n  asrbox:\n    build:\n      args:\n        APP_VERSION: \${ASRBOX_VERSION:-${version}}\n`,
+  );
+  await writeFile(path.join(root, ".env.example"), `ASRBOX_VERSION=${version}\n`);
+  await writeFile(
+    path.join(root, "bun.lock"),
+    `{
+  "workspaces": {
+    "app": { "version": "${version}" },
+    "tauri": { "version": "${version}" },
+    "web": { "version": "${version}" },
+  },
+}\n`,
+  );
+  await writeFile(
+    path.join(root, "tauri/src-tauri/Cargo.lock"),
+    `[[package]]\nname = "asrbox"\nversion = "${version}"\ndependencies = []\n`,
+  );
+  await writeFile(
+    path.join(root, "README.md"),
+    `当前源码版本为 \`${version}\`\n从 [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}) 下载\n`,
+  );
+  await writeFile(
+    path.join(root, "README.en.md"),
+    `The current source version is \`${version}\`.\nDownload from the [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}).\n`,
+  );
+  await writeFile(
+    path.join(root, "docs/release.md"),
+    `Current release: [\`v${version}\`](https://github.com/Goldloli/asrbox/releases/tag/v${version}).\n`,
+  );
+  await writeFile(
+    path.join(root, `docs/releases/v${version}.md`),
+    `ASRbox \`v${version}\`\nhttps://github.com/Goldloli/asrbox/releases/download/v${version}/ASRbox_${version}_aarch64.dmg\n`,
+  );
   await writeFile(
     path.join(root, "web/vite.config.ts"),
     "const applicationVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;\n"
@@ -39,6 +75,41 @@ test("rejects a missing frontend build-version binding", async () => {
   const root = await fixture("0.1.0-beta.1");
   await writeFile(path.join(root, "web/vite.config.ts"), "define: {},\n");
   await assert.rejects(checkVersions(root), /Version mismatch/);
+});
+
+test("rejects drift in Docker release surfaces", async () => {
+  const root = await fixture("0.1.0-beta.1");
+  await writeFile(path.join(root, "Dockerfile"), "ARG APP_VERSION=0.1.0\n");
+  await assert.rejects(checkVersions(root), /Dockerfile: 0.1.0/);
+});
+
+test("rejects drift in generated dependency lock versions", async () => {
+  const bunRoot = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(bunRoot, "bun.lock"),
+    '{"workspaces":{"app":{"version":"0.0.9"},"tauri":{"version":"0.1.0-beta.1"},"web":{"version":"0.1.0-beta.1"}}}\n',
+  );
+  await assert.rejects(checkVersions(bunRoot), /bun\.lock#workspaces\.app: 0\.0\.9/);
+
+  const cargoRoot = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(cargoRoot, "tauri/src-tauri/Cargo.lock"),
+    '[[package]]\nname = "asrbox"\nversion = "0.0.9"\n',
+  );
+  await assert.rejects(checkVersions(cargoRoot), /Cargo\.lock#asrbox: 0\.0\.9/);
+});
+
+test("requires version-matched current release documentation", async () => {
+  const staleRoot = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(staleRoot, "README.md"),
+    "当前源码版本为 `0.0.9`\n从 [`v0.0.9` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.0.9) 下载\n",
+  );
+  await assert.rejects(checkVersions(staleRoot), /README\.md#source: 0\.0\.9/);
+
+  const missingNotesRoot = await fixture("0.1.0-beta.1");
+  await rm(path.join(missingNotesRoot, "docs/releases/v0.1.0-beta.1.md"));
+  await assert.rejects(checkVersions(missingNotesRoot), /release notes: missing/);
 });
 
 test("release tag must be safe semver and match the application", () => {

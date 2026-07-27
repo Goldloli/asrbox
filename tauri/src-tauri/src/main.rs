@@ -1,8 +1,9 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -12,6 +13,8 @@ mod update;
 
 const SERVER_PORT: u16 = 17494;
 const SERVER_URL: &str = "http://127.0.0.1:17494";
+const SERVER_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
+const SERVER_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 
 struct ServerState {
     child: Mutex<Option<CommandChild>>,
@@ -93,6 +96,12 @@ async fn start_server(
     }
 
     if check_health().await? {
+        let token_is_accepted = check_server_token(&api_token).await?;
+        if let Some(error) =
+            existing_server_conflict(cfg!(not(debug_assertions)), token_is_accepted)
+        {
+            return Err(error);
+        }
         return Ok(server_connection(api_token));
     }
     if port_is_open() {
@@ -275,14 +284,41 @@ fn open_file_location(app: tauri::AppHandle, path: Option<String>) -> Result<(),
     let target = path
         .map(PathBuf::from)
         .unwrap_or(app.path().app_data_dir().map_err(|e| e.to_string())?);
-    let open_target = if target.is_file() {
-        target.parent().map(PathBuf::from).unwrap_or(target)
-    } else {
-        target
-    };
+    let open_target = resolve_open_target(&target)?;
     app.shell()
         .open(open_target.to_string_lossy().to_string(), None)
         .map_err(|e| format!("Failed to open file location: {e}"))
+}
+
+/// Directory name suffixes that macOS treats as executable bundles: handing
+/// them to `shell.open` launches the bundle instead of revealing it.
+const EXECUTABLE_BUNDLE_EXTENSIONS: [&str; 4] = ["app", "framework", "bundle", "plugin"];
+
+fn resolve_open_target(target: &Path) -> Result<PathBuf, String> {
+    if !target.exists() {
+        return Err(format!("Path does not exist: {}", target.display()));
+    }
+    let resolved = target
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve {}: {error}", target.display()))?;
+    if resolved.is_file() {
+        return Ok(resolved.parent().map(PathBuf::from).unwrap_or(resolved));
+    }
+    if resolved.is_dir() {
+        if let Some(extension) = resolved.extension().and_then(|value| value.to_str()) {
+            if EXECUTABLE_BUNDLE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str()) {
+                return Err(format!(
+                    "Refusing to open {} because it is an executable bundle",
+                    resolved.display()
+                ));
+            }
+        }
+        return Ok(resolved);
+    }
+    Err(format!(
+        "Path is not a regular file or directory: {}",
+        target.display()
+    ))
 }
 
 #[tauri::command]
@@ -298,8 +334,24 @@ async fn pick_export_directory(app: tauri::AppHandle) -> Result<Option<String>, 
             .transpose();
         let _ = tx.send(result);
     });
-    rx.await
-        .map_err(|_| "Folder picker was closed before returning a result".to_string())?
+    let selected = rx
+        .await
+        .map_err(|_| "Folder picker was closed before returning a result".to_string())??;
+    if let Some(directory) = selected.as_deref() {
+        // Recording is best-effort: a failure only means save_text_file will
+        // reject this directory until it is picked and recorded successfully.
+        match app.path().app_config_dir() {
+            Ok(config_dir) => {
+                if let Err(error) = record_allowed_save_dir(&config_dir, Path::new(directory)) {
+                    eprintln!("Failed to record allowed save directory {directory}: {error}");
+                }
+            }
+            Err(error) => {
+                eprintln!("Failed to resolve app config dir while recording {directory}: {error}");
+            }
+        }
+    }
+    Ok(selected)
 }
 
 #[tauri::command]
@@ -404,7 +456,16 @@ fn save_text_file(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        Some(value) => PathBuf::from(value),
+        Some(value) => {
+            let requested = PathBuf::from(value);
+            if !is_allowed_save_dir(&requested, &allowed_save_dir_roots(&app)) {
+                return Err(format!(
+                    "Export directory {} is not an allowed save location. Pick the directory again with the native folder picker to allow it.",
+                    requested.display()
+                ));
+            }
+            requested
+        }
         None => app
             .path()
             .download_dir()
@@ -422,6 +483,103 @@ fn save_text_file(
     std::fs::write(&path, contents)
         .map_err(|e| format!("Failed to write export {}: {e}", path.display()))?;
     Ok(path.to_string_lossy().to_string())
+}
+
+const ALLOWED_SAVE_DIRS_FILENAME: &str = "allowed-save-dirs.json";
+
+/// Roots an explicit `save_text_file` directory must resolve into: the system
+/// downloads directory (the default when no directory is given), the app data
+/// directory (which is also the backend sidecar `--data-dir`, see
+/// `start_server`), and directories previously picked via the native folder
+/// picker and recorded under the app config directory.
+fn allowed_save_dir_roots(app: &tauri::AppHandle) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(dir) = app.path().download_dir() {
+        roots.push(dir);
+    } else if let Ok(dir) = app.path().document_dir() {
+        roots.push(dir);
+    }
+    if let Ok(dir) = app.path().app_data_dir() {
+        roots.push(dir);
+    }
+    if let Ok(config_dir) = app.path().app_config_dir() {
+        roots.extend(load_allowed_save_dirs(&config_dir));
+    }
+    roots
+}
+
+fn is_allowed_save_dir(dir: &Path, roots: &[PathBuf]) -> bool {
+    let Some(resolved) = resolve_existing_path(dir) else {
+        return false;
+    };
+    roots
+        .iter()
+        .filter_map(|root| resolve_existing_path(root))
+        .any(|root| resolved == root || resolved.starts_with(&root))
+}
+
+/// Resolves a path like `canonicalize`, but tolerates a non-existent tail by
+/// canonicalizing the longest existing ancestor and re-joining the rest.
+fn resolve_existing_path(path: &Path) -> Option<PathBuf> {
+    let mut normalized = if path.is_absolute() {
+        PathBuf::new()
+    } else {
+        env::current_dir().ok()?
+    };
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    let mut ancestor = normalized.clone();
+    let mut tail = Vec::new();
+    loop {
+        if ancestor.exists() {
+            break;
+        }
+        tail.push(ancestor.file_name()?.to_os_string());
+        ancestor = ancestor.parent()?.to_path_buf();
+    }
+    let mut resolved = ancestor.canonicalize().ok()?;
+    for component in tail.iter().rev() {
+        resolved.push(component);
+    }
+    Some(resolved)
+}
+
+fn load_allowed_save_dirs(config_dir: &Path) -> Vec<PathBuf> {
+    let Ok(contents) = std::fs::read_to_string(config_dir.join(ALLOWED_SAVE_DIRS_FILENAME)) else {
+        return Vec::new();
+    };
+    serde_json::from_str::<Vec<String>>(&contents)
+        .map(|dirs| dirs.into_iter().map(PathBuf::from).collect())
+        .unwrap_or_default()
+}
+
+fn record_allowed_save_dir(config_dir: &Path, dir: &Path) -> Result<(), String> {
+    let mut dirs = load_allowed_save_dirs(config_dir);
+    if !dirs.iter().any(|existing| existing == dir) {
+        dirs.push(dir.to_path_buf());
+    }
+    std::fs::create_dir_all(config_dir).map_err(|e| {
+        format!(
+            "Failed to create config directory {}: {e}",
+            config_dir.display()
+        )
+    })?;
+    let serialized = serde_json::to_string_pretty(
+        &dirs
+            .iter()
+            .map(|dir| dir.to_string_lossy().to_string())
+            .collect::<Vec<_>>(),
+    )
+    .map_err(|e| format!("Failed to serialize allowed save directories: {e}"))?;
+    std::fs::write(config_dir.join(ALLOWED_SAVE_DIRS_FILENAME), serialized)
+        .map_err(|e| format!("Failed to persist allowed save directories: {e}"))
 }
 
 fn safe_filename(filename: &str) -> String {
@@ -540,7 +698,8 @@ fn vendor_platform_dir() -> &'static str {
 }
 
 async fn check_health() -> Result<bool, String> {
-    match reqwest::get(format!("{SERVER_URL}/health")).await {
+    let client = desktop_http_client()?;
+    match client.get(format!("{SERVER_URL}/health")).send().await {
         Ok(response) if response.status().is_success() => {
             let body = response.text().await.map_err(|e| e.to_string())?;
             Ok(is_asrbox_health_response(&body))
@@ -549,6 +708,45 @@ async fn check_health() -> Result<bool, String> {
         Err(error) if error.is_connect() || error.is_timeout() => Ok(false),
         Err(error) => Err(format!("Failed to check ASRbox server health: {error}")),
     }
+}
+
+async fn check_server_token(api_token: &str) -> Result<bool, String> {
+    let response = desktop_http_client()?
+        .get(format!("{SERVER_URL}/runtime/status"))
+        .bearer_auth(api_token)
+        .send()
+        .await;
+    match response {
+        Ok(response) => Ok(response.status().is_success()),
+        Err(error) if error.is_connect() || error.is_timeout() => Ok(false),
+        Err(error) => Err(format!(
+            "Failed to verify the existing ASRbox server: {error}"
+        )),
+    }
+}
+
+fn existing_server_conflict(packaged: bool, token_is_accepted: bool) -> Option<String> {
+    if packaged {
+        return Some(
+            "Another ASRbox backend is already running on port 17494. Close the other ASRbox instance and try again."
+                .to_string(),
+        );
+    }
+    if !token_is_accepted {
+        return Some(
+            "An ASRbox development server is already running but does not accept this desktop process token. Stop it or restart it without a conflicting ASRBOX_API_TOKEN."
+                .to_string(),
+        );
+    }
+    None
+}
+
+fn desktop_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(SERVER_CONNECT_TIMEOUT)
+        .timeout(SERVER_REQUEST_TIMEOUT)
+        .build()
+        .map_err(|error| format!("Failed to create desktop HTTP client: {error}"))
 }
 
 async fn wait_for_health(server_exited: &AtomicBool) -> Result<(), String> {
@@ -572,14 +770,16 @@ async fn shutdown_server(app: &tauri::AppHandle) -> Result<(), String> {
     if !check_health().await? {
         return Ok(());
     }
-    let client = reqwest::Client::new();
+    let client = desktop_http_client()?;
     let token = app.state::<ServerState>().api_token.clone();
-    let _ = client
+    client
         .post(format!("{SERVER_URL}/shutdown"))
         .bearer_auth(token)
         .send()
         .await
-        .map_err(|e| format!("Failed to request ASRbox shutdown: {e}"))?;
+        .map_err(|e| format!("Failed to request ASRbox shutdown: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("ASRbox shutdown request was rejected: {e}"))?;
     app.emit(
         "server-log",
         serde_json::json!({"stream": "system", "line": "ASRbox server shutdown requested"}),
@@ -637,5 +837,150 @@ mod tests {
         assert!(!is_asrbox_health_response(
             r#"{"status":"healthy","message":"other service"}"#
         ));
+    }
+
+    #[test]
+    fn packaged_runtime_never_adopts_an_unowned_healthy_server() {
+        assert!(existing_server_conflict(true, true).is_some());
+        assert!(existing_server_conflict(true, false).is_some());
+        assert!(existing_server_conflict(false, false).is_some());
+        assert!(existing_server_conflict(false, true).is_none());
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = env::temp_dir().join(format!(
+            "asrbox-main-test-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn save_dir_allowlist_accepts_roots_and_descendants() {
+        let base = temp_dir("allow");
+        let downloads = base.join("Downloads");
+        let nested = downloads.join("ASRbox Exports").join("not-created-yet");
+        std::fs::create_dir_all(&downloads).unwrap();
+        let roots = vec![downloads.clone()];
+        assert!(is_allowed_save_dir(&downloads, &roots));
+        assert!(is_allowed_save_dir(&nested, &roots));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn save_dir_allowlist_rejects_arbitrary_directories() {
+        let base = temp_dir("reject");
+        let fake_home = base.join("home");
+        let downloads = fake_home.join("Downloads");
+        let launch_agents = fake_home.join("Library").join("LaunchAgents");
+        std::fs::create_dir_all(&downloads).unwrap();
+        std::fs::create_dir_all(&launch_agents).unwrap();
+        let roots = vec![downloads];
+        assert!(!is_allowed_save_dir(&launch_agents, &roots));
+        assert!(!is_allowed_save_dir(&fake_home, &roots));
+        // Traversal that escapes the allowed root must not pass either.
+        assert!(!is_allowed_save_dir(&roots[0].join(".."), &roots));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_target_rejects_symlink_alias_to_executable_bundle() {
+        use std::os::unix::fs::symlink;
+
+        let base = temp_dir("bundle-symlink");
+        let bundle = base.join("Unsafe.app");
+        let alias = base.join("innocent-folder");
+        std::fs::create_dir_all(&bundle).unwrap();
+        symlink(&bundle, &alias).unwrap();
+
+        let error = resolve_open_target(&alias).unwrap_err();
+        assert!(error.contains("executable bundle"));
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn recorded_save_dirs_are_loaded_and_deduplicated() {
+        let config_dir = temp_dir("record");
+        let picked = temp_dir("picked");
+        // Missing file loads as an empty list.
+        assert!(load_allowed_save_dirs(&config_dir).is_empty());
+        record_allowed_save_dir(&config_dir, &picked).unwrap();
+        record_allowed_save_dir(&config_dir, &picked).unwrap();
+        let dirs = load_allowed_save_dirs(&config_dir);
+        assert_eq!(dirs, vec![picked.clone()]);
+        // A recorded directory (and its descendants) passes the allowlist.
+        assert!(is_allowed_save_dir(&picked.join("sub"), &dirs));
+        std::fs::remove_dir_all(&config_dir).ok();
+        std::fs::remove_dir_all(&picked).ok();
+    }
+
+    #[test]
+    fn corrupt_save_dirs_file_loads_as_empty_list() {
+        let config_dir = temp_dir("corrupt");
+        std::fs::write(
+            config_dir.join(ALLOWED_SAVE_DIRS_FILENAME),
+            "not valid json {{",
+        )
+        .unwrap();
+        assert!(load_allowed_save_dirs(&config_dir).is_empty());
+        // A wrong shape (not a string array) is tolerated as well.
+        std::fs::write(
+            config_dir.join(ALLOWED_SAVE_DIRS_FILENAME),
+            r#"{"dir":"/tmp"}"#,
+        )
+        .unwrap();
+        assert!(load_allowed_save_dirs(&config_dir).is_empty());
+        std::fs::remove_dir_all(&config_dir).ok();
+    }
+
+    #[test]
+    fn open_target_reveals_files_via_parent_directory() {
+        let base = temp_dir("reveal");
+        let file = base.join("note.txt");
+        std::fs::write(&file, "hello").unwrap();
+        assert_eq!(
+            resolve_open_target(&file).unwrap(),
+            base.canonicalize().unwrap()
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn open_target_rejects_executable_bundles() {
+        let base = temp_dir("bundle");
+        for name in [
+            "Bad.app",
+            "Bad.framework",
+            "Bad.bundle",
+            "Bad.plugin",
+            "Bad.APP",
+        ] {
+            let bundle = base.join(name);
+            std::fs::create_dir_all(&bundle).unwrap();
+            let error = resolve_open_target(&bundle).unwrap_err();
+            assert!(error.contains("executable bundle"), "{name}: {error}");
+        }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn open_target_opens_plain_directories_and_rejects_missing_paths() {
+        let base = temp_dir("plain");
+        let plain = base.join("exports");
+        std::fs::create_dir_all(&plain).unwrap();
+        assert_eq!(
+            resolve_open_target(&plain).unwrap(),
+            plain.canonicalize().unwrap()
+        );
+        let missing = base.join("does-not-exist");
+        let error = resolve_open_target(&missing).unwrap_err();
+        assert!(error.contains("does not exist"), "{error}");
+        std::fs::remove_dir_all(&base).ok();
     }
 }

@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { matchesShortcut } from '../lib/shortcuts';
+import { isEditableShortcutEvent, matchesShortcut } from '../lib/shortcuts';
 import { useUiStore } from '../stores/uiStore';
 
 export const openGlobalSearchEvent = 'asrbox:open-global-search';
@@ -11,6 +11,7 @@ export function GlobalShortcuts() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableShortcutEvent(event)) return;
       if (matchesShortcut(event, shortcuts.newTranscription)) {
         event.preventDefault();
         navigate({ to: '/' });

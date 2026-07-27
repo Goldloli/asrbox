@@ -16,7 +16,7 @@
     },
     "app": {
       "name": "@asrbox/app",
-      "version": "0.1.2-rc.1",
+      "version": "0.1.5",
       "dependencies": {
         "@radix-ui/react-dialog": "^1.1.18",
         "@radix-ui/react-dropdown-menu": "^2.1.19",
@@ -44,14 +44,14 @@
     },
     "tauri": {
       "name": "@asrbox/tauri",
-      "version": "0.1.2-rc.1",
+      "version": "0.1.5",
       "devDependencies": {
         "@tauri-apps/cli": "^2.9.5",
       },
     },
     "web": {
       "name": "@asrbox/web",
-      "version": "0.1.2-rc.1",
+      "version": "0.1.5",
       "dependencies": {
         "@asrbox/app": "file:../app",
         "@tanstack/react-query": "^5.0.0",

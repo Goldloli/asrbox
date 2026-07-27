@@ -6,12 +6,13 @@ services:
     build:
       context: .
       args:
-        APP_VERSION: ${ASRBOX_VERSION:-0.1.3}
+        APP_VERSION: ${ASRBOX_VERSION:-0.1.5}
     ports:
       - "${ASRBOX_BIND_ADDRESS:-127.0.0.1}:${ASRBOX_PORT:-17494}:17494"
     environment:
       ASRBOX_DATA_DIR: /data
       ASRBOX_CONTAINER: "1"
+      ASRBOX_PUBLIC_BIND_ADDRESS: ${ASRBOX_BIND_ADDRESS:-127.0.0.1}
       ASRBOX_API_TOKEN: ${ASRBOX_API_TOKEN:-}
       HF_HOME: /data/cache/huggingface
       HUGGINGFACE_HUB_CACHE: /data/cache/huggingface/hub

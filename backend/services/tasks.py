@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue
 import shutil
@@ -23,7 +24,7 @@ from backend.database.models import TaskDiagnostic, TranscriptVersion
 from backend.database.models import TaskLog, TranscriptionBatch
 from backend.database.models import TranscriptionChunk
 from backend.database.models import TranscriptionTask
-from backend.models import ChunkResponse, SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest, TranscriptSegment, TranscriptionTaskResponse
+from backend.models import ChunkResponse, SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest, SegmentsBulkUpdateRequest, TranscriptSegment, TranscriptionTaskResponse
 from backend.providers.base import ProviderError
 from backend.services import diagnostics
 from backend.services import models as model_service
@@ -37,6 +38,7 @@ from backend.services import versions as version_service
 from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
+from backend.services.task_transitions import task_transition_lock as _task_transition_lock
 from backend.services.transcribe import transcribe_with_local_model
 from backend.services.uploads import copy_local_path, save_upload
 from backend.utils.events import event_bus
@@ -60,6 +62,7 @@ def _local_worker_stall_seconds() -> int:
         return DEFAULT_LOCAL_WORKER_STALL_SECONDS
 LOCAL_QUEUE = "local"
 PROVIDER_QUEUE = "provider"
+logger = logging.getLogger(__name__)
 ACTIVE_TASK_STATUSES = {
     "queued",
     "importing",
@@ -72,7 +75,8 @@ ACTIVE_TASK_STATUSES = {
 }
 _task_queues = {LOCAL_QUEUE: queue.Queue(), PROVIDER_QUEUE: queue.Queue()}
 _worker_counts = {LOCAL_QUEUE: 0, PROVIDER_QUEUE: 0}
-_queue_lock = threading.Lock()
+_worker_targets = {LOCAL_QUEUE: 0, PROVIDER_QUEUE: 0}
+_queue_lock = threading.RLock()
 
 
 def _utc_now() -> datetime:
@@ -272,29 +276,79 @@ def _ensure_task_workers(local_count: int, provider_count: int) -> None:
     desired = {LOCAL_QUEUE: local_count, PROVIDER_QUEUE: provider_count}
     with _queue_lock:
         for queue_name, count in desired.items():
-            while _worker_counts[queue_name] < count:
-                thread = threading.Thread(target=_task_worker, args=(queue_name,), daemon=True)
-                thread.start()
-                _worker_counts[queue_name] += 1
+            _worker_targets[queue_name] = count
+            _start_missing_workers_locked(queue_name)
+
+
+def _start_missing_workers_locked(queue_name: str) -> None:
+    while _worker_counts[queue_name] < _worker_targets[queue_name]:
+        thread = threading.Thread(target=_task_worker, args=(queue_name,), daemon=True)
+        _worker_counts[queue_name] += 1
+        try:
+            thread.start()
+        except BaseException:
+            _worker_counts[queue_name] -= 1
+            raise
 
 
 def _task_worker(queue_name: str) -> None:
     work_queue = _task_queues[queue_name]
-    while True:
-        task_id = work_queue.get()
-        try:
-            db = db_session.SessionLocal()
+    try:
+        while True:
+            task_id = work_queue.get()
             try:
-                row = get_task_row(db, task_id)
-                if row is not None and row.status != "cancelled" and not task_runtime.is_cancelled(task_id):
-                    task_runtime.mark_running(task_id)
-                    run_task(db, row)
-                else:
-                    task_runtime.mark_finished(task_id)
+                db = db_session.SessionLocal()
+                try:
+                    row = get_task_row(db, task_id)
+                    if row is not None and row.status != "cancelled" and not task_runtime.is_cancelled(task_id):
+                        task_runtime.mark_running(task_id)
+                        run_task(db, row)
+                    else:
+                        task_runtime.mark_finished(task_id)
+                finally:
+                    db.close()
+            except Exception:
+                # The worker must never die: contain the escape and fail the task.
+                logger.exception("Task worker escaped an unexpected error for task %s", task_id)
+                _fail_task_after_escape(task_id)
+            except BaseException:
+                # Persist the current task best-effort, then let the worker
+                # lifecycle replace this thread without surfacing an
+                # unhandled thread exception.
+                logger.exception("Task worker is exiting unexpectedly for task %s", task_id)
+                _fail_task_after_escape(task_id)
+                return
             finally:
-                db.close()
+                work_queue.task_done()
+    finally:
+        with _queue_lock:
+            _worker_counts[queue_name] = max(0, _worker_counts[queue_name] - 1)
+            _start_missing_workers_locked(queue_name)
+
+
+def _fail_task_after_escape(task_id: str) -> None:
+    """Best-effort failure persistence after run_task itself raised."""
+    try:
+        db = db_session.SessionLocal()
+        try:
+            db.rollback()
+            row = get_task_row(db, task_id)
+            if row is None or row.status not in ACTIVE_TASK_STATUSES:
+                return
+            row.status = "failed"
+            row.error = "Task worker encountered an unexpected runtime error"
+            _set_error_code(row, "WORKER_RUNTIME_ERROR")
+            row.progress = 100
+            row.updated_at = _utc_now()
+            db.commit()
+            task_logs.add_log(db, row.id, "failed", "error", row.error, {"error_code": row.error_code})
+            event_bus.publish("task.failed", {"id": row.id, "status": row.status, "error": row.error, "error_code": row.error_code})
         finally:
-            work_queue.task_done()
+            db.close()
+    except Exception:
+        logger.exception("Failed to persist escaped worker failure for task %s", task_id)
+    finally:
+        task_runtime.mark_finished(task_id)
 
 
 def create_task(
@@ -937,6 +991,7 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
             segments = [segments[0].model_copy(update={"end": row.duration_ms / 1000})]
         native_speaker_labels = any(segment.speaker for segment in segments)
         diarization_requested = bool(options.get("diarization", settings.diarization))
+        _raise_if_cancelled(row.id)
         if diarization_requested and not native_speaker_labels:
             token = options.get("diarization_token")
             if not token:
@@ -967,44 +1022,54 @@ def run_task(db: Session, row: TranscriptionTask) -> None:
         if report["warnings"]:
             task_logs.add_log(db, row.id, "quality", "warning", "Quality warnings detected", report)
         _write_options(row, options)
+        _raise_if_cancelled(row.id)
         row.status = "completed"
         row.progress = 100
         row.completed_at = _utc_now()
-        db.commit()
         version_type = options.pop("pending_version_type", None) or "transcribe"
         _write_options(row, options)
+        db.flush()
+        version_service.create_version(db, row, version_type, commit=False)
         db.commit()
-        version_service.create_version(db, row, version_type)
         if config.delete_derived_audio_on_complete():
             try:
-                cleanup_task_artifacts(db, row.id)
+                with _task_transition_lock:
+                    db.expire_all()
+                    completed = get_task_row(db, row.id)
+                    if completed is not None and completed.status == "completed":
+                        _cleanup_task_artifacts_for_row(db, completed)
+                        db.commit()
             except Exception as exc:  # cleanup must not fail a completed task
                 task_logs.add_log(db, row.id, "cleanup", "warning", f"Derived-audio cleanup failed: {exc}", None)
         event_bus.publish("task.completed", {"id": row.id, "status": row.status, "progress": row.progress})
     except Exception as exc:
-        db.refresh(row)
-        if row.status == "cancelled":
+        db.rollback()
+        fresh = get_task_row(db, row.id)
+        if fresh is None:
+            logger.warning("Task %s row was deleted during execution; skipping failure persistence", row.id)
+            return
+        if fresh.status == "cancelled":
             return
         code, message, stage, command, stderr_excerpt, audio_metadata = _error_from_exception(exc)
-        row.status = "cancelled" if code == "TASK_CANCELLED" else "failed"
-        row.error = message
-        _set_error_code(row, code)
-        row.progress = 100
+        fresh.status = "cancelled" if code == "TASK_CANCELLED" else "failed"
+        fresh.error = message
+        _set_error_code(fresh, code)
+        fresh.progress = 100
         db.commit()
         diagnostics.record_task_diagnostic(
             db,
-            task_id=row.id,
-            stage=stage or row.status,
+            task_id=fresh.id,
+            stage=stage or fresh.status,
             error_code=code,
             message=message,
             command=command,
             stderr_excerpt=stderr_excerpt,
-            model_name=row.model_name,
-            provider_id=row.provider_id,
+            model_name=fresh.model_name,
+            provider_id=fresh.provider_id,
             audio_metadata=audio_metadata,
         )
-        task_logs.add_log(db, row.id, stage or "failed", "error", message, {"error_code": code})
-        event_bus.publish("task.failed", {"id": row.id, "status": row.status, "error": row.error, "error_code": row.error_code})
+        task_logs.add_log(db, fresh.id, stage or "failed", "error", message, {"error_code": code})
+        event_bus.publish("task.failed", {"id": fresh.id, "status": fresh.status, "error": fresh.error, "error_code": fresh.error_code})
     finally:
         task_runtime.mark_finished(row.id)
 
@@ -1079,20 +1144,41 @@ def get_task_row(db: Session, task_id: str) -> TranscriptionTask | None:
     return db.query(TranscriptionTask).filter(TranscriptionTask.id == task_id).first()
 
 
+class TaskStateConflictError(Exception):
+    """Raised when a task mutation conflicts with its current lifecycle state."""
+
+
+class TaskActiveError(TaskStateConflictError):
+    """Raised when retry/retranscribe/delete targets a task that is still active."""
+
+
+class ChunkRetryConflictError(TaskStateConflictError):
+    """Raised when a chunk is not eligible for a failed-chunk retry."""
+
+
+def _require_not_active(row: TranscriptionTask, action: str) -> None:
+    if row.status in ACTIVE_TASK_STATUSES or row.id in task_runtime.active_ids():
+        raise TaskActiveError(f"Cannot {action} task while it is {row.status}; cancel it first")
+
+
 def retry_task(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    row.status = "queued"
-    row.error = None
-    _set_error_code(row, None)
-    row.progress = 0
-    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
-    db.commit()
-    db.refresh(row)
-    response = to_response(db, row)
-    start_task_in_background(row.id)
-    return response
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        _require_not_active(row, "retry")
+        row.status = "queued"
+        row.error = None
+        _set_error_code(row, None)
+        row.progress = 0
+        row.completed_at = None
+        db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
+        db.commit()
+        db.refresh(row)
+        response = to_response(db, row)
+        start_task_in_background(row.id)
+        return response
 
 
 def retranscribe_task(
@@ -1105,94 +1191,106 @@ def retranscribe_task(
     language: str | None = None,
     output_formats: list[str] | None = None,
 ) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    row.source = backend or row.source
-    if model_name is not None:
-        row.model_name = model_name
-    if provider_id is not None:
-        row.provider_id = provider_id
-    if language is not None:
-        row.language = language
-    options = _read_options(row)
-    if output_formats is not None:
-        options["output_formats"] = output_formats
-    options.pop("audio_metadata", None)
-    options.pop("audio_quality", None)
-    options["pending_version_type"] = "retranscribe"
-    _write_options(row, options)
-    row.normalized_audio_path = None
-    row.status = "queued"
-    row.progress = 0
-    row.duration_ms = None
-    row.text = None
-    row.error = None
-    _set_error_code(row, None)
-    row.completed_at = None
-    db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
-    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
-    db.commit()
-    db.refresh(row)
-    response = to_response(db, row)
-    start_task_in_background(row.id)
-    return response
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        _require_not_active(row, "retranscribe")
+        row.source = backend or row.source
+        if model_name is not None:
+            row.model_name = model_name
+        if provider_id is not None:
+            row.provider_id = provider_id
+        if language is not None:
+            row.language = language
+        options = _read_options(row)
+        if output_formats is not None:
+            options["output_formats"] = output_formats
+        options.pop("audio_metadata", None)
+        options.pop("audio_quality", None)
+        options["pending_version_type"] = "retranscribe"
+        _write_options(row, options)
+        row.normalized_audio_path = None
+        row.status = "queued"
+        row.progress = 0
+        row.duration_ms = None
+        row.text = None
+        row.error = None
+        _set_error_code(row, None)
+        row.completed_at = None
+        db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
+        db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
+        db.commit()
+        db.refresh(row)
+        response = to_response(db, row)
+        start_task_in_background(row.id)
+        return response
 
 
 def cancel_task(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    if row.status != "completed":
-        task_runtime.request_cancel(task_id)
-        row.status = "cancelled"
-        _set_error_code(row, "TASK_CANCELLED")
-        row.progress = 100
-        row.updated_at = _utc_now()
-        db.commit()
-        db.refresh(row)
-    return to_response(db, row)
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        if row.status != "completed":
+            task_runtime.request_cancel(task_id)
+            row.status = "cancelled"
+            _set_error_code(row, "TASK_CANCELLED")
+            row.progress = 100
+            row.updated_at = _utc_now()
+            db.commit()
+            db.refresh(row)
+        return to_response(db, row)
 
 
 def delete_task(db: Session, task_id: str) -> bool:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return False
-    task_runtime.request_cancel(task_id)
-    # Externally referenced media belongs to the user; only managed copies are unlinked.
-    if _read_options(row).get("_source_kind", "managed") == "managed":
-        audio_path = config.resolve_storage_path(row.audio_path)
-        if audio_path:
-            audio_path.unlink(missing_ok=True)
-    normalized_audio_path = config.resolve_storage_path(row.normalized_audio_path)
-    if normalized_audio_path:
-        normalized_audio_path.unlink(missing_ok=True)
-    chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).all()
-    for chunk in chunks:
-        chunk_path = config.resolve_storage_path(chunk.audio_path)
-        if chunk_path:
-            chunk_path.unlink(missing_ok=True)
-    db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
-    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
-    db.query(TaskDiagnostic).filter(TaskDiagnostic.task_id == task_id).delete()
-    run_ids = db.query(ProofreadingRun.id).filter(ProofreadingRun.task_id == task_id)
-    db.query(ProofreadingSuggestion).filter(ProofreadingSuggestion.run_id.in_(run_ids)).delete(
-        synchronize_session=False
-    )
-    db.query(ProofreadingRun).filter(ProofreadingRun.task_id == task_id).delete()
-    db.query(TranscriptVersion).filter(TranscriptVersion.task_id == task_id).delete()
-    db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
-    db.delete(row)
-    db.commit()
-    return True
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return False
+        _require_not_active(row, "delete")
+        task_runtime.request_cancel(task_id)
+        # Externally referenced media belongs to the user; only managed copies are unlinked.
+        if _read_options(row).get("_source_kind", "managed") == "managed":
+            audio_path = config.resolve_storage_path(row.audio_path)
+            if audio_path:
+                audio_path.unlink(missing_ok=True)
+        normalized_audio_path = config.resolve_storage_path(row.normalized_audio_path)
+        if normalized_audio_path:
+            normalized_audio_path.unlink(missing_ok=True)
+        chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).all()
+        for chunk in chunks:
+            chunk_path = config.resolve_storage_path(chunk.audio_path)
+            if chunk_path:
+                chunk_path.unlink(missing_ok=True)
+        db.query(DBSegment).filter(DBSegment.task_id == task_id).delete()
+        db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
+        db.query(TaskDiagnostic).filter(TaskDiagnostic.task_id == task_id).delete()
+        run_ids = db.query(ProofreadingRun.id).filter(ProofreadingRun.task_id == task_id)
+        db.query(ProofreadingSuggestion).filter(ProofreadingSuggestion.run_id.in_(run_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ProofreadingRun).filter(ProofreadingRun.task_id == task_id).delete()
+        db.query(TranscriptVersion).filter(TranscriptVersion.task_id == task_id).delete()
+        db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
+        db.delete(row)
+        db.commit()
+        return True
 
 
 def delete_all_tasks(db: Session) -> int:
     task_ids = [row.id for row in db.query(TranscriptionTask.id).all()]
     deleted = 0
     for task_id in task_ids:
-        if delete_task(db, task_id):
-            deleted += 1
+        try:
+            if delete_task(db, task_id):
+                deleted += 1
+        except TaskActiveError:
+            # Active tasks are cancelled first by their owners; batch delete skips them.
+            continue
     return deleted
 
 
@@ -1207,28 +1305,34 @@ def postprocess_task(
     traditional_to_simplified: bool,
     mode: str = "safe",
 ) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    segments = _segments_for_task(db, task_id)
-    if mode == "safe":
-        merge_short_segments = False
-        traditional_to_simplified = False
-    processed = postprocess.process_segments(
-        segments,
-        max_chars_per_line=max_chars_per_line,
-        max_lines=max_lines,
-        min_duration_ms=min_duration_ms,
-        merge_short_segments=merge_short_segments,
-        traditional_to_simplified=traditional_to_simplified,
-    )
-    _store_segments(db, row, processed)
-    row.text = transcript_text_from_segments(processed)
-    row.updated_at = _utc_now()
-    db.commit()
-    db.refresh(row)
-    version_service.create_version(db, row, "postprocess")
-    return to_response(db, row)
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "postprocess")
+        if row is None:
+            return None
+        segments = _segments_for_task(db, task_id)
+        if mode == "safe":
+            merge_short_segments = False
+            traditional_to_simplified = False
+        processed = postprocess.process_segments(
+            segments,
+            max_chars_per_line=max_chars_per_line,
+            max_lines=max_lines,
+            min_duration_ms=min_duration_ms,
+            merge_short_segments=merge_short_segments,
+            traditional_to_simplified=traditional_to_simplified,
+        )
+        _store_segments(db, row, processed)
+        row.text = transcript_text_from_segments(processed)
+        row.updated_at = _utc_now()
+        try:
+            db.flush()
+            version_service.create_version(db, row, "postprocess", commit=False)
+            db.commit()
+            db.refresh(row)
+        except Exception:
+            db.rollback()
+            raise
+        return to_response(db, row)
 
 
 def _reindex_segments(db: Session, task_id: str) -> None:
@@ -1243,13 +1347,19 @@ def _reindex_segments(db: Session, task_id: str) -> None:
 
 
 def _save_edit_version(db: Session, row: TranscriptionTask) -> TranscriptionTaskResponse:
-    _reindex_segments(db, row.id)
-    row.text = transcript_text_from_segments(_segments_for_task(db, row.id))
-    row.updated_at = _utc_now()
-    db.commit()
-    db.refresh(row)
-    version_service.create_version(db, row, "edit")
-    return to_response(db, row)
+    try:
+        _reindex_segments(db, row.id)
+        db.flush()
+        row.text = transcript_text_from_segments(_segments_for_task(db, row.id))
+        row.updated_at = _utc_now()
+        db.flush()
+        version_service.create_version(db, row, "edit", commit=False)
+        db.commit()
+        db.refresh(row)
+        return to_response(db, row)
+    except Exception:
+        db.rollback()
+        raise
 
 
 def list_task_diagnostics(db: Session, task_id: str):
@@ -1284,107 +1394,156 @@ def latest_version_id(db: Session, task_id: str) -> int | None:
 
 
 def restore_version(db: Session, task_id: str, version_id: int) -> TranscriptionTaskResponse | None:
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "restore")
+        if row is None:
+            return None
+        if not version_service.restore_version(db, row, version_id):
+            return None
+        db.refresh(row)
+        return to_response(db, row)
+
+
+def _get_mutable_transcript_task(
+    db: Session,
+    task_id: str,
+    action: str,
+) -> TranscriptionTask | None:
+    db.expire_all()
     row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    if not version_service.restore_version(db, row, version_id):
-        return None
-    db.refresh(row)
-    return to_response(db, row)
+    if row is not None:
+        _require_not_active(row, action)
+    return row
+
+
+def _validate_segment_timing(start: float, end: float, segment_id: int | str) -> None:
+    if start < 0 or end <= start:
+        raise ValueError(f"Segment {segment_id} must have finite timing with start >= 0 and end > start")
 
 
 def update_segment(db: Session, task_id: str, segment_id: int, request: SegmentUpdateRequest) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
-    if row is None or segment is None:
-        return None
-    data = request.model_dump(exclude_unset=True)
-    if "start" in data and data["start"] is not None:
-        segment.start_ms = int(data["start"] * 1000)
-    if "end" in data and data["end"] is not None:
-        segment.end_ms = int(data["end"] * 1000)
-    if "text" in data and data["text"] is not None:
-        segment.text = data["text"]
-    if "speaker" in data:
-        segment.speaker = data["speaker"]
-    if "confidence" in data:
-        segment.confidence = data["confidence"]
-    return _save_edit_version(db, row)
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
+        if row is None or segment is None:
+            return None
+        data = request.model_dump(exclude_unset=True)
+        start = data.get("start")
+        end = data.get("end")
+        start = segment.start_ms / 1000 if start is None else start
+        end = segment.end_ms / 1000 if end is None else end
+        _validate_segment_timing(start, end, segment_id)
+        if "start" in data and data["start"] is not None:
+            segment.start_ms = int(data["start"] * 1000)
+        if "end" in data and data["end"] is not None:
+            segment.end_ms = int(data["end"] * 1000)
+        if "text" in data and data["text"] is not None:
+            segment.text = data["text"]
+        if "speaker" in data:
+            segment.speaker = data["speaker"]
+        if "confidence" in data:
+            segment.confidence = data["confidence"]
+        return _save_edit_version(db, row)
+
+
+def update_segments_bulk(db: Session, task_id: str, request: SegmentsBulkUpdateRequest) -> TranscriptionTaskResponse | None:
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        if row is None:
+            return None
+        current = {segment.idx: segment for segment in db.query(DBSegment).filter(DBSegment.task_id == task_id).all()}
+        incoming_ids = {item.id for item in request.segments}
+        if len(incoming_ids) != len(request.segments) or incoming_ids != set(current):
+            raise ValueError("Segment id set must match the task's current segments exactly; use the structural endpoints for create/delete/split/merge")
+        for item in request.segments:
+            _validate_segment_timing(item.start, item.end, item.id)
+        for item in request.segments:
+            segment = current[item.id]
+            segment.start_ms = int(item.start * 1000)
+            segment.end_ms = int(item.end * 1000)
+            segment.text = item.text
+            segment.speaker = item.speaker
+        return _save_edit_version(db, row)
 
 
 def create_segment(db: Session, task_id: str, request: SegmentCreateRequest) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    db.add(
-        DBSegment(
-            task_id=task_id,
-            idx=999999,
-            start_ms=int(request.start * 1000),
-            end_ms=int(request.end * 1000),
-            text=request.text,
-            speaker=request.speaker,
-            confidence=request.confidence,
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        if row is None:
+            return None
+        _validate_segment_timing(request.start, request.end, "new")
+        db.add(
+            DBSegment(
+                task_id=task_id,
+                idx=999999,
+                start_ms=int(request.start * 1000),
+                end_ms=int(request.end * 1000),
+                text=request.text,
+                speaker=request.speaker,
+                confidence=request.confidence,
+            )
         )
-    )
-    return _save_edit_version(db, row)
+        return _save_edit_version(db, row)
 
 
 def delete_segment(db: Session, task_id: str, segment_id: int) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
-    if row is None or segment is None:
-        return None
-    db.delete(segment)
-    return _save_edit_version(db, row)
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
+        if row is None or segment is None:
+            return None
+        db.delete(segment)
+        return _save_edit_version(db, row)
 
 
 def split_segment(db: Session, task_id: str, segment_id: int, request: SegmentSplitRequest) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
-    if row is None or segment is None:
-        return None
-    split_ms = int(request.split_at * 1000)
-    if split_ms <= segment.start_ms or split_ms >= segment.end_ms:
-        split_ms = segment.start_ms + max(1, (segment.end_ms - segment.start_ms) // 2)
-    original_end_ms = segment.end_ms
-    text = segment.text
-    midpoint = max(1, len(text) // 2)
-    left_text = request.left_text if request.left_text is not None else text[:midpoint].strip()
-    right_text = request.right_text if request.right_text is not None else text[midpoint:].strip()
-    segment.end_ms = split_ms
-    segment.text = left_text or text
-    db.add(
-        DBSegment(
-            task_id=task_id,
-            idx=999999,
-            start_ms=split_ms,
-            end_ms=max(split_ms + 1, original_end_ms),
-            text=right_text or text,
-            speaker=segment.speaker,
-            confidence=segment.confidence,
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        segment = db.query(DBSegment).filter(DBSegment.task_id == task_id, DBSegment.idx == segment_id).first()
+        if row is None or segment is None:
+            return None
+        split_ms = int(request.split_at * 1000)
+        if split_ms <= segment.start_ms or split_ms >= segment.end_ms:
+            split_ms = segment.start_ms + max(1, (segment.end_ms - segment.start_ms) // 2)
+        original_end_ms = segment.end_ms
+        text = segment.text
+        midpoint = max(1, len(text) // 2)
+        left_text = request.left_text if request.left_text is not None else text[:midpoint].strip()
+        right_text = request.right_text if request.right_text is not None else text[midpoint:].strip()
+        segment.end_ms = split_ms
+        segment.text = left_text or text
+        db.add(
+            DBSegment(
+                task_id=task_id,
+                idx=999999,
+                start_ms=split_ms,
+                end_ms=max(split_ms + 1, original_end_ms),
+                text=right_text or text,
+                speaker=segment.speaker,
+                confidence=segment.confidence,
+            )
         )
-    )
-    return _save_edit_version(db, row)
+        return _save_edit_version(db, row)
 
 
 def merge_segments(db: Session, task_id: str, request: SegmentMergeRequest) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    rows = (
-        db.query(DBSegment)
-        .filter(DBSegment.task_id == task_id, DBSegment.idx.in_(request.segment_ids))
-        .order_by(DBSegment.start_ms.asc())
-        .all()
-    )
-    if row is None or len(rows) < 2:
-        return None
-    first = rows[0]
-    first.start_ms = min(segment.start_ms for segment in rows)
-    first.end_ms = max(segment.end_ms for segment in rows)
-    first.text = " ".join(segment.text for segment in rows if segment.text).strip()
-    for segment in rows[1:]:
-        db.delete(segment)
-    return _save_edit_version(db, row)
+    with _task_transition_lock:
+        row = _get_mutable_transcript_task(db, task_id, "edit")
+        rows = (
+            db.query(DBSegment)
+            .filter(DBSegment.task_id == task_id, DBSegment.idx.in_(request.segment_ids))
+            .order_by(DBSegment.start_ms.asc())
+            .all()
+        )
+        if row is None or len(rows) < 2:
+            return None
+        first = rows[0]
+        first.start_ms = min(segment.start_ms for segment in rows)
+        first.end_ms = max(segment.end_ms for segment in rows)
+        first.text = " ".join(segment.text for segment in rows if segment.text).strip()
+        for segment in rows[1:]:
+            db.delete(segment)
+        return _save_edit_version(db, row)
 
 
 def list_chunks(db: Session, task_id: str) -> list[ChunkResponse]:
@@ -1415,58 +1574,142 @@ def list_chunks(db: Session, task_id: str) -> list[ChunkResponse]:
 def _merge_completed_chunks(db: Session, row: TranscriptionTask) -> None:
     chunks = (
         db.query(TranscriptionChunk)
-        .filter(TranscriptionChunk.task_id == row.id, TranscriptionChunk.status == "completed")
+        .filter(TranscriptionChunk.task_id == row.id)
         .order_by(TranscriptionChunk.idx.asc())
         .all()
     )
+    if not chunks or any(chunk.status != "completed" for chunk in chunks):
+        return
     segments = [
         TranscriptSegment(id=index, start=chunk.start_ms / 1000, end=chunk.end_ms / 1000, text=chunk.text or "")
         for index, chunk in enumerate(chunks, 1)
         if chunk.text
     ]
-    _store_segments(db, row, segments)
-    row.text = transcript_text_from_segments(segments)
-    if chunks and not db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == row.id, TranscriptionChunk.status == "failed").first():
+    try:
+        _store_segments(db, row, segments)
+        row.text = transcript_text_from_segments(segments)
         row.status = "completed"
         row.progress = 100
+        row.error = None
+        _set_error_code(row, None)
         row.completed_at = _utc_now()
-    db.commit()
-    db.refresh(row)
-    version_service.create_version(db, row, "retranscribe")
+        db.flush()
+        version_service.create_version(db, row, "retranscribe", commit=False)
+        db.commit()
+        db.refresh(row)
+    except Exception:
+        db.rollback()
+        raise
 
 
-def retry_chunk(db: Session, task_id: str, chunk_id: int) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    chunk = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id, TranscriptionChunk.id == chunk_id).first()
-    if row is None or chunk is None:
-        return None
+def _claim_failed_chunks(
+    db: Session,
+    task_id: str,
+    *,
+    chunk_id: int | None,
+) -> tuple[TranscriptionTask, list[int], tuple[str, float, str | None, str | None, datetime | None]] | None:
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        _require_not_active(row, "retry chunks for")
+        query = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id)
+        if chunk_id is not None:
+            chunk = query.filter(TranscriptionChunk.id == chunk_id).first()
+            if chunk is None:
+                return None
+            if chunk.status != "failed":
+                raise ChunkRetryConflictError(
+                    f"Cannot retry chunk {chunk_id} while it is {chunk.status}; only failed chunks can be retried"
+                )
+            failed_chunk_ids = [chunk.id]
+        else:
+            failed_chunk_ids = [
+                chunk.id
+                for chunk in query.filter(TranscriptionChunk.status == "failed")
+                .order_by(TranscriptionChunk.idx.asc())
+                .all()
+            ]
+            if not failed_chunk_ids:
+                return row, [], (
+                    row.status,
+                    row.progress,
+                    row.error,
+                    row.error_code,
+                    row.completed_at,
+                )
+
+        previous_state = (
+            row.status,
+            row.progress,
+            row.error,
+            row.error_code,
+            row.completed_at,
+        )
+        row.status = "transcribing"
+        row.completed_at = None
+        row.updated_at = _utc_now()
+        db.commit()
+        db.refresh(row)
+        task_runtime.mark_running(task_id)
+        return row, failed_chunk_ids, previous_state
+
+
+def _retry_claimed_chunk(
+    db: Session,
+    row: TranscriptionTask,
+    chunk_id: int,
+) -> bool:
+    chunk = (
+        db.query(TranscriptionChunk)
+        .filter(
+            TranscriptionChunk.task_id == row.id,
+            TranscriptionChunk.id == chunk_id,
+        )
+        .first()
+    )
+    if chunk is None:
+        row.status = "failed"
+        row.error = "Chunk row disappeared during retry"
+        _set_error_code(row, "CHUNK_FAILED")
+        db.commit()
+        return False
     path = config.resolve_storage_path(chunk.audio_path)
     if path is None or not path.exists():
         chunk.status = "failed"
         chunk.error = "Chunk audio file not found"
         chunk.error_code = "CHUNK_FAILED"
+        row.status = "failed"
+        row.error = chunk.error
+        _set_error_code(row, chunk.error_code)
         db.commit()
-        return to_response(db, row)
+        return False
     chunk.status = "transcribing"
     chunk.progress = 20
     chunk.error = None
     chunk.error_code = None
     db.commit()
     try:
+        _raise_if_cancelled(row.id)
         result = _transcribe_path_for_row(db, row, path)
+        _raise_if_cancelled(row.id)
         chunk.text = result.text or transcript_text_from_segments(result.segments)
         chunk.status = "completed"
         chunk.progress = 100
         db.commit()
-        _merge_completed_chunks(db, row)
+        return True
     except Exception as exc:
         code, message, stage, command, stderr_excerpt, audio_metadata = _error_from_exception(exc)
         chunk.status = "failed"
         chunk.error = message
         chunk.error_code = code or "CHUNK_FAILED"
-        row.status = "failed"
+        row.status = "cancelled" if code == "TASK_CANCELLED" else "failed"
         row.error = message
         _set_error_code(row, chunk.error_code)
+        if row.status == "cancelled":
+            row.progress = 100
+            row.completed_at = _utc_now()
         db.commit()
         diagnostics.record_task_diagnostic(
             db,
@@ -1480,25 +1723,85 @@ def retry_chunk(db: Session, task_id: str, chunk_id: int) -> TranscriptionTaskRe
             provider_id=row.provider_id,
             audio_metadata=audio_metadata,
         )
-    db.refresh(row)
-    return to_response(db, row)
+        return False
+
+
+def _retry_failed_chunk_ids(
+    db: Session,
+    row: TranscriptionTask,
+    chunk_ids: list[int],
+    previous_state: tuple[str, float, str | None, str | None, datetime | None],
+) -> TranscriptionTaskResponse:
+    task_id = row.id
+    try:
+        all_retried = True
+        for chunk_id in chunk_ids:
+            if not _retry_claimed_chunk(db, row, chunk_id):
+                all_retried = False
+        with _task_transition_lock:
+            db.expire_all()
+            row = get_task_row(db, task_id)
+            if row is None:
+                raise RuntimeError("Task disappeared while retrying failed chunks")
+            chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).all()
+            if row.status == "cancelled" or task_runtime.is_cancelled(task_id):
+                row.status = "cancelled"
+                row.progress = 100
+                _set_error_code(row, "TASK_CANCELLED")
+                row.completed_at = _utc_now()
+                db.commit()
+                db.refresh(row)
+            elif chunks and all(chunk.status == "completed" for chunk in chunks):
+                _merge_completed_chunks(db, row)
+                db.refresh(row)
+            elif all_retried:
+                status, progress, error, error_code, completed_at = previous_state
+                row.status = status
+                row.progress = progress
+                row.error = error
+                _set_error_code(row, error_code)
+                row.completed_at = completed_at
+                row.updated_at = _utc_now()
+                db.commit()
+                db.refresh(row)
+            return to_response(db, row)
+    except BaseException:
+        db.rollback()
+        try:
+            failed = get_task_row(db, task_id)
+            if failed is not None and failed.status == "transcribing":
+                failed.status = "failed"
+                failed.error = "Chunk retry was interrupted"
+                _set_error_code(failed, "CHUNK_FAILED")
+                failed.completed_at = _utc_now()
+                db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("Failed to persist interrupted chunk retry for task %s", task_id)
+        raise
+    finally:
+        task_runtime.mark_finished(task_id)
+
+
+def retry_chunk(db: Session, task_id: str, chunk_id: int) -> TranscriptionTaskResponse | None:
+    claim = _claim_failed_chunks(db, task_id, chunk_id=chunk_id)
+    if claim is None:
+        return None
+    row, chunk_ids, previous_state = claim
+    return _retry_failed_chunk_ids(db, row, chunk_ids, previous_state)
 
 
 def retry_failed_chunks(db: Session, task_id: str) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
+    claim = _claim_failed_chunks(db, task_id, chunk_id=None)
+    if claim is None:
         return None
-    failed = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id, TranscriptionChunk.status == "failed").order_by(TranscriptionChunk.idx.asc()).all()
-    for chunk in failed:
-        retry_chunk(db, task_id, chunk.id)
-    db.refresh(row)
-    return to_response(db, row)
+    row, chunk_ids, previous_state = claim
+    if not chunk_ids:
+        return to_response(db, row)
+    return _retry_failed_chunk_ids(db, row, chunk_ids, previous_state)
 
 
-def cleanup_task_artifacts(db: Session, task_id: str) -> dict[str, Any] | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
+def _cleanup_task_artifacts_for_row(db: Session, row: TranscriptionTask) -> dict[str, Any]:
     removed: list[str] = []
     errors: list[str] = []
     normalized = config.resolve_storage_path(row.normalized_audio_path)
@@ -1510,7 +1813,7 @@ def cleanup_task_artifacts(db: Session, task_id: str) -> dict[str, Any] | None:
                 removed.append(str(path))
             except OSError as exc:
                 errors.append(f"{path}: {exc}")
-    chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).all()
+    chunks = db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == row.id).all()
     for chunk in chunks:
         path = config.resolve_storage_path(chunk.audio_path)
         if path and path.exists():
@@ -1519,30 +1822,52 @@ def cleanup_task_artifacts(db: Session, task_id: str) -> dict[str, Any] | None:
                 removed.append(str(path))
             except OSError as exc:
                 errors.append(f"{path}: {exc}")
-    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == task_id).delete()
+    db.query(TranscriptionChunk).filter(TranscriptionChunk.task_id == row.id).delete()
     row.normalized_audio_path = None
-    db.commit()
     return {"removed": removed, "errors": errors}
 
 
+def cleanup_task_artifacts(db: Session, task_id: str) -> dict[str, Any] | None:
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        _require_not_active(row, "clean up artifacts for")
+        result = _cleanup_task_artifacts_for_row(db, row)
+        db.commit()
+        return result
+
+
 def relink_task_media(db: Session, task_id: str, *, path: Path) -> TranscriptionTaskResponse | None:
-    row = get_task_row(db, task_id)
-    if row is None:
-        return None
-    source_path = Path(path).expanduser()
-    if not source_path.is_file():
-        raise FileNotFoundError(f"Audio file not found: {path}")
-    source_path = source_path.resolve(strict=True)
-    # Stale derived audio was generated from the previous source; invalidate it.
-    cleanup_task_artifacts(db, task_id)
-    row.audio_path = config.to_storage_path(source_path)
-    options = _read_options(row)
-    options["_source_kind"] = "external"
-    _write_options(row, options)
-    row.updated_at = _utc_now()
-    task_logs.add_log(db, row.id, "relink", "info", f"Task media relinked to {source_path}", {})
-    db.commit()
-    db.refresh(row)
+    with _task_transition_lock:
+        db.expire_all()
+        row = get_task_row(db, task_id)
+        if row is None:
+            return None
+        _require_not_active(row, "relink media for")
+        source_path = Path(path).expanduser()
+        if not source_path.is_file():
+            raise FileNotFoundError(f"Audio file not found: {path}")
+        source_path = source_path.resolve(strict=True)
+        # Stale derived audio was generated from the previous source; invalidate it.
+        _cleanup_task_artifacts_for_row(db, row)
+        row.audio_path = config.to_storage_path(source_path)
+        options = _read_options(row)
+        options["_source_kind"] = "external"
+        _write_options(row, options)
+        row.updated_at = _utc_now()
+        task_logs.add_log(
+            db,
+            row.id,
+            "relink",
+            "info",
+            f"Task media relinked to {source_path}",
+            {},
+            commit=False,
+        )
+        db.commit()
+        db.refresh(row)
     return to_response(db, row)
 
 

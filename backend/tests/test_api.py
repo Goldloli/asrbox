@@ -848,8 +848,9 @@ def test_media_preprocess_generates_wav_metadata_and_rejects_unsupported_input(t
     def fake_probe(path: Path) -> dict:
         return {"duration_ms": 12340, "format": "mov,mp4", "audio_codec": "aac"}
 
-    def fake_run(command, capture_output, check, encoding, errors):
+    def fake_run(command, capture_output, check, encoding, errors, timeout):
         commands.append(command)
+        assert timeout > 0
         Path(command[-1]).write_bytes(b"wav")
 
     monkeypatch.setattr("backend.services.media.probe_media", fake_probe)
@@ -968,6 +969,7 @@ def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypa
         data={"backend": "local", "model_name": "whisper-base"},
     )
     task_id = response.json()["id"]
+    wait_for_task(client, task_id, lambda item: item["status"] == "completed", "completed")
 
     retry = client.post(f"/tasks/{task_id}/retry")
     assert retry.status_code == 200
@@ -1689,6 +1691,104 @@ def test_segment_editing_creates_versions_and_can_restore(tmp_path: Path, monkey
     assert version_types[:4] == ["restore", "edit", "edit", "transcribe"]
 
 
+def test_bulk_segment_update_persists_one_edit_version(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.tasks.transcribe_with_local_model",
+        lambda model_name, audio_path, options: TranscriptionResult(
+            text="first second",
+            duration=2.0,
+            model_name=model_name,
+            segments=[
+                TranscriptSegment(id=1, start=0.0, end=1.0, text="first"),
+                TranscriptSegment(id=2, start=1.0, end=2.0, text="second"),
+            ],
+        ),
+    )
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 2000}))
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+    created = client.post(
+        "/transcriptions",
+        files={"file": ("bulk.wav", b"audio", "audio/wav")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    ).json()
+    task = wait_for_task(client, created["id"], lambda row: row["status"] == "completed", "completed")
+
+    payload = {
+        "segments": [
+            {"id": 1, "start": 0.0, "end": 1.2, "text": "edited first", "speaker": "S01"},
+            {"id": 2, "start": 1.2, "end": 2.4, "text": "edited second", "speaker": "S01"},
+        ]
+    }
+    updated = client.put(f"/tasks/{task['id']}/segments", json=payload)
+    assert updated.status_code == 200
+    body = updated.json()
+    assert [segment["text"] for segment in body["segments"]] == ["edited first", "edited second"]
+    assert {segment["speaker"] for segment in body["segments"]} == {"S01"}
+    assert body["segments"][1]["end"] == pytest.approx(2.4)
+    assert "edited first" in body["text"]
+
+    exported = client.get(f"/tasks/{task['id']}/export/srt")
+    assert exported.status_code == 200
+    assert "edited first" in exported.text
+
+    version_types = [item["version_type"] for item in client.get(f"/tasks/{task['id']}/versions").json()]
+    assert version_types[:2] == ["edit", "transcribe"]
+
+
+def test_bulk_segment_update_rejects_mismatched_ids_and_bad_timing(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.services.tasks.transcribe_with_local_model",
+        lambda model_name, audio_path, options: TranscriptionResult(
+            text="first second",
+            duration=2.0,
+            model_name=model_name,
+            segments=[
+                TranscriptSegment(id=1, start=0.0, end=1.0, text="first"),
+                TranscriptSegment(id=2, start=1.0, end=2.0, text="second"),
+            ],
+        ),
+    )
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 2000}))
+    client = make_client(tmp_path)
+    create_downloaded_model(tmp_path, "whisper-base")
+    created = client.post(
+        "/transcriptions",
+        files={"file": ("bulk-invalid.wav", b"audio", "audio/wav")},
+        data={"backend": "local", "model_name": "whisper-base"},
+    ).json()
+    task = wait_for_task(client, created["id"], lambda row: row["status"] == "completed", "completed")
+
+    missing = client.put(
+        f"/tasks/{task['id']}/segments",
+        json={"segments": [{"id": 1, "start": 0.0, "end": 1.0, "text": "only one"}]},
+    )
+    assert missing.status_code == 400
+
+    bad_timing = client.put(
+        f"/tasks/{task['id']}/segments",
+        json={
+            "segments": [
+                {"id": 1, "start": 1.0, "end": 1.0, "text": "collapsed"},
+                {"id": 2, "start": 1.0, "end": 2.0, "text": "second"},
+            ]
+        },
+    )
+    assert bad_timing.status_code == 400
+    assert "Segment 1" in bad_timing.json()["detail"]
+
+    not_found = client.put(
+        "/tasks/missing-task/segments",
+        json={"segments": [{"id": 1, "start": 0.0, "end": 1.0, "text": "x"}]},
+    )
+    assert not_found.status_code == 404
+
+    unchanged = client.get(f"/tasks/{task['id']}").json()
+    assert [segment["text"] for segment in unchanged["segments"]] == ["first", "second"]
+    version_types = [item["version_type"] for item in client.get(f"/tasks/{task['id']}/versions").json()]
+    assert version_types == ["transcribe"]
+
+
 def test_preflight_and_storage_usage_endpoints(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "backend.routes.transcriptions.preflight_media",
@@ -2023,6 +2123,54 @@ def test_openai_compatible_provider_transcribes_and_masks_option_secrets(tmp_pat
     assert posted[0]["url"] == "https://asr.example/v1/audio/transcriptions"
     assert posted[0]["headers"]["Authorization"] == "Bearer secret-token"
     assert posted[0]["data"]["language"] == "zh"
+
+
+def test_openai_compatible_keeps_seconds_for_long_audio(tmp_path: Path, monkeypatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        text = "{}"
+
+        def json(self):
+            return {
+                "text": "tail segment",
+                "segments": [{"start": 1200.0, "end": 1205.5, "text": "tail segment"}],
+            }
+
+    def fake_post(url, headers, files, data, timeout):
+        return FakeResponse()
+
+    monkeypatch.setattr("backend.providers.http_providers.requests.post", fake_post)
+    monkeypatch.setattr("backend.services.tasks.prepare_media_for_asr", lambda path, **_: (path, {"duration_ms": 1_210_000}))
+
+    client = make_client(tmp_path)
+    provider = client.post(
+        "/providers",
+        json={
+            "name": "Compatible",
+            "provider_type": "openai_compatible",
+            "base_url": "https://asr.example/v1",
+            "api_key": "secret-token",
+            "default_model": "whisper-1",
+            "enabled": True,
+        },
+    ).json()
+
+    created = client.post(
+        "/transcriptions",
+        files={"file": ("long.wav", b"audio", "audio/wav")},
+        data={"backend": "provider", "provider_id": provider["id"]},
+    ).json()
+    task = wait_for_task(client, created["id"], lambda row: row["status"] == "completed", "provider completed")
+    assert task["segments"][0]["start"] == pytest.approx(1200.0)
+    assert task["segments"][0]["end"] == pytest.approx(1205.5)
+
+
+def test_generic_payload_parser_keeps_millisecond_heuristic() -> None:
+    from backend.providers.http_providers import _segments_from_payload
+
+    milliseconds = _segments_from_payload([{"start": 120000, "end": 121000, "text": "ms"}])
+    assert milliseconds[0].start == pytest.approx(120.0)
+    assert milliseconds[0].end == pytest.approx(121.0)
 
 
 def test_aliyun_provider_supports_submit_and_poll_flow(tmp_path: Path, monkeypatch) -> None:

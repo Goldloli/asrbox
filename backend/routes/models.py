@@ -210,7 +210,10 @@ async def redownload_model(model_name: str):
 
 @router.delete("/{model_name}")
 async def delete_model(model_name: str):
-    model_service.delete_model(model_name)
+    try:
+        model_service.delete_model(model_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"message": f"Model {model_name} deleted"}
 
 

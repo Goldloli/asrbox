@@ -8,7 +8,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.4`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.5`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -73,7 +73,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.4` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.4) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.5` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.5) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
 
 桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把 DMG 下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 

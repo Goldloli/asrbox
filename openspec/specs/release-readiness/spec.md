@@ -11,11 +11,18 @@ Until a future approved change expands support, packaged ASRbox releases SHALL i
 - **THEN** it does not claim stable, signed, notarized, automatically updating, universally model-compatible, securely public-hosted, or native cross-platform desktop support
 
 ### Requirement: Release verification gate
-A release SHALL pass version consistency, locked dependency installation, vulnerability audit, TypeScript and Web build checks, backend and contract tests, Cargo checks and tests, browser smoke coverage, third-party verification, frozen-backend smoke, Docker build and runtime smoke, and release-asset verification applicable to the target.
+
+A release SHALL pass version consistency across application package manifests, corresponding Bun and Cargo lock entries, backend, Tauri, Dockerfile defaults, Compose defaults, `.env.example`, maintained README release references, the current release guide, and a version-matched release-note file; locked dependency installation; vulnerability audit; TypeScript and Web build checks; maintained frontend unit tests; backend and contract tests; Cargo checks and tests; the complete maintained browser suite; third-party verification; frozen-backend smoke; Docker build and runtime smoke; and release-asset verification applicable to the target. Maintained frontend unit and browser specs SHALL have explicit runnable commands, and CI and release workflows SHALL invoke those maintained commands rather than duplicating a partial file list.
 
 #### Scenario: Required release check fails
-- **WHEN** an applicable release gate does not pass
+
+- **WHEN** an applicable release gate, version source, lock entry, current release document, maintained frontend unit test, or maintained browser scenario does not pass
 - **THEN** the release workflow does not publish the affected artifacts as a verified release
+
+#### Scenario: Release version is prepared
+
+- **WHEN** a maintainer prepares a version for tagging
+- **THEN** package manifests, generated lock entries, runtime surfaces, current README and release-guide references, and `docs/releases/<tag>.md` all identify that same version
 
 ### Requirement: Verifiable release artifacts
 Published desktop releases SHALL provide the expected application artifact, checksums, and required bundled-FFmpeg source and licensing materials; any future published container image SHALL provide immutable version identification and applicable distribution-package licensing information; and version tags SHALL match application version sources.

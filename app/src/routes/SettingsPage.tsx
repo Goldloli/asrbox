@@ -21,6 +21,7 @@ import { MediaStorageSettings } from '../components/settings/MediaStorageSetting
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { AboutSettings } from '../components/settings/AboutSettings';
 import { useAppUpdateStore } from '../stores/appUpdateStore';
+import { downloadResponse, responseFilename } from '../lib/downloads';
 
 type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage' | 'about';
 
@@ -57,7 +58,7 @@ export function SettingsPage() {
   const setAutoCheckUpdates = useUiStore((state) => state.setAutoCheckUpdates);
   const setUpdateNotifications = useUiStore((state) => state.setUpdateNotifications);
   const hasUpdate = useAppUpdateStore((state) => Boolean(state.checkResult?.updateAvailable));
-  const { serverUrl, apiToken, setServerUrl, setApiToken } = useServerStore();
+  const { serverUrl, apiToken, setServerConnection } = useServerStore();
   const settingsQuery = useSettingsQuery();
   const healthQuery = useHealthQuery();
   const runtimeQuery = useRuntimeQuery();
@@ -81,7 +82,18 @@ export function SettingsPage() {
     delete_old_diagnostics: false,
   });
   const [cleanupResult, setCleanupResult] = useState<{ removed: string[]; errors: string[]; freed_mb: number } | null>(null);
+  const [serverUrlDraft, setServerUrlDraft] = useState(serverUrl);
+  const [apiTokenDraft, setApiTokenDraft] = useState(apiToken ?? '');
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  const downloadDiagnosticBundle = async () => {
+    try {
+      const response = await apiClient.runtimeDiagnosticBundle();
+      await downloadResponse(response, responseFilename(response, 'asrbox-diagnostics.zip'));
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
 
   useEffect(() => {
     if (!settingsQuery.data) return;
@@ -98,6 +110,11 @@ export function SettingsPage() {
   useEffect(() => {
     setActiveTab(normalizeSettingsTab(search.tab));
   }, [search.tab]);
+
+  useEffect(() => {
+    setServerUrlDraft(serverUrl);
+    setApiTokenDraft(apiToken ?? '');
+  }, [apiToken, serverUrl]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -213,7 +230,9 @@ export function SettingsPage() {
           if (typeof shortcut === 'string' && shortcutActions.includes(action as ShortcutAction)) setShortcut(action as ShortcutAction, shortcut);
         });
       }
-      if (typeof payload.server?.serverUrl === 'string') setServerUrl(payload.server.serverUrl);
+      if (typeof payload.server?.serverUrl === 'string') {
+        setServerConnection(payload.server.serverUrl, null);
+      }
       toast.success(t('settings.imported'));
     } catch (error) {
       toast.error(t('toast.actionFailed'), toastErrorMessage(error));
@@ -257,18 +276,37 @@ export function SettingsPage() {
                 />
               </Field>
               <Field label={t('settings.serverUrl')}>
-                <Input value={serverUrl} onChange={(event) => setServerUrl(event.target.value)} />
+                <Input value={serverUrlDraft} onChange={(event) => setServerUrlDraft(event.target.value)} />
               </Field>
               <Field label={t('settings.apiToken')}>
                 <div className="grid gap-1.5">
                   <Input
                     type="password"
                     autoComplete="off"
-                    value={apiToken ?? ''}
+                    value={apiTokenDraft}
                     placeholder={t('settings.apiTokenPlaceholder')}
-                    onChange={(event) => setApiToken(event.target.value)}
+                    onChange={(event) => setApiTokenDraft(event.target.value)}
                   />
                   <p className="text-xs text-app-muted">{t('settings.apiTokenHint')}</p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-fit"
+                    disabled={
+                      !serverUrlDraft.trim()
+                      || (
+                        serverUrlDraft.trim().replace(/\/$/, '') === serverUrl.replace(/\/$/, '')
+                        && (apiTokenDraft.trim() || null) === apiToken
+                      )
+                    }
+                    onClick={() => setServerConnection(
+                      serverUrlDraft.trim().replace(/\/$/, ''),
+                      apiTokenDraft.trim() || null,
+                    )}
+                  >
+                    <Save className="size-4" />
+                    {t('common.save')}
+                  </Button>
                 </div>
               </Field>
               <Field label={t('settings.theme')}>
@@ -491,11 +529,9 @@ export function SettingsPage() {
               <PathRow label={t('settings.modelsPath')} value={runtimeQuery.data?.models_dir} />
               <PathRow label={t('settings.freeDisk')} value={formatBytes(runtimeQuery.data?.free_disk_bytes)} />
               <PathRow label={t('settings.storageUsed')} value={formatBytes(storageQuery.data?.used_bytes)} />
-              <Button asChild variant="secondary">
-                <a href={apiClient.runtimeDiagnosticBundleUrl()}>
-                  <Download className="size-4" />
-                  {t('settings.diagnosticBundle')}
-                </a>
+              <Button variant="secondary" onClick={() => void downloadDiagnosticBundle()}>
+                <Download className="size-4" />
+                {t('settings.diagnosticBundle')}
               </Button>
             </div>
           </Panel>

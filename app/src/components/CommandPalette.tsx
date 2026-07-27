@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { DownloadCloud, FileDown, FilePlus2, ListTodo, Plus, Settings, TerminalSquare } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../lib/i18n';
-import { matchesShortcut } from '../lib/shortcuts';
+import { isEditableShortcutEvent, matchesShortcut } from '../lib/shortcuts';
 import { useUiStore } from '../stores/uiStore';
 import { Button, Dialog, DialogContent, EmptyState, Input } from './weiui';
 import { ResultItemContent, resultItemClassName } from './ResultItem';
@@ -78,6 +78,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableShortcutEvent(event)) return;
       if (!matchesShortcut(event, commandPaletteShortcut)) return;
       event.preventDefault();
       setOpen((current) => !current);

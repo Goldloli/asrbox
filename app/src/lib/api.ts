@@ -49,6 +49,20 @@ export interface TranscriptionTask {
   batch_id?: string | null;
 }
 
+export interface SegmentBulkUpdateItem {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+  speaker: string | null;
+}
+
+export interface ResourceTicketResponse {
+  ticket: string;
+  path: string;
+  expires_at: string;
+}
+
 export interface TaskListResponse {
   items: TranscriptionTask[];
   total: number;
@@ -499,6 +513,18 @@ class ApiClient {
     return response.json();
   }
 
+  private async resourceRequest(path: string, init?: RequestInit): Promise<Response> {
+    const headers = new Headers(init?.headers);
+    const apiToken = useServerStore.getState().apiToken;
+    if (apiToken) headers.set('Authorization', `Bearer ${apiToken}`);
+    const response = await fetch(`${this.baseUrl()}${path}`, {
+      ...init,
+      headers,
+    });
+    if (!response.ok) throw await parseError(response);
+    return response;
+  }
+
   private async formRequest<T>(path: string, form: FormData, onUploadProgress?: (progress: number) => void): Promise<T> {
     const headers = new Headers();
     const apiToken = useServerStore.getState().apiToken;
@@ -636,6 +662,13 @@ class ApiClient {
     return this.request<TranscriptionTask>(`/tasks/${id}`);
   }
 
+  updateSegments(id: string, segments: SegmentBulkUpdateItem[]) {
+    return this.request<TranscriptionTask>(`/tasks/${id}/segments`, {
+      method: 'PUT',
+      body: JSON.stringify({ segments }),
+    });
+  }
+
   getTaskDiagnostics(id: string) {
     return this.request<TaskDiagnostic[]>(`/tasks/${id}/diagnostics`);
   }
@@ -693,16 +726,24 @@ class ApiClient {
     return this.request<{ deleted: number }>('/tasks', { method: 'DELETE' });
   }
 
-  exportTaskUrl(id: string, format: string) {
-    return this.browserResourceUrl(`/tasks/${id}/export/${format}`);
+  exportTask(id: string, format: string) {
+    return this.resourceRequest(`/tasks/${id}/export/${format}`);
   }
 
-  taskAudioUrl(id: string) {
-    return this.browserResourceUrl(`/tasks/${id}/audio`);
+  async taskAudioUrl(id: string) {
+    const path = `/tasks/${id}/audio`;
+    const url = new URL(`${this.baseUrl()}${path}`);
+    if (!useServerStore.getState().apiToken) return url.toString();
+    const grant = await this.request<ResourceTicketResponse>('/auth/resource-ticket', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+    url.searchParams.set('resource_ticket', grant.ticket);
+    return url.toString();
   }
 
   eventsUrl() {
-    return this.browserResourceUrl('/events');
+    return new URL(`${this.baseUrl()}/events`).toString();
   }
 
   listModels() {
@@ -871,15 +912,8 @@ class ApiClient {
     return this.request<RuntimeStatus>('/runtime/status');
   }
 
-  runtimeDiagnosticBundleUrl() {
-    return this.browserResourceUrl('/runtime/diagnostic-bundle.zip');
-  }
-
-  private browserResourceUrl(path: string) {
-    const url = new URL(`${this.baseUrl()}${path}`);
-    const apiToken = useServerStore.getState().apiToken;
-    if (apiToken) url.searchParams.set('api_token', apiToken);
-    return url.toString();
+  runtimeDiagnosticBundle() {
+    return this.resourceRequest('/runtime/diagnostic-bundle.zip');
   }
 }
 

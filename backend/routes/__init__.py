@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 def register_routers(app: FastAPI) -> None:
     from backend.routes.health import router as health_router
+    from backend.routes.auth import router as auth_router
     from backend.routes.batches import router as batches_router
     from backend.routes.events import router as events_router
     from backend.routes.diagnostics import router as diagnostics_router
@@ -20,6 +21,7 @@ def register_routers(app: FastAPI) -> None:
     from backend.mcp_server import mount_mcp
 
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.include_router(batches_router)
     app.include_router(events_router)
     app.include_router(diagnostics_router)

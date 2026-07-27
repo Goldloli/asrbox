@@ -15,7 +15,7 @@ import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import { ErrorDiagnosticsPanel, FilterCheckboxGroup, Metric, TaskRow, useTaskMutation } from '../components/tasks/TaskWorkbenchParts';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
-import { downloadUrl } from '../lib/downloads';
+import { downloadResponse } from '../lib/downloads';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'importing', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
@@ -248,7 +248,8 @@ export function TasksPage() {
   };
 
   const downloadTaskFormat = async (task: TranscriptionTask, format: string) => {
-    const savedPath = await downloadUrl(apiClient.exportTaskUrl(task.id, format), `${task.filename}.${format}`);
+    const response = await apiClient.exportTask(task.id, format);
+    const savedPath = await downloadResponse(response, `${task.filename}.${format}`, { saveAsText: true });
     if (!savedPath) return false;
     recordRecentExport(task, format);
     return true;

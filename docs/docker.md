@@ -42,6 +42,19 @@ Compose 默认值：
 
 修改 `.env` 后运行 `docker compose up -d` 应用配置。
 
+Compose 会把宿主发布地址传给应用做启动门禁：默认回环地址可保持 token 为空；只要 `ASRBOX_BIND_ADDRESS` 不是回环地址，token 为空就会拒绝启动并在日志中说明原因。直接运行 Dockerfile 镜像默认视为公开绑定，因此必须设置 `ASRBOX_API_TOKEN`，或明确把 `ASRBOX_PUBLIC_BIND_ADDRESS` 设为回环地址。
+
+### MCP 工具面（可选）
+
+镜像内会挂载 `/mcp` 的 MCP 服务（依赖 `fastmcp`），提供 `asrbox.transcribe`、`asrbox.list_tasks`、`asrbox.get_task`、`asrbox.export_subtitle`、`asrbox.list_models`、`asrbox.readiness` 等工具。MCP 与 HTTP API 受同一个 `ASRBOX_API_TOKEN` 保护。
+
+出于安全考虑，`asrbox.transcribe` 只接受位于以下根之内的媒体路径：uploads 目录（`/data/uploads`）、派生音频目录，以及 operator 通过 `ASRBOX_MCP_ALLOWED_ROOTS`（逗号分隔）显式声明的附加根。数据目录根下的其他文件（如数据库）永远不可作为转写输入。
+
+```dotenv
+# 允许 MCP 转写读取额外挂载目录中的媒体
+ASRBOX_MCP_ALLOWED_ROOTS=/model-storage,/mnt/media
+```
+
 ### 单独挂载模型存储
 
 默认模型和下载缓存位于 `/data/models` 与 `/data/cache`。如需使用大容量磁盘，先停止正在进行的本地转写和模型下载，然后取消 `compose.yaml` 中可选 bind mount 的注释，并在 `.env` 中设置：
@@ -80,7 +93,7 @@ ASRBOX_UPLOADS_HOST_PATH=D:/asrbox-uploads
 docker compose down
 ```
 
-备份：
+下面的整卷备份必须先执行 `docker compose down`，避免直接复制正在写入的 SQLite 文件：
 
 ```bash
 docker run --rm \
@@ -99,7 +112,7 @@ docker run --rm \
   alpine sh -c 'cd /data && tar xzf /backup/asrbox-data-backup.tar.gz'
 ```
 
-备份可能包含媒体、字幕和明文 Provider 密钥，应加密保存并限制访问。恢复前先停止 ASRbox。不要向非空卷叠加不匹配版本的备份。
+应用内“设置 → 存储与诊断 → 备份”使用 SQLite online backup 生成事务一致的数据库快照，服务运行时也可使用。两种备份都可能包含媒体、字幕和明文 Provider 密钥，应加密保存并限制访问。恢复前先停止 ASRbox。不要向非空卷叠加不匹配版本的备份。
 
 `docker compose down -v`、`docker volume rm asrbox-data` 会永久删除受管数据，只有确认备份后才可执行。
 

@@ -1,8 +1,8 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Clipboard, FileText, FolderOpen, Pause, Pencil, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
+import { Activity, Clipboard, FileText, FolderOpen, Pause, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type TranscriptionTask } from '../lib/api';
+import { apiClient, type SegmentBulkUpdateItem, type TranscriptionTask } from '../lib/api';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { queryKeys } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
@@ -12,40 +12,61 @@ import { useI18n } from '../lib/i18n';
 import { toastErrorMessage, useToast } from './Toast';
 import { countTextMatches, drawAudioWaveform, formatSubtitlePreview, renderHighlightedText, replaceTextMatches } from './transcript/transcriptUtils';
 
+type SegmentDraft = {
+  text?: string;
+  speaker?: string;
+  start?: number;
+  end?: number;
+};
+
 export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const { t } = useI18n();
   const toast = useToast();
-  const [editedTextByTask, setEditedTextByTask] = useState<Record<string, string>>({});
-  const [speakerLabelsByTask, setSpeakerLabelsByTask] = useState<Record<string, Record<number, string>>>({});
-  const [segmentTimesByTask, setSegmentTimesByTask] = useState<Record<string, Record<number, { start: number; end: number }>>>({});
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftText, setDraftText] = useState('');
+  const queryClient = useQueryClient();
+  const [draftEdits, setDraftEdits] = useState<Record<number, SegmentDraft>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
 
-  const displayedText = useMemo(() => {
-    if (!task) return '';
-    return editedTextByTask[task.id] ?? task.text ?? '';
-  }, [editedTextByTask, task]);
-  const speakerLabels = task ? speakerLabelsByTask[task.id] ?? {} : {};
-  const segmentTimes = task ? segmentTimesByTask[task.id] ?? {} : {};
+  const taskId = task?.id;
+  const fullText = task?.text ?? '';
   const displaySegments = useMemo(() => {
     if (!task) return [];
-    return task.segments.map((segment) => ({
-      ...segment,
-      ...(segmentTimes[segment.id] ?? {}),
-    }));
-  }, [segmentTimes, task]);
-  const matchCount = useMemo(() => countTextMatches(displayedText, searchQuery), [displayedText, searchQuery]);
+    return task.segments.map((segment) => {
+      const draft = draftEdits[segment.id];
+      if (!draft) return segment;
+      return {
+        ...segment,
+        text: draft.text ?? segment.text,
+        speaker: draft.speaker ?? segment.speaker,
+        start: draft.start ?? segment.start,
+        end: draft.end ?? segment.end,
+      };
+    });
+  }, [draftEdits, task]);
+  const matchCount = useMemo(
+    () => displaySegments.reduce((total, segment) => total + countTextMatches(segment.text, searchQuery), 0),
+    [displaySegments, searchQuery],
+  );
   const subtitlePreview = useMemo(() => formatSubtitlePreview(displaySegments, subtitleFormat), [displaySegments, subtitleFormat]);
 
   useEffect(() => {
-    setDraftText(displayedText);
-    setIsEditing(false);
+    setDraftEdits({});
     setSeekTarget(null);
-  }, [displayedText, task?.id]);
+  }, [taskId]);
+
+  const saveEdits = useMutation({
+    mutationFn: (input: { taskId: string; segments: SegmentBulkUpdateItem[] }) => apiClient.updateSegments(input.taskId, input.segments),
+    onSuccess: (updatedTask) => {
+      setDraftEdits({});
+      queryClient.invalidateQueries({ queryKey: queryKeys.task(updatedTask.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      queryClient.invalidateQueries({ queryKey: queryKeys.taskVersions(updatedTask.id) });
+      toast.success(t('transcript.editsSaved'));
+    },
+    onError: (error) => toast.error(t('transcript.editsSaveFailed'), toastErrorMessage(error)),
+  });
 
   if (!task) {
     return (
@@ -64,12 +85,46 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
     );
   }
 
-  const hasLocalEdit = editedTextByTask[task.id] !== undefined;
-  const saveLocalEdit = () => {
-    setEditedTextByTask((current) => ({ ...current, [task.id]: draftText }));
-    setIsEditing(false);
-    toast.success(t('transcript.localEditSaved'));
+  const hasDraftEdits = Object.keys(draftEdits).length > 0;
+  const setSegmentDraft = (segmentId: number, patch: SegmentDraft) => {
+    const segment = task.segments.find((item) => item.id === segmentId);
+    if (!segment) return;
+
+    setDraftEdits((current) => {
+      const merged = { ...(current[segmentId] ?? {}), ...patch };
+      const isDirty =
+        (merged.text !== undefined && merged.text !== segment.text) ||
+        (merged.speaker !== undefined && merged.speaker !== (segment.speaker ?? '')) ||
+        (merged.start !== undefined && merged.start !== segment.start) ||
+        (merged.end !== undefined && merged.end !== segment.end);
+      const next = { ...current };
+      if (isDirty) {
+        next[segmentId] = merged;
+      } else {
+        delete next[segmentId];
+      }
+      return next;
+    });
   };
+  const setSegmentTime = (segmentId: number, field: 'start' | 'end', value: string) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    setSegmentDraft(segmentId, { [field]: Math.max(0, numericValue) });
+  };
+  const saveDraftEdits = () => {
+    if (!hasDraftEdits || saveEdits.isPending) return;
+    saveEdits.mutate({
+      taskId: task.id,
+      segments: displaySegments.map((segment) => ({
+        id: segment.id,
+        start: segment.start,
+        end: segment.end,
+        text: segment.text,
+        speaker: segment.speaker || null,
+      })),
+    });
+  };
+  const discardDraftEdits = () => setDraftEdits({});
   const replaceAllMatches = () => {
     if (!searchQuery.trim()) return;
     if (matchCount === 0) {
@@ -77,13 +132,19 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       return;
     }
 
-    const nextText = replaceTextMatches(displayedText, searchQuery, replaceQuery);
-    setEditedTextByTask((current) => ({ ...current, [task.id]: nextText }));
-    setDraftText(nextText);
-    setIsEditing(false);
+    setDraftEdits((current) => {
+      const next = { ...current };
+      for (const segment of displaySegments) {
+        const replacedText = replaceTextMatches(segment.text, searchQuery, replaceQuery);
+        if (replacedText !== segment.text) {
+          next[segment.id] = { ...(next[segment.id] ?? {}), text: replacedText };
+        }
+      }
+      return next;
+    });
     setSearchQuery('');
     setReplaceQuery('');
-    toast.success(t('transcript.replaceSaved'), `${matchCount} ${t('transcript.matches')}`);
+    toast.success(t('transcript.replaceApplied'), `${matchCount} ${t('transcript.matches')}`);
   };
   const copyText = async (text: string) => {
     try {
@@ -93,39 +154,8 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
       toast.error(t('toast.actionFailed'), toastErrorMessage(error));
     }
   };
-  const cancelLocalEdit = () => {
-    setDraftText(displayedText);
-    setIsEditing(false);
-  };
   const seekToSegment = (seconds: number) => {
     setSeekTarget(Math.max(0, seconds));
-  };
-  const setSegmentSpeaker = (segmentId: number, value: string) => {
-    setSpeakerLabelsByTask((current) => ({
-      ...current,
-      [task.id]: {
-        ...(current[task.id] ?? {}),
-        [segmentId]: value,
-      },
-    }));
-  };
-  const setSegmentTime = (segmentId: number, field: 'start' | 'end', value: string) => {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue)) return;
-
-    const segment = displaySegments.find((item) => item.id === segmentId);
-    if (!segment) return;
-
-    setSegmentTimesByTask((current) => ({
-      ...current,
-      [task.id]: {
-        ...(current[task.id] ?? {}),
-        [segmentId]: {
-          start: field === 'start' ? Math.max(0, numericValue) : segment.start,
-          end: field === 'end' ? Math.max(0, numericValue) : segment.end,
-        },
-      },
-    }));
   };
   return (
     <Panel className="min-h-[calc(100dvh-160px)] overflow-hidden">
@@ -146,29 +176,24 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         <div className="sticky top-0 z-10 -mx-5 flex flex-wrap items-center justify-between gap-3 border-y app-border bg-[var(--app-panel-solid)] px-5 py-3">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-sm font-semibold text-app">{t('transcript.text')}</h2>
-            {hasLocalEdit && <Badge tone="accent">{t('transcript.localEdit')}</Badge>}
+            {hasDraftEdits && <Badge tone="warning">{t('transcript.unsavedChanges')}</Badge>}
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => copyText(displayedText)} disabled={!displayedText}>
+            <Button variant="secondary" size="sm" onClick={() => copyText(fullText)} disabled={!fullText}>
               <Clipboard className="size-4" />
               {t('tasks.copyFullText')}
             </Button>
-            {isEditing ? (
+            {hasDraftEdits && (
               <>
-                <Button variant="secondary" size="sm" onClick={cancelLocalEdit}>
+                <Button variant="secondary" size="sm" onClick={discardDraftEdits} disabled={saveEdits.isPending}>
                   <X className="size-4" />
-                  {t('common.cancel')}
+                  {t('transcript.discardChanges')}
                 </Button>
-                <Button size="sm" onClick={saveLocalEdit}>
+                <Button size="sm" onClick={saveDraftEdits} disabled={saveEdits.isPending}>
                   <Save className="size-4" />
-                  {t('transcript.saveLocalEdit')}
+                  {saveEdits.isPending ? t('transcript.savingChanges') : t('transcript.saveChanges')}
                 </Button>
               </>
-            ) : (
-              <Button variant="secondary" size="sm" onClick={() => setIsEditing(true)}>
-                <Pencil className="size-4" />
-                {t('transcript.edit')}
-              </Button>
             )}
           </div>
         </div>
@@ -199,19 +224,10 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
               </Badge>
             )}
           </div>
-          {isEditing ? (
-            <Textarea
-              value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
-              placeholder={t('transcript.placeholder')}
-              className="min-h-56 font-mono text-[13px]"
-            />
-          ) : (
-            <div className="min-h-56 whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
-              {displayedText ? renderHighlightedText(displayedText, searchQuery) : <span className="text-app-faint">{t('transcript.placeholder')}</span>}
-            </div>
-          )}
-          {hasLocalEdit && <p className="text-xs text-app-muted">{t('transcript.localEditHint')}</p>}
+          <div className="min-h-56 whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
+            {fullText ? renderHighlightedText(fullText, searchQuery) : <span className="text-app-faint">{t('transcript.placeholder')}</span>}
+          </div>
+          <p className="text-xs text-app-muted">{t('transcript.fullTextReadOnly')}</p>
         </section>
         <WaveformAudioPlayer
           taskId={task.id}
@@ -281,13 +297,19 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                   <div className="flex items-start gap-2">
                     <div className="grid min-w-0 flex-1 gap-2">
                       <Input
-                        value={speakerLabels[segment.id] ?? segment.speaker ?? ''}
-                        onChange={(event) => setSegmentSpeaker(segment.id, event.target.value)}
+                        value={segment.speaker ?? ''}
+                        onChange={(event) => setSegmentDraft(segment.id, { speaker: event.target.value })}
                         placeholder={t('transcript.speakerPlaceholder')}
                         className="h-8 max-w-40 text-xs"
                         aria-label={t('transcript.speakerLabel')}
                       />
-                      <p className="text-sm leading-6 text-app-soft">{renderHighlightedText(segment.text, searchQuery)}</p>
+                      <Textarea
+                        value={segment.text}
+                        onChange={(event) => setSegmentDraft(segment.id, { text: event.target.value })}
+                        aria-label={t('transcript.segmentText')}
+                        rows={2}
+                        className="min-h-0 text-sm"
+                      />
                     </div>
                     <Button
                       variant="ghost"
@@ -331,16 +353,28 @@ function WaveformAudioPlayer({
   const audioRef = useRef<HTMLAudioElement>(null);
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const [audioReloadKey, setAudioReloadKey] = useState(0);
-  const audioUrl = useMemo(() => {
-    const base = apiClient.taskAudioUrl(taskId);
-    if (audioReloadKey === 0) return base;
-    return `${base}${base.includes('?') ? '&' : '?'}reload=${audioReloadKey}`;
-  }, [taskId, audioReloadKey]);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [waveformStatus, setWaveformStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAudioUrl(null);
+    setWaveformStatus('loading');
+    void apiClient.taskAudioUrl(taskId)
+      .then((url) => {
+        if (!cancelled) setAudioUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setWaveformStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audioReloadKey, taskId]);
 
   const relink = useMutation({
     mutationFn: (path: string) => apiClient.relinkTask(taskId, path),
@@ -378,7 +412,7 @@ function WaveformAudioPlayer({
 
   useEffect(() => {
     const canvas = waveformCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !audioUrl) return;
 
     let cancelled = false;
     const loadWaveform = async () => {
@@ -455,7 +489,7 @@ function WaveformAudioPlayer({
         <audio
           ref={audioRef}
           preload="metadata"
-          src={audioUrl}
+          src={audioUrl ?? undefined}
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onPlay={() => setIsPlaying(true)}

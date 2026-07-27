@@ -40,6 +40,8 @@ docker compose logs -f asrbox
 
 Run `docker compose up -d` after changing `.env`.
 
+Compose passes the published host address into a startup guard. An empty token remains supported for the default loopback bind, while any non-loopback `ASRBOX_BIND_ADDRESS` fails closed unless `ASRBOX_API_TOKEN` is set. Running the Dockerfile image directly is treated as a public bind by default, so it requires a token unless `ASRBOX_PUBLIC_BIND_ADDRESS` is explicitly set to a loopback address.
+
 ### Separate model-storage mount
 
 Models and download caches default to `/data/models` and `/data/cache`. To use a larger disk, stop active local transcription and model downloads, uncomment the optional bind mount in `compose.yaml`, and set:
@@ -72,7 +74,7 @@ Create the host directory first and make it writable by container UID/GID `10001
 
 `/data` contains the database, media, extracted audio, transcript versions, exports, models, caches, settings, and provider credentials. Compose stores it in the `asrbox-data` named volume.
 
-`docker compose down` preserves data. Back up with:
+`docker compose down` preserves data. Stop the service before this whole-volume backup so it does not copy SQLite while a transaction is writing:
 
 ```bash
 docker run --rm \
@@ -91,7 +93,7 @@ docker run --rm \
   alpine sh -c 'cd /data && tar xzf /backup/asrbox-data-backup.tar.gz'
 ```
 
-Backups can contain media, transcripts, and plaintext provider credentials. Encrypt and restrict them. `docker compose down -v` and `docker volume rm asrbox-data` permanently delete managed data.
+The in-app backup action uses SQLite online backup to create a transaction-consistent database snapshot and can run while the service is online. Both backup forms can contain media, transcripts, and plaintext provider credentials. Encrypt and restrict them. `docker compose down -v` and `docker volume rm asrbox-data` permanently delete managed data.
 
 ## Phone and LAN access
 

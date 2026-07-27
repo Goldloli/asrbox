@@ -7,15 +7,32 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from backend import config
 from backend.database import get_db
 from backend.models import ActiveTasksResponse, TaskListResponse, TaskLogResponse, TaskPostprocessRequest, TaskQualityResponse, TaskRelinkRequest, TaskRetranscribeRequest
-from backend.models import SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest
+from backend.models import SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest, SegmentsBulkUpdateRequest
 from backend.services import exports as export_service
 from backend.services import tasks as task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+def _run_transcript_mutation(operation):
+    try:
+        return operation()
+    except task_service.TaskStateConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+async def _run_task_mutation(operation):
+    try:
+        return await run_in_threadpool(operation)
+    except task_service.TaskStateConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("", response_model=TaskListResponse)
@@ -67,7 +84,10 @@ async def cancel_task(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/retry")
 async def retry_task(task_id: str, db: Session = Depends(get_db)):
-    task = task_service.retry_task(db, task_id)
+    try:
+        task = task_service.retry_task(db, task_id)
+    except task_service.TaskActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -75,15 +95,18 @@ async def retry_task(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/retranscribe")
 async def retranscribe_task(task_id: str, request: TaskRetranscribeRequest, db: Session = Depends(get_db)):
-    task = task_service.retranscribe_task(
-        db,
-        task_id,
-        backend=request.backend,
-        model_name=request.model_name,
-        provider_id=request.provider_id,
-        language=request.language,
-        output_formats=request.output_formats,
-    )
+    try:
+        task = task_service.retranscribe_task(
+            db,
+            task_id,
+            backend=request.backend,
+            model_name=request.model_name,
+            provider_id=request.provider_id,
+            language=request.language,
+            output_formats=request.output_formats,
+        )
+    except task_service.TaskActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -91,15 +114,17 @@ async def retranscribe_task(task_id: str, request: TaskRetranscribeRequest, db: 
 
 @router.post("/{task_id}/postprocess")
 async def postprocess_task(task_id: str, request: TaskPostprocessRequest, db: Session = Depends(get_db)):
-    task = task_service.postprocess_task(
-        db,
-        task_id,
-        max_chars_per_line=request.max_chars_per_line,
-        max_lines=request.max_lines,
-        min_duration_ms=request.min_duration_ms,
-        merge_short_segments=request.merge_short_segments,
-        traditional_to_simplified=request.traditional_to_simplified,
-        mode=request.mode,
+    task = _run_transcript_mutation(
+        lambda: task_service.postprocess_task(
+            db,
+            task_id,
+            max_chars_per_line=request.max_chars_per_line,
+            max_lines=request.max_lines,
+            min_duration_ms=request.min_duration_ms,
+            merge_short_segments=request.merge_short_segments,
+            traditional_to_simplified=request.traditional_to_simplified,
+            mode=request.mode,
+        )
     )
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -137,7 +162,7 @@ async def task_versions(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/versions/{version_id}/restore")
 async def restore_task_version(task_id: str, version_id: int, db: Session = Depends(get_db)):
-    task = task_service.restore_version(db, task_id, version_id)
+    task = _run_transcript_mutation(lambda: task_service.restore_version(db, task_id, version_id))
     if task is None:
         raise HTTPException(status_code=404, detail="Task or version not found")
     return task
@@ -171,15 +196,23 @@ async def export_task_version(task_id: str, version_id: int, fmt: str, db: Sessi
 
 @router.patch("/{task_id}/segments/{segment_id}")
 async def update_segment(task_id: str, segment_id: int, request: SegmentUpdateRequest, db: Session = Depends(get_db)):
-    task = task_service.update_segment(db, task_id, segment_id, request)
+    task = _run_transcript_mutation(lambda: task_service.update_segment(db, task_id, segment_id, request))
     if task is None:
         raise HTTPException(status_code=404, detail="Task or segment not found")
     return task
 
 
+@router.put("/{task_id}/segments")
+async def update_segments_bulk(task_id: str, request: SegmentsBulkUpdateRequest, db: Session = Depends(get_db)):
+    task = _run_transcript_mutation(lambda: task_service.update_segments_bulk(db, task_id, request))
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
 @router.post("/{task_id}/segments")
 async def create_segment(task_id: str, request: SegmentCreateRequest, db: Session = Depends(get_db)):
-    task = task_service.create_segment(db, task_id, request)
+    task = _run_transcript_mutation(lambda: task_service.create_segment(db, task_id, request))
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -187,7 +220,7 @@ async def create_segment(task_id: str, request: SegmentCreateRequest, db: Sessio
 
 @router.delete("/{task_id}/segments/{segment_id}")
 async def delete_segment(task_id: str, segment_id: int, db: Session = Depends(get_db)):
-    task = task_service.delete_segment(db, task_id, segment_id)
+    task = _run_transcript_mutation(lambda: task_service.delete_segment(db, task_id, segment_id))
     if task is None:
         raise HTTPException(status_code=404, detail="Task or segment not found")
     return task
@@ -195,7 +228,7 @@ async def delete_segment(task_id: str, segment_id: int, db: Session = Depends(ge
 
 @router.post("/{task_id}/segments/{segment_id}/split")
 async def split_segment(task_id: str, segment_id: int, request: SegmentSplitRequest, db: Session = Depends(get_db)):
-    task = task_service.split_segment(db, task_id, segment_id, request)
+    task = _run_transcript_mutation(lambda: task_service.split_segment(db, task_id, segment_id, request))
     if task is None:
         raise HTTPException(status_code=404, detail="Task or segment not found")
     return task
@@ -203,7 +236,7 @@ async def split_segment(task_id: str, segment_id: int, request: SegmentSplitRequ
 
 @router.post("/{task_id}/segments/merge")
 async def merge_segments(task_id: str, request: SegmentMergeRequest, db: Session = Depends(get_db)):
-    task = task_service.merge_segments(db, task_id, request)
+    task = _run_transcript_mutation(lambda: task_service.merge_segments(db, task_id, request))
     if task is None:
         raise HTTPException(status_code=404, detail="Task or segments not found")
     return task
@@ -218,7 +251,9 @@ async def task_chunks(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/chunks/{chunk_id}/retry")
 async def retry_chunk(task_id: str, chunk_id: int, db: Session = Depends(get_db)):
-    task = task_service.retry_chunk(db, task_id, chunk_id)
+    task = await _run_task_mutation(
+        lambda: task_service.retry_chunk(db, task_id, chunk_id)
+    )
     if task is None:
         raise HTTPException(status_code=404, detail="Task or chunk not found")
     return task
@@ -226,7 +261,9 @@ async def retry_chunk(task_id: str, chunk_id: int, db: Session = Depends(get_db)
 
 @router.post("/{task_id}/chunks/retry-failed")
 async def retry_failed_chunks(task_id: str, db: Session = Depends(get_db)):
-    task = task_service.retry_failed_chunks(db, task_id)
+    task = await _run_task_mutation(
+        lambda: task_service.retry_failed_chunks(db, task_id)
+    )
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -234,7 +271,9 @@ async def retry_failed_chunks(task_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{task_id}/cleanup-artifacts")
 async def cleanup_task_artifacts(task_id: str, db: Session = Depends(get_db)):
-    result = task_service.cleanup_task_artifacts(db, task_id)
+    result = await _run_task_mutation(
+        lambda: task_service.cleanup_task_artifacts(db, task_id)
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return result
@@ -245,7 +284,13 @@ async def relink_task(task_id: str, request: TaskRelinkRequest, db: Session = De
     if os.environ.get("ASRBOX_DESKTOP_MODE") != "1":
         raise HTTPException(status_code=404, detail="Not found")
     try:
-        task = task_service.relink_task_media(db, task_id, path=Path(request.path))
+        task = await _run_task_mutation(
+            lambda: task_service.relink_task_media(
+                db,
+                task_id,
+                path=Path(request.path),
+            )
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if task is None:
@@ -255,7 +300,11 @@ async def relink_task(task_id: str, request: TaskRelinkRequest, db: Session = De
 
 @router.delete("/{task_id}")
 async def delete_task(task_id: str, db: Session = Depends(get_db)):
-    if not task_service.delete_task(db, task_id):
+    try:
+        deleted = task_service.delete_task(db, task_id)
+    except task_service.TaskActiveError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": f"Task {task_id} deleted"}
 

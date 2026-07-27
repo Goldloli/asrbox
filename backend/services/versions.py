@@ -133,8 +133,13 @@ def restore_version(db: Session, task: TranscriptionTask, version_id: int) -> bo
     task.options_json = version.options_json or "{}"
     task.model_name = version.model_name
     task.provider_id = version.provider_id
-    db.commit()
-    create_version(db, task, "restore")
+    try:
+        db.flush()
+        create_version(db, task, "restore", commit=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return True
 
 

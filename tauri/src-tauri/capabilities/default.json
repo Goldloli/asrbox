@@ -6,7 +6,6 @@
   "permissions": [
     "core:default",
     "core:event:allow-listen",
-    "dialog:default",
-    "shell:allow-open"
+    "dialog:default"
   ]
 }

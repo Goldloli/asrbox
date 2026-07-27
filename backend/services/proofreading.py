@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import queue
 import threading
 from dataclasses import dataclass
@@ -21,7 +22,10 @@ from backend.database.models import (
 from backend.models import ProofreadingRunResponse, ProofreadingSuggestionResponse, TranscriptSegment
 from backend.services import llm_providers
 from backend.services import versions as version_service
+from backend.services.task_transitions import task_transition_lock
 from backend.utils.transcript_text import transcript_text_from_segments
+
+_logger = logging.getLogger(__name__)
 
 
 ACTIVE_RUN_STATUSES = {"queued", "running"}
@@ -31,6 +35,8 @@ MAX_BATCH_CHARACTERS = 30_000
 _run_queue: queue.Queue[str] = queue.Queue()
 _worker_lock = threading.Lock()
 _worker_started = False
+_worker_count = 0
+_worker_target = 1
 
 
 class ProofreadingError(RuntimeError):
@@ -296,7 +302,7 @@ def get_run(db: Session, task_id: str, run_id: str) -> ProofreadingRun | None:
     )
 
 
-def apply_suggestions(
+def _apply_suggestions_unlocked(
     db: Session,
     run_id: str,
     suggestion_ids: list[int],
@@ -396,6 +402,16 @@ def apply_suggestions(
         raise
 
 
+def apply_suggestions(
+    db: Session,
+    run_id: str,
+    suggestion_ids: list[int],
+) -> TranscriptVersion:
+    with task_transition_lock:
+        db.expire_all()
+        return _apply_suggestions_unlocked(db, run_id, suggestion_ids)
+
+
 def _messages_for_batch(batch: ProofreadingBatch) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -469,24 +485,71 @@ def execute_run(db: Session, run_id: str) -> None:
         db.commit()
 
 
-def enqueue_run(run_id: str) -> None:
-    global _worker_started
-    db_session.init_db()
-    with _worker_lock:
-        if not _worker_started:
+def _ensure_worker_capacity_locked() -> None:
+    global _worker_count, _worker_started
+    while _worker_count < _worker_target:
+        _worker_count += 1
+        try:
             threading.Thread(target=_run_worker, daemon=True).start()
-            _worker_started = True
+        except BaseException:
+            _worker_count -= 1
+            _worker_started = _worker_count > 0
+            raise
+    _worker_started = _worker_count > 0
+
+
+def enqueue_run(run_id: str) -> None:
+    db_session.init_db()
     _run_queue.put(run_id)
+    with _worker_lock:
+        _ensure_worker_capacity_locked()
 
 
 def _run_worker() -> None:
-    while True:
-        run_id = _run_queue.get()
-        try:
-            db = db_session.SessionLocal()
+    global _worker_count, _worker_started
+    try:
+        while True:
+            run_id = _run_queue.get()
             try:
-                execute_run(db, run_id)
+                db = db_session.SessionLocal()
+                try:
+                    execute_run(db, run_id)
+                finally:
+                    db.close()
+            except Exception:
+                # A normal exception is contained so this worker can continue.
+                _logger.exception("Proofreading worker escaped an unexpected error for run %s", run_id)
+                _fail_run_after_escape(run_id)
+            except BaseException:
+                # Thread-level exits must release the worker slot and trigger a replacement.
+                _logger.exception("Proofreading worker exited while processing run %s", run_id)
+                _fail_run_after_escape(run_id)
+                return
             finally:
-                db.close()
+                _run_queue.task_done()
+    finally:
+        with _worker_lock:
+            _worker_count = max(0, _worker_count - 1)
+            _worker_started = _worker_count > 0
+            _ensure_worker_capacity_locked()
+
+
+def _fail_run_after_escape(run_id: str) -> None:
+    """Best-effort failure persistence after execute_run itself raised."""
+    try:
+        db = db_session.SessionLocal()
+        try:
+            db.rollback()
+            failed = db.query(ProofreadingRun).filter(ProofreadingRun.id == run_id).first()
+            if failed is None or failed.status not in {"queued", "running"}:
+                return
+            failed.status = "failed"
+            failed.error_code = "PROOFREADING_FAILED"
+            failed.error = "Proofreading failed"
+            failed.completed_at = datetime.now(UTC)
+            failed.updated_at = failed.completed_at
+            db.commit()
         finally:
-            _run_queue.task_done()
+            db.close()
+    except Exception:
+        _logger.exception("Failed to persist escaped proofreading failure for run %s", run_id)

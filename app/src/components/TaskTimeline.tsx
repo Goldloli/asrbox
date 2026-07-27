@@ -3,6 +3,7 @@ import type { TaskDiagnostic, TaskLogEntry, TaskQuality, TaskVersion } from '../
 import { formatDate } from '../lib/format';
 import { Badge, Button, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from './weiui';
 import { useI18n } from '../lib/i18n';
+import { diffTextLines } from '../lib/transcriptDiff';
 
 export type TaskTimelineTab = 'diagnostics' | 'logs' | 'versions' | 'quality';
 
@@ -168,10 +169,12 @@ function VersionHistoryList({ versions, currentText }: { versions: TaskVersion[]
                     ? 'bg-[var(--app-success-soft)] text-[var(--app-success)]'
                     : line.kind === 'removed'
                       ? 'bg-[var(--app-danger-soft)] text-[var(--app-danger)]'
+                      : line.kind === 'summary'
+                        ? 'bg-[var(--app-accent-soft)] text-app-accent'
                       : 'text-app-muted'
                 }
               >
-                <span className="mr-2 inline-block w-4 text-center">{line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : ' '}</span>
+                <span className="mr-2 inline-block w-4 text-center">{line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : line.kind === 'summary' ? '…' : ' '}</span>
                 {line.text || ' '}
               </p>
             ))}
@@ -203,47 +206,4 @@ function TimelineList({
       ))}
     </div>
   );
-}
-
-function diffTextLines(previousText: string, currentText: string) {
-  const previousLines = previousText.split('\n');
-  const currentLines = currentText.split('\n');
-  const rows = previousLines.length + 1;
-  const columns = currentLines.length + 1;
-  const table = Array.from({ length: rows }, () => Array<number>(columns).fill(0));
-
-  for (let row = previousLines.length - 1; row >= 0; row -= 1) {
-    for (let column = currentLines.length - 1; column >= 0; column -= 1) {
-      table[row][column] = previousLines[row] === currentLines[column]
-        ? table[row + 1][column + 1] + 1
-        : Math.max(table[row + 1][column], table[row][column + 1]);
-    }
-  }
-
-  const result: Array<{ kind: 'same' | 'added' | 'removed'; text: string }> = [];
-  let row = 0;
-  let column = 0;
-  while (row < previousLines.length && column < currentLines.length) {
-    if (previousLines[row] === currentLines[column]) {
-      result.push({ kind: 'same', text: previousLines[row] });
-      row += 1;
-      column += 1;
-    } else if (table[row + 1][column] >= table[row][column + 1]) {
-      result.push({ kind: 'removed', text: previousLines[row] });
-      row += 1;
-    } else {
-      result.push({ kind: 'added', text: currentLines[column] });
-      column += 1;
-    }
-  }
-  while (row < previousLines.length) {
-    result.push({ kind: 'removed', text: previousLines[row] });
-    row += 1;
-  }
-  while (column < currentLines.length) {
-    result.push({ kind: 'added', text: currentLines[column] });
-    column += 1;
-  }
-
-  return result.slice(0, 200);
 }

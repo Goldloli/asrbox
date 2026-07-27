@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import hashlib
+import sqlite3
 import shutil
+import uuid
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,19 +98,27 @@ def cleanup(db: Session, *, delete_normalized: bool, delete_chunks: bool, delete
                     row.normalized_audio_path = None
 
     if delete_chunks:
-        for chunk in db.query(TranscriptionChunk).all():
+        from backend.services.tasks import ACTIVE_TASK_STATUSES
+
+        active_task_ids = {
+            row.id for row in db.query(TranscriptionTask.id).filter(TranscriptionTask.status.in_(ACTIVE_TASK_STATUSES)).all()
+        }
+        removable_chunks = [chunk for chunk in db.query(TranscriptionChunk).all() if chunk.task_id not in active_task_ids]
+        for chunk in removable_chunks:
             path = config.resolve_storage_path(chunk.audio_path)
             if path:
                 remove_file(path)
         if not dry_run:
-            db.query(TranscriptionChunk).delete()
+            for chunk in removable_chunks:
+                db.delete(chunk)
 
     if delete_orphans:
         referenced = {config.resolve_storage_path(row.audio_path) for row in db.query(TranscriptionTask).all()}
         referenced.update(config.resolve_storage_path(row.normalized_audio_path) for row in db.query(TranscriptionTask).all())
+        referenced.update(config.resolve_storage_path(row.audio_path) for row in db.query(TranscriptionChunk).all())
         referenced.discard(None)
         for directory in {config.get_uploads_dir(), config.get_derived_audio_dir()}:
-            for path in directory.glob("*.wav"):
+            for path in directory.rglob("*.wav"):
                 if path not in referenced:
                     remove_file(path)
 
@@ -159,20 +169,35 @@ def backup(db: Session, *, include_uploads: bool, include_exports: bool) -> dict
         },
         "files": files,
     }
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        db_path = config.get_db_path()
+    db_path = config.get_db_path()
+    snapshot_path: Path | None = None
+    try:
         if db_path.exists():
-            add_file(archive, db_path, "asrbox.db")
-        if include_uploads:
-            for item in config.get_uploads_dir().rglob("*"):
-                if item.is_file():
-                    add_file(archive, item, str(Path("uploads") / item.relative_to(config.get_uploads_dir())))
-        if include_exports:
-            for item in config.get_exports_dir().rglob("*"):
-                if item.is_file():
-                    add_file(archive, item, str(Path("exports") / item.relative_to(config.get_exports_dir())))
-        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-        archive.writestr("metadata.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            snapshot_path = backup_dir / f".asrbox-snapshot-{uuid.uuid4().hex}.db"
+            source = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            destination = sqlite3.connect(snapshot_path)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+                source.close()
+
+        with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            if snapshot_path is not None:
+                add_file(archive, snapshot_path, "asrbox.db")
+            if include_uploads:
+                for item in config.get_uploads_dir().rglob("*"):
+                    if item.is_file():
+                        add_file(archive, item, str(Path("uploads") / item.relative_to(config.get_uploads_dir())))
+            if include_exports:
+                for item in config.get_exports_dir().rglob("*"):
+                    if item.is_file():
+                        add_file(archive, item, str(Path("exports") / item.relative_to(config.get_exports_dir())))
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            archive.writestr("metadata.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+    finally:
+        if snapshot_path is not None:
+            snapshot_path.unlink(missing_ok=True)
     return {
         "path": str(path),
         "included_uploads": include_uploads,

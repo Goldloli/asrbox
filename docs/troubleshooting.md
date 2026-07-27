@@ -28,7 +28,7 @@ docker compose logs --tail=200 asrbox
 docker inspect --format '{{json .State.Health}}' "$(docker compose ps -q asrbox)"
 ```
 
-If the Docker page loads but reports the backend offline, confirm the API token in Settings matches `ASRBOX_API_TOKEN`. Changing the service URL clears the session token.
+If the Docker page loads but reports the backend offline, confirm the API token in Settings matches `ASRBOX_API_TOKEN`. Server URL and token edits remain drafts until Save is selected; applying an empty token clears the current session token.
 
 ## Docker Build or Startup Fails
 
@@ -37,6 +37,7 @@ If the Docker page loads but reports the backend offline, confirm the API token 
 - First builds need Docker Hub, PyPI, the PyTorch CPU index, and GitHub access.
 - A `/data` permission error usually means a bind mount is not writable by container uid/gid `10001`; prefer the named volume or fix host ownership.
 - An unhealthy container should be diagnosed from logs before it is repeatedly restarted.
+- A log saying a public bind requires `ASRBOX_API_TOKEN` means `ASRBOX_BIND_ADDRESS` is non-loopback while the token is empty. Return to `127.0.0.1` or generate a strong token before restarting.
 - `mlx-whisper-turbo` is intentionally unavailable in Linux containers. Choose Faster Whisper, Transformers Whisper, SenseVoice, or Qwen3-ASR.
 
 Do not use `docker compose down -v` as a troubleshooting reset unless permanent data loss is intended.
@@ -88,6 +89,8 @@ third_party/ffmpeg/darwin-arm64/ffprobe -version
 ```
 
 If the desktop app reports a missing tool, reinstall a complete ASRbox build. In development, set `ASRBOX_FFMPEG_PATH` and `ASRBOX_FFPROBE_PATH` to executable files or install ffmpeg on `PATH`.
+
+ffprobe and ffmpeg executions have bounded deadlines. A timeout removes partial derived output and leaves the task failed with a diagnostic error. On unusually slow hardware, `ASRBOX_MEDIA_PROCESS_TIMEOUT_SECONDS` may be raised to a positive number of seconds; avoid lowering it below the time needed to process the longest media.
 
 ## `MODEL_LOAD_FAILED` Mentions TorchCodec
 
@@ -151,6 +154,8 @@ Check Settings → General → Download location. Without a custom directory, de
 ```
 
 ASRbox appends a numeric suffix rather than overwriting an existing file. Backend-generated diagnostics may instead be under the app data `exports/` directory.
+
+For security, custom download directories must be chosen through the native folder picker; the desktop app only saves exports into the system download directory, its own data directory, or picker-chosen directories. If an older custom directory is rejected after an upgrade, pick it once more in Settings → General → Download location to re-authorize it.
 
 ## A Task Fails or Produces Empty/Bad Subtitles
 

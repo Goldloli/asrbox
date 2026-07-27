@@ -4,6 +4,8 @@ import { apiClient, type ModelStorage, type RuntimeStatus } from '../../lib/api'
 import { formatBytes } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
 import { Badge, Button, Panel, PanelHeader, Switch } from '../weiui';
+import { downloadResponse, responseFilename } from '../../lib/downloads';
+import { toastErrorMessage, useToast } from '../Toast';
 
 export function DiagnosticsHealthCenter({
   connected,
@@ -23,6 +25,7 @@ export function DiagnosticsHealthCenter({
   onRefresh: () => void;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
   const runtimeChecks = runtime
     ? [
         ['ffmpeg', runtime.ffmpeg_available],
@@ -108,11 +111,19 @@ export function DiagnosticsHealthCenter({
           </div>
         ) : null}
 
-        <Button asChild variant="secondary">
-          <a href={apiClient.runtimeDiagnosticBundleUrl()}>
-            <Download className="size-4" />
-            {t('settings.diagnosticBundle')}
-          </a>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void apiClient.runtimeDiagnosticBundle()
+              .then((response) => downloadResponse(
+                response,
+                responseFilename(response, 'asrbox-diagnostics.zip'),
+              ))
+              .catch((error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)));
+          }}
+        >
+          <Download className="size-4" />
+          {t('settings.diagnosticBundle')}
         </Button>
       </div>
     </Panel>

@@ -9,7 +9,7 @@ test('public beta shell reaches the local backend and core routes', async ({ pag
 
   const health = await request.get('http://127.0.0.1:17496/health');
   expect(health.ok()).toBeTruthy();
-  expect(await health.json()).toMatchObject({ status: 'healthy', version: '0.1.4' });
+  expect(await health.json()).toMatchObject({ status: 'healthy', version: '0.1.5' });
 
   await page.goto('/');
   await expect(page.getByText('Backend online', { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -29,6 +29,32 @@ test('public beta shell reaches the local backend and core routes', async ({ pag
   await expect(page).toHaveURL(/\/settings\?tab=providers$/);
   await expect(page.getByRole('tab', { name: 'Online providers' })).toHaveAttribute('data-state', 'active');
   expect(pageErrors).toEqual([]);
+});
+
+test('server connection edits stay as a draft until explicitly saved', async ({ page }) => {
+  const originalUrl = 'http://127.0.0.1:17496';
+  const draftUrl = 'http://127.0.0.1:17497';
+  await page.addInitScript(({ url, token }) => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
+    sessionStorage.setItem('asrbox-api-token', token);
+  }, { url: originalUrl, token: 'desktop-process-token' });
+
+  await page.goto('/settings');
+  const serverInput = page.locator('input').first();
+  await expect(serverInput).toHaveValue(originalUrl);
+  const tokenInput = page.locator('input[type="password"]').first();
+  await expect(tokenInput).toHaveValue('desktop-process-token');
+
+  await serverInput.fill(draftUrl);
+  expect(await page.evaluate(() => sessionStorage.getItem('asrbox-api-token'))).toBe('desktop-process-token');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('asrbox-server') ?? '{}').state?.serverUrl))
+    .toBe(originalUrl);
+
+  await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+  await expect.poll(() => page.evaluate(
+    () => JSON.parse(localStorage.getItem('asrbox-server') ?? '{}').state?.serverUrl,
+  )).toBe(draftUrl);
+  expect(await page.evaluate(() => sessionStorage.getItem('asrbox-api-token'))).toBe('desktop-process-token');
 });
 
 test('transcription workspace confirms and stops the selected active task', async ({ page }) => {

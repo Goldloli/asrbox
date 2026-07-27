@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI
 
+from backend import config
 from backend.database import session as db_session
 from backend.models import MCPTranscribeRequest
 from backend.services import exports as export_service
@@ -23,11 +24,17 @@ def _with_db(fn):
 
 def _transcribe(request: dict[str, Any]) -> dict[str, Any]:
     payload = MCPTranscribeRequest(**request)
+    source = Path(payload.path)
+    if not config.is_desktop_mode() and not config.path_within_roots(source, config.get_mcp_allowed_roots()):
+        raise ValueError(
+            "Path is outside the MCP ingestion boundary: only the uploads directory, "
+            "the derived-audio directory, and roots listed in ASRBOX_MCP_ALLOWED_ROOTS are allowed"
+        )
 
     def run(db):
         task = task_service.create_task_from_path(
             db,
-            path=Path(payload.path),
+            path=source,
             backend=payload.backend,
             model_name=payload.model_name,
             provider_id=payload.provider_id,

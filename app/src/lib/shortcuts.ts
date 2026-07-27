@@ -19,6 +19,20 @@ export function normalizeShortcut(value: string) {
     .replace('ctrl', 'mod');
 }
 
+export function isEditableShortcutEvent(event: KeyboardEvent) {
+  if (event.isComposing) return true;
+  const target = event.target as {
+    tagName?: string;
+    isContentEditable?: boolean;
+    closest?: (selector: string) => unknown;
+  } | null;
+  if (!target) return false;
+  const tagName = target.tagName?.toUpperCase();
+  if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest?.('[contenteditable="true"]'));
+}
+
 export function matchesShortcut(event: KeyboardEvent, shortcut: string) {
   const parts = normalizeShortcut(shortcut).split('+').filter(Boolean);
   const key = parts.at(-1);

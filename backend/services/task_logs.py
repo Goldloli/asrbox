@@ -25,7 +25,16 @@ def _mask(value: Any):
     return value
 
 
-def add_log(db: Session, task_id: str, stage: str, level: str, message: str, data: dict[str, Any] | None = None) -> TaskLog:
+def add_log(
+    db: Session,
+    task_id: str,
+    stage: str,
+    level: str,
+    message: str,
+    data: dict[str, Any] | None = None,
+    *,
+    commit: bool = True,
+) -> TaskLog:
     row = TaskLog(
         task_id=task_id,
         stage=stage,
@@ -34,7 +43,10 @@ def add_log(db: Session, task_id: str, stage: str, level: str, message: str, dat
         data_json=json.dumps(_mask(data or {}), ensure_ascii=False),
     )
     db.add(row)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(row)
     return row
 

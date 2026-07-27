@@ -80,6 +80,7 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 2. 实现完成后应及时归档，不要长期挂起。挂起期间若有后续 change 改动了同一 requirement，归档会因 delta 过期被拒（`current spec contains scenario(s) not present in the modified block`）。此时先把 delta 的 MODIFIED 块刷新为并集——保留主 spec 现有全部 scenario、合入本 change 的新增 scenario、合并 requirement 正文——再重新归档；不得以丢弃 scenario 的方式强行归档。
 3. 归档后检查主 spec 的 `## Purpose`；如果仍是 `TBD`，补写一句话职责说明。
 4. 归档的同时更新受影响的面向用户文档（README、docs/、CHANGELOG），保持 spec、代码、文档三者一致。
+5. 归档完成后再次运行 `openspec list --json` 和 `openspec validate --specs`，确认活动 change 已消失、主 spec 已同步且全部规格通过校验。
 
 ## ASRbox 边界
 
@@ -100,9 +101,16 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 - 前端代码使用带类型的响应，不得依赖内部 `options_json` key。
 - 受维护的路由、字段和事件只有在同步更新 OpenSpec、producer、typed consumer、contract test 和项目负责维护的文档后才能变更。
 - 新增响应字段必须同时声明到 FastAPI 的 `response_model`（pydantic 模型）：service 层产出但模型未声明的字段会被静默丢弃，且必须在 API 测试中断言该字段存在（binary smoke 等发布门禁不覆盖全部字段）。
+- 新增 Tauri 网络或文件系统能力时，不得让 WebView 向特权 command 传入并决定任意 URL、仓库或目标路径；应由 Rust 侧解析并校验可信来源、资源名称和文件目标，同时覆盖允许与拒绝路径测试，并保持 Web runtime 显式降级。
 - 除非使用经过批准且许可合规的 fixture，否则用户媒体、字幕、模型、数据库、备份和诊断不得进入仓库或发布包。
 
 对于可选或容易失败的功能，应优先采用增量、隔离的行为。除非已经批准的 spec 明确修改了相关 contract，否则新的后处理能力不得让成功转写依赖外部服务。
+
+任务并发与异步路由遵守以下实现约束：
+
+- 修改任务生命周期、字幕状态、媒体关联或任务自有派生文件时，必须在共享任务转换边界内重新读取状态并完成短认领；耗时推理、网络调用和 subprocess 等待不得持有该锁，最终落库前必须再次尊重取消状态。
+- FastAPI `async` 路由不得直接运行同步推理、subprocess、递归文件扫描、重型数据库组合或 runtime 探测；在不改变响应 contract 时使用线程池，并用事件循环响应测试证明等待期间其他 coroutine 仍可运行。
+- 测试活动任务冲突时，若应用 lifespan 会把持久化活动行恢复为 `interrupted`，应在 lifespan 启动后建立活动态或显式控制恢复，避免测试命中错误状态而产生假阳性。
 
 ## 范围纪律
 
@@ -128,6 +136,7 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 - 后端逻辑：运行相关 `pytest` 文件或测试选择；变更准备完成后再运行 `npm run test:backend`。
 - 稳定 API 行为：还要运行 `npm run test:backend:contract`。
 - React/Web 变更：运行 `npm run typecheck`、`npm run build:web`，以及覆盖用户可见行为的相关 Playwright 场景。
+- 新增受维护的前端单元或 Playwright 场景时，必须接入 `test:frontend:unit` 或 `test:e2e:maintained` 聚合命令；CI、Release 和本地开源就绪门禁复用聚合命令，不在工作流中复制不完整的文件清单。
 - Tauri 或 sidecar 变更：运行 Cargo 检查/测试和桌面启动验证。
 - 依赖或内置代码变更：运行依赖或第三方审计。
 - 模型执行、长音频、冻结二进制或发布资源：只有在涉及相应风险时才运行专用的高成本测试套件。

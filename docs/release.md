@@ -1,25 +1,26 @@
 # Release Process
 
-ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.4`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
+ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.5`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
 
-Current release: [`v0.1.4`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.4). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
+Current release: [`v0.1.5`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.5). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
 
 ## Version Sources
 
 These values must match:
 
-- `package.json`
-- `app/package.json`
-- `backend/__init__.py`
-- `tauri/src-tauri/Cargo.toml`
-- `tauri/src-tauri/tauri.conf.json`
-- User-visible app version where checked by `scripts/check-versions.mjs`
+- Root, app, Web, and Tauri `package.json` manifests.
+- `backend/__init__.py`.
+- `tauri/src-tauri/Cargo.toml` and `tauri/src-tauri/tauri.conf.json`.
+- `Dockerfile`, `compose.yaml`, and `.env.example` defaults.
+- App/Web/Tauri workspace entries in `bun.lock` and the ASRbox package entry in `Cargo.lock`.
+- Current-version and Release references in both README files and this guide.
+- `docs/releases/v<version>.md`, including the matching tag and DMG filename.
 
-Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
+`npm run check:versions` enforces the list above. Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
 
 ## Before Tagging
 
-1. Update `CHANGELOG.md` and both README files.
+1. Update `CHANGELOG.md`, both README files, this release guide, package/runtime version sources, and generated Bun/Cargo lock entries.
 2. Create `docs/releases/<tag>.md`, for example `docs/releases/v0.1.0-beta.2.md`. Start from the previous version, then update the GIF URL, downloads, highlights, verification, limitations, and changelog comparison.
 3. Confirm `THIRD_PARTY_NOTICES.md` is current.
 4. Verify `third_party/ffmpeg/SOURCE.md`, licenses, configuration, and checksums.
@@ -33,7 +34,7 @@ npm run test:docker
 ```
 
 7. For model-runtime changes, record the real models and media characteristics tested. Do not publish private filenames or content.
-8. Confirm `main` is clean, pushed, and matches `origin/main`.
+8. Confirm the release commit has passed the GitHub `CI` workflow on `main`; then confirm local `main` is clean, pushed, and matches `origin/main`.
 
 ## Release Notes
 

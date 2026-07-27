@@ -14,7 +14,7 @@ test('web About shows build identity and browser-only update fallback', async ({
 
   await expect(page.getByRole('tab', { name: 'About' })).toHaveAttribute('data-state', 'active');
   await expect(page.getByText('Public beta', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('About').getByText('v0.1.4', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('About').getByText('v0.1.5', { exact: true })).toBeVisible();
   await expect(page.getByLabel('About').getByText('Web', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /View Releases/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Check now/ })).toHaveCount(0);
@@ -27,7 +27,7 @@ test('desktop About persists update preferences and includes them in settings tr
   await page.addInitScript((url) => {
     const invoke = async (command: string) => {
       if (command === 'start_server') return { url, api_token: 'test-token' };
-      if (command === 'get_app_version') return { version: '0.1.4', target: 'macOS Apple Silicon', installer_kind: 'dmg' };
+      if (command === 'get_app_version') return { version: '0.1.5', target: 'macOS Apple Silicon', installer_kind: 'dmg' };
       if (command === 'get_app_update_download_state') {
         return {
           status: 'idle',
@@ -44,17 +44,17 @@ test('desktop About persists update preferences and includes them in settings tr
       }
       if (command === 'check_app_update') {
         return {
-          current_version: '0.1.4',
+          current_version: '0.1.5',
           update_available: false,
           checked_at_ms: Date.now(),
           release: {
-            version: '0.1.4',
-            tag_name: 'v0.1.4',
-            name: 'ASRbox v0.1.4',
+            version: '0.1.5',
+            tag_name: 'v0.1.5',
+            name: 'ASRbox v0.1.5',
             notes: 'Current release.',
             published_at: '2026-07-01T00:00:00Z',
-            html_url: 'https://github.com/Goldloli/asrbox/releases/tag/v0.1.4',
-            asset_name: 'ASRbox_0.1.4_aarch64.dmg',
+            html_url: 'https://github.com/Goldloli/asrbox/releases/tag/v0.1.5',
+            asset_name: 'ASRbox_0.1.5_aarch64.dmg',
             asset_size: 1024,
           },
           releases_url: 'https://github.com/Goldloli/asrbox/releases',

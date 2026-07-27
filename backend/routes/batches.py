@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,14 @@ from backend.services import exports as export_service
 from backend.services import tasks as task_service
 
 router = APIRouter(prefix="/batches", tags=["batches"])
+
+
+def _safe_archive_stem(filename: str, fallback: str) -> str:
+    leaf = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    stem = leaf.rsplit(".", 1)[0]
+    stem = re.sub(r"[\x00-\x1f\x7f/:\\]+", "-", stem)
+    stem = re.sub(r"\s+", " ", stem).strip(" .-_")
+    return (stem or fallback)[:120]
 
 
 @router.get("/{batch_id}", response_model=BatchStatusResponse)
@@ -41,7 +50,7 @@ async def export_batch_zip(batch_id: str, db: Session = Depends(get_db)):
         for task in status["items"]:
             if task.status != "completed":
                 continue
-            stem = task.filename.rsplit(".", 1)[0] or task.id
+            stem = _safe_archive_stem(task.filename, task.id)
             archive.writestr(f"{stem}-{task.id}.txt", export_service.render_txt(task.filename, task.segments))
             archive.writestr(f"{stem}-{task.id}.srt", export_service.render_srt(task.segments))
             archive.writestr(f"{stem}-{task.id}.vtt", export_service.render_vtt(task.segments))

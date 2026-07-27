@@ -115,6 +115,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Frontend unit tests
+        run: npm run test:frontend:unit
+
       - name: Build Web UI
         run: npm run build:web
 
@@ -136,11 +139,8 @@ jobs:
       - name: Install Playwright Chromium
         run: bunx playwright install chromium
 
-      - name: Browser smoke test
-        run: npm run test:e2e:smoke
-
-      - name: AI LLM browser regression tests
-        run: npm run test:e2e:llm
+      - name: Maintained browser regression tests
+        run: npm run test:e2e:maintained
 
       - name: Build desktop DMG
         run: npm run build:desktop

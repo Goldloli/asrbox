@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import math
 import os
 from pathlib import Path
 import secrets
+from urllib.parse import parse_qsl, urlencode
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -21,6 +24,7 @@ API_DOCUMENT_PATHS = {"/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    config.validate_container_security()
     config.configure_model_cache_environment()
     init_db()
     _mark_interrupted_tasks()
@@ -61,8 +65,40 @@ def create_app() -> FastAPI:
             status_code=409,
         )
 
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(_request: Request, exc: RequestValidationError):
+        def json_safe(value):
+            if isinstance(value, float) and not math.isfinite(value):
+                return str(value)
+            if isinstance(value, dict):
+                return {key: json_safe(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [json_safe(item) for item in value]
+            return value
+
+        return JSONResponse({"detail": json_safe(exc.errors())}, status_code=422)
+
     @app.middleware("http")
     async def require_loopback_token(request: Request, call_next):
+        query_items = parse_qsl(
+            request.scope.get("query_string", b"").decode("utf-8", errors="replace"),
+            keep_blank_values=True,
+        )
+        supplied_query_token = next(
+            (value for key, value in query_items if key == "api_token"),
+            "",
+        )
+        supplied_resource_ticket = next(
+            (value for key, value in query_items if key == "resource_ticket"),
+            "",
+        )
+        redacted_query = [
+            (key, value)
+            for key, value in query_items
+            if key not in {"api_token", "resource_ticket"}
+        ]
+        request.scope["query_string"] = urlencode(redacted_query, doseq=True).encode("utf-8")
+
         if frontend_dir is not None and request.method == "GET":
             accepts_html = "text/html" in request.headers.get("accept", "")
             if accepts_html and request.url.path not in {"/health", "/health/filesystem", "/api-info", *API_DOCUMENT_PATHS}:
@@ -84,8 +120,17 @@ def create_app() -> FastAPI:
         authorization = request.headers.get("authorization", "")
         supplied = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
         if not supplied:
-            supplied = request.query_params.get("api_token", "")
-        if not supplied or not secrets.compare_digest(supplied, expected):
+            supplied = supplied_query_token
+        authenticated = bool(supplied and secrets.compare_digest(supplied, expected))
+        if not authenticated and supplied_resource_ticket:
+            from backend.services import resource_tickets
+
+            authenticated = resource_tickets.validate(
+                supplied_resource_ticket,
+                request.url.path,
+                request.method,
+            )
+        if not authenticated:
             return JSONResponse({"detail": "ASRbox API authentication required"}, status_code=401)
         return await call_next(request)
 

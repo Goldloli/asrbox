@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ASRbox",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "identifier": "com.goldloli.asrbox",
   "build": {
     "beforeDevCommand": "cd .. && bun run dev:web",
@@ -12,7 +12,8 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:17494 http://127.0.0.1:5173; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' http://127.0.0.1:17494 blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'none'",
+      "csp": "default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:17494; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' http://127.0.0.1:17494 blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'none'",
+      "devCsp": "default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:17494 http://127.0.0.1:5173 ws://127.0.0.1:5173; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' http://127.0.0.1:17494 blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'none'",
       "capabilities": ["default"]
     },
     "windows": [
@@ -38,10 +39,5 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
-  },
-  "plugins": {
-    "shell": {
-      "open": "^(file://|https?://|/).*$"
-    }
   }
 }

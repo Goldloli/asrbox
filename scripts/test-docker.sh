@@ -8,7 +8,17 @@ else
   PYTHON="$(command -v python3 || command -v python)"
 fi
 PROJECT="asrbox-smoke-${$}"
-PORT="${ASRBOX_DOCKER_TEST_PORT:-17504}"
+if [[ -n "${ASRBOX_DOCKER_TEST_PORT:-}" ]]; then
+  PORT="$ASRBOX_DOCKER_TEST_PORT"
+else
+  PORT="$("$PYTHON" -c '
+import socket
+
+with socket.socket() as listener:
+    listener.bind(("127.0.0.1", 0))
+    print(listener.getsockname()[1])
+')"
+fi
 TOKEN="${ASRBOX_DOCKER_TEST_TOKEN:-asrbox-docker-smoke-token}"
 BASE_URL="http://127.0.0.1:${PORT}"
 MARKER="Docker persistence ${PROJECT}"

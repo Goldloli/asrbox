@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, FiniteFloat
 
 TaskStatus = Literal[
     "created",
@@ -32,6 +32,16 @@ class DirectoryCheck(BaseModel):
     exists: bool
     writable: bool
     error: str | None = None
+
+
+class ResourceTicketRequest(BaseModel):
+    path: str = Field(..., pattern=r"^/tasks/[^/?#]+/audio$")
+
+
+class ResourceTicketResponse(BaseModel):
+    ticket: str
+    path: str
+    expires_at: datetime
 
 
 class FilesystemHealthResponse(BaseModel):
@@ -660,29 +670,41 @@ class ProofreadingApplyResponse(BaseModel):
 
 
 class SegmentUpdateRequest(BaseModel):
-    start: float | None = Field(None, ge=0)
-    end: float | None = Field(None, ge=0)
+    start: FiniteFloat | None = Field(None, ge=0)
+    end: FiniteFloat | None = Field(None, ge=0)
     text: str | None = None
     speaker: str | None = None
-    confidence: float | None = None
+    confidence: FiniteFloat | None = None
 
 
 class SegmentCreateRequest(BaseModel):
-    start: float = Field(..., ge=0)
-    end: float = Field(..., ge=0)
+    start: FiniteFloat = Field(..., ge=0)
+    end: FiniteFloat = Field(..., ge=0)
     text: str
     speaker: str | None = None
-    confidence: float | None = None
+    confidence: FiniteFloat | None = None
 
 
 class SegmentSplitRequest(BaseModel):
-    split_at: float = Field(..., ge=0)
+    split_at: FiniteFloat = Field(..., ge=0)
     left_text: str | None = None
     right_text: str | None = None
 
 
 class SegmentMergeRequest(BaseModel):
     segment_ids: list[int] = Field(..., min_length=2)
+
+
+class SegmentBulkItem(BaseModel):
+    id: int
+    start: FiniteFloat = Field(..., ge=0)
+    end: FiniteFloat = Field(..., ge=0)
+    text: str
+    speaker: str | None = None
+
+
+class SegmentsBulkUpdateRequest(BaseModel):
+    segments: list[SegmentBulkItem] = Field(..., min_length=1)
 
 
 class ChunkResponse(BaseModel):

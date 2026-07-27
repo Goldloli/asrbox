@@ -62,3 +62,36 @@ normalized 音频与 chunk 文件 SHALL 写入配置后的派生音频目录，�
 - **WHEN** relink 请求给出不存在或非文件的路径，或来自非桌面运行时
 - **THEN** 请求明确失败，任务保留其先前记录的路径
 
+### Requirement: 有界且稳健的媒体工具执行
+
+媒体探测、规范化、音量分析与切片 SHALL 使用参数列表调用已解析的 ffprobe/ffmpeg，SHALL 具有与预期工作量匹配且可配置的总时限，并 SHALL 把超时作为可诊断的预处理或切片失败。ffprobe 的未知、非有限或负 duration SHALL 作为未知时长处理，而不是导致未捕获异常或伪造时长。
+
+#### Scenario: ffprobe 返回未知时长
+
+- **WHEN** ffprobe 对有效输入返回 `"N/A"`、非有限数或负 duration
+- **THEN** 媒体元数据的 duration 为未知，其他可用流信息仍被保留
+
+#### Scenario: ffmpeg 停止产生进展
+
+- **WHEN** 媒体规范化、音量分析或切片进程超过其宽松总时限
+- **THEN** 进程被终止，不完整目标被清理，任务收到现有错误体系内的可诊断失败
+
+### Requirement: 派生音频失败清理完整性
+
+媒体切片与 orphan 清理 SHALL 只删除本次失败操作拥有或数据库未引用的派生 WAV；活动或终态任务仍由 task/chunk 行引用的文件 SHALL 保留。桌面 relink SHALL 只在任务非活动时以一个状态转换完成旧派生文件失效和新源路径提交。
+
+#### Scenario: 第 N 个切片失败
+
+- **WHEN** ffmpeg 在一次切片调用已经生成前几个 chunk 后失败或超时
+- **THEN** 本次调用已经生成的全部 chunk 被删除，任务源媒体和其他任务文件保持不变
+
+#### Scenario: 递归清理派生目录
+
+- **WHEN** orphan 清理扫描 task-id chunk 子目录
+- **THEN** 数据库仍引用的 task/chunk 文件被保留，未引用 WAV 被删除
+
+#### Scenario: 活动任务 relink
+
+- **WHEN** 桌面用户尝试为活动任务选择新的源文件
+- **THEN** relink 返回冲突，旧路径、派生文件和 chunk 行全部保持不变
+

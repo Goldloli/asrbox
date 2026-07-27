@@ -4,6 +4,23 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-27
+
+### Changed
+
+- Desktop and Web API credentials now use Authorization headers; native audio playback receives a path-scoped ticket with a 30-minute idle timeout and a non-renewable 24-hour maximum lifetime, SSE reconnects after startup races, and server connection settings apply only on explicit Save.
+- Runtime compatibility imports run in a bounded short-lived probe process, media tools and desktop/update networking have explicit deadlines, and online SQLite backups use a transaction-consistent snapshot.
+
+### Fixed
+
+- Hardened MCP path access, model deletion, task worker replacement, concurrent retry/retranscribe/delete transitions, and atomic transcript/version writes without changing successful transcription, editing, export, or restore contracts.
+- Failed-chunk retry now has one-writer claiming, cancellation-safe finalization, and non-blocking API execution; active cleanup/relink and concurrent proofreading application share the same lifecycle guard, while partial chunk files and nested orphan WAV files are cleaned safely.
+- Rejected executable-bundle symlink aliases and broad WebView shell opening, sanitized ZIP entry names, bounded large transcript diffs, and prevented global shortcuts from firing inside editable controls.
+
+### Security
+
+- Tokenless containers now fail closed when their declared published address is non-loopback; query credentials are stripped before routine access logging, and packaged desktop instances no longer adopt an already-running backend they do not own.
+
 ## [0.1.4] - 2026-07-26
 
 ### Added

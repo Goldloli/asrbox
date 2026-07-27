@@ -18,7 +18,13 @@ from backend.backends import ASRModelConfig, ModelSourceCandidate, get_all_model
 from backend.models import ASRModelStatus, ModelRecommendationRequest, ModelRecommendationResponse
 from backend.services.errors import ASRboxError
 from backend.services import model_storage
-from backend.services.platform import funasr_available, mlx_runtime_import_error, moss_transcribe_diarize_available, qwen3_asr_available, torchaudio_available
+from backend.services.platform import (
+    funasr_available,
+    moss_transcribe_diarize_available,
+    qwen3_asr_available,
+    runtime_mlx_import_error as mlx_runtime_import_error,
+    torchaudio_available,
+)
 from backend.utils.hf_progress import track_hf_download
 from backend.utils.progress import get_progress_manager
 
@@ -627,8 +633,13 @@ def unload_model(model_name: str) -> bool:
 
 def delete_model(model_name: str) -> None:
     model_storage.require_storage(writable=True)
+    if get_model_config(model_name) is None:
+        raise ValueError(f"Unknown model: {model_name}")
+    target = _model_dir(model_name).resolve()
+    if not target.is_relative_to(config.get_models_dir().resolve()):
+        raise ValueError(f"Unknown model: {model_name}")
     unload_model(model_name)
-    shutil.rmtree(_model_dir(model_name), ignore_errors=True)
+    shutil.rmtree(target, ignore_errors=True)
     with _state_lock:
         _active_downloads.discard(model_name)
         _cancelled_downloads.discard(model_name)

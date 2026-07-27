@@ -72,9 +72,13 @@ Treat the data directory and every backup as sensitive. Do not attach them to pu
 
 The supported desktop backend binds to `127.0.0.1` and uses a random API token generated for each app launch. The token reduces access from unrelated local web pages, but it is not user authentication, disk encryption, or protection from software running as the same macOS user.
 
+Maintained API, export, diagnostics, and event-stream requests send that process token in the `Authorization` header. Native audio playback uses an in-memory ticket restricted to one task audio path; it expires after 30 minutes without a valid request, can be renewed by active playback only up to a non-renewable 24-hour maximum, cannot call other APIs, and disappears on restart. Legacy query authentication remains accepted for compatibility, but the backend removes credential parameters from the request scope before normal access logging.
+
 Health and API metadata remain available without the token. A manually started development backend is unauthenticated unless `ASRBOX_API_TOKEN` is set.
 
 The supported Docker Compose configuration binds to host loopback by default. An operator can explicitly bind to a LAN interface and set a fixed `ASRBOX_API_TOKEN`; the Web UI stores an entered token only in browser session storage. This is not multi-user authentication, TLS, rate limiting, or a public-Internet security layer. Use a trusted LAN/VPN or an authenticated HTTPS reverse proxy and never expose a tokenless container beyond loopback.
+
+Container startup now enforces this boundary: a declared non-loopback published address with an empty token is rejected instead of starting unauthenticated.
 
 ## Backups and Diagnostics
 

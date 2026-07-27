@@ -37,7 +37,7 @@ def request_cancel(task_id: str) -> str | None:
         if task_id in _running_task_ids:
             _cancelled_task_ids.add(task_id)
             return "running"
-        _cancelled_task_ids.add(task_id)
+        # Untracked ids have no worker to notify; do not pin them in the set forever.
         return None
 
 

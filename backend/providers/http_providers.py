@@ -26,7 +26,7 @@ def _get_path(data: Any, path: str | None):
     return current
 
 
-def _segments_from_payload(value: Any) -> list[TranscriptSegment]:
+def _segments_from_payload(value: Any, *, assume_seconds: bool = False) -> list[TranscriptSegment]:
     if not isinstance(value, list):
         return []
     segments = []
@@ -38,7 +38,7 @@ def _segments_from_payload(value: Any) -> list[TranscriptSegment]:
             continue
         start = float(item.get("start") or item.get("start_time") or 0)
         end = float(item.get("end") or item.get("end_time") or start)
-        if start > 1000 or end > 1000:
+        if not assume_seconds and (start > 1000 or end > 1000):
             start /= 1000
             end /= 1000
         segments.append(TranscriptSegment(id=index, start=start, end=end, text=text))
@@ -68,11 +68,11 @@ def _sleep_or_cancel(seconds: float, options: dict, stage: str = "poll") -> None
         time.sleep(min(0.2, deadline - time.time()))
 
 
-def _result_from_payload(data: Any, *, text_path: str | None, segments_path: str | None, provider_id: str) -> TranscriptionResult:
+def _result_from_payload(data: Any, *, text_path: str | None, segments_path: str | None, provider_id: str, assume_seconds: bool = False) -> TranscriptionResult:
     text_value = _get_path(data, text_path) if text_path else None
     if text_value is None and isinstance(data, dict):
         text_value = data.get("text")
-    segments = _segments_from_payload(_get_path(data, segments_path) if segments_path else data.get("segments") if isinstance(data, dict) else None)
+    segments = _segments_from_payload(_get_path(data, segments_path) if segments_path else data.get("segments") if isinstance(data, dict) else None, assume_seconds=assume_seconds)
     text = str(text_value or "").strip()
     if not text and segments:
         text = transcript_text_from_segments(segments)
@@ -127,7 +127,8 @@ class OpenAICompatibleProvider:
             payload = response.json()
         except json.JSONDecodeError:
             payload = {"text": response.text}
-        return _result_from_payload(payload, text_path="text", segments_path="segments", provider_id=self.provider_id)
+        # OpenAI verbose_json segment timestamps are always seconds, even beyond 1000s.
+        return _result_from_payload(payload, text_path="text", segments_path="segments", provider_id=self.provider_id, assume_seconds=True)
 
     def list_models(self) -> list[str]:
         return [self.default_model]

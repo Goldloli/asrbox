@@ -14,7 +14,7 @@ RUN bun run build:web
 
 FROM python:3.13-slim-bookworm AS runtime
 
-ARG APP_VERSION=0.1.0-rc.2
+ARG APP_VERSION=0.1.5
 LABEL org.opencontainers.image.title="ASRbox" \
       org.opencontainers.image.description="Local-first transcription and LLM subtitle proofreading workspace" \
       org.opencontainers.image.source="https://github.com/Goldloli/asrbox" \
@@ -25,6 +25,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     ASRBOX_DATA_DIR=/data \
     ASRBOX_CONTAINER=1 \
+    ASRBOX_PUBLIC_BIND_ADDRESS=0.0.0.0 \
     ASRBOX_FRONTEND_DIR=/opt/asrbox/frontend \
     HF_HOME=/data/cache/huggingface \
     HUGGINGFACE_HUB_CACHE=/data/cache/huggingface/hub \

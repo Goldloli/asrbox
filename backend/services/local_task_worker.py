@@ -19,6 +19,7 @@ def run_local_task_worker(request_path: str | Path, result_path: str | Path) -> 
     request_file = Path(request_path)
     result_file = Path(result_path)
     results: list[dict[str, Any]] = []
+    inputs: list[Any] = []
 
     try:
         request = json.loads(request_file.read_text(encoding="utf-8"))

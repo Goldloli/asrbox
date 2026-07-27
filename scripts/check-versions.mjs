@@ -20,10 +20,73 @@ export async function checkVersions(root) {
   const cargo = await readFile(path.join(root, "tauri/src-tauri/Cargo.toml"), "utf8");
   const backend = await readFile(path.join(root, "backend/__init__.py"), "utf8");
   const viteConfig = await readFile(path.join(root, "web/vite.config.ts"), "utf8");
+  const dockerfile = await readFile(path.join(root, "Dockerfile"), "utf8");
+  const compose = await readFile(path.join(root, "compose.yaml"), "utf8");
+  const envExample = await readFile(path.join(root, ".env.example"), "utf8");
+  const bunLock = await readFile(path.join(root, "bun.lock"), "utf8");
+  const cargoLock = await readFile(path.join(root, "tauri/src-tauri/Cargo.lock"), "utf8");
   versions.set("tauri/src-tauri/Cargo.toml", matchVersion(cargo, /^version\s*=\s*"([^"]+)"/m));
   versions.set("backend/__init__.py", matchVersion(backend, /^__version__\s*=\s*"([^"]+)"/m));
+  versions.set("Dockerfile", matchVersion(dockerfile, /^ARG APP_VERSION=([^\s#]+)/m));
+  versions.set(
+    "compose.yaml",
+    matchVersion(compose, /APP_VERSION:\s*\$\{ASRBOX_VERSION:-([^}]+)\}/),
+  );
+  versions.set(".env.example", matchVersion(envExample, /^ASRBOX_VERSION=([^\s#]+)/m));
 
   const expected = versions.get("package.json");
+  if (expected) {
+    validateReleaseTag(`v${expected}`, expected);
+  }
+  const bunWorkspaces = parseBunWorkspaceVersions(bunLock);
+  for (const workspace of ["app", "web", "tauri"]) {
+    versions.set(`bun.lock#workspaces.${workspace}`, bunWorkspaces[workspace]);
+  }
+  versions.set(
+    "tauri/src-tauri/Cargo.lock#asrbox",
+    matchVersion(
+      cargoLock,
+      /\[\[package\]\]\s*\nname\s*=\s*"asrbox"\s*\nversion\s*=\s*"([^"]+)"/m,
+    ),
+  );
+
+  if (expected) {
+    const readmeZh = await readOptional(path.join(root, "README.md"));
+    const readmeEn = await readOptional(path.join(root, "README.en.md"));
+    const releaseGuide = await readOptional(path.join(root, "docs/release.md"));
+    const releaseNotes = await readOptional(
+      path.join(root, `docs/releases/v${expected}.md`),
+    );
+    versions.set(
+      "README.md#source",
+      matchVersion(readmeZh ?? "", /当前源码版本为\s*`([^`]+)`/),
+    );
+    versions.set(
+      "README.md#release",
+      matchVersion(readmeZh ?? "", /releases\/tag\/v([^)\s]+)/),
+    );
+    versions.set(
+      "README.en.md#source",
+      matchVersion(readmeEn ?? "", /current source version is\s*`([^`]+)`/i),
+    );
+    versions.set(
+      "README.en.md#release",
+      matchVersion(readmeEn ?? "", /releases\/tag\/v([^)\s]+)/),
+    );
+    versions.set(
+      "docs/release.md#current",
+      matchVersion(releaseGuide ?? "", /releases\/tag\/v([^)\s]+)/),
+    );
+    const expectedTag = `v${expected}`;
+    const expectedDmg = `ASRbox_${expected}_aarch64.dmg`;
+    versions.set(
+      "release notes",
+      releaseNotes?.includes(expectedTag) && releaseNotes.includes(expectedDmg)
+        ? expected
+        : undefined,
+    );
+  }
+
   const frontendVersionIsBound =
     /const applicationVersion\s*=\s*[\s\S]*new URL\(['"]\.\.\/package\.json['"]/.test(viteConfig)
     && /__ASRBOX_VERSION__\s*:\s*JSON\.stringify\(applicationVersion\)/.test(viteConfig);
@@ -52,6 +115,30 @@ export function validateReleaseTag(tag, version) {
 
 function matchVersion(contents, pattern) {
   return contents.match(pattern)?.[1];
+}
+
+function parseBunWorkspaceVersions(contents) {
+  try {
+    const withoutTrailingCommas = contents.replace(/,(\s*[}\]])/g, "$1");
+    const parsed = JSON.parse(withoutTrailingCommas);
+    return Object.fromEntries(
+      Object.entries(parsed.workspaces ?? {}).map(([name, value]) => [
+        name,
+        value?.version,
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+async function readOptional(file) {
+  try {
+    return await readFile(file, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 async function main() {

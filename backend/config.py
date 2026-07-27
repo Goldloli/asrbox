@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import os
 from pathlib import Path
 import tempfile
@@ -17,6 +18,28 @@ INGEST_MODE_REFERENCE = "reference"
 INGEST_MODE_COPY = "copy"
 INGEST_MODES = (INGEST_MODE_REFERENCE, INGEST_MODE_COPY)
 DEFAULT_INGEST_MODE = INGEST_MODE_REFERENCE
+
+
+def is_loopback_address(value: str) -> bool:
+    host = value.strip().strip("[]").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def validate_container_security() -> None:
+    if os.environ.get("ASRBOX_CONTAINER") != "1":
+        return
+    public_bind = os.environ.get("ASRBOX_PUBLIC_BIND_ADDRESS", "").strip()
+    if not public_bind or is_loopback_address(public_bind):
+        return
+    if not os.environ.get("ASRBOX_API_TOKEN", "").strip():
+        raise RuntimeError(
+            "ASRBOX_API_TOKEN is required when ASRBOX_PUBLIC_BIND_ADDRESS is not loopback"
+        )
 
 
 def get_data_dir() -> Path:
@@ -108,6 +131,27 @@ def resolve_derived_audio_dir() -> Path:
 
 def delete_derived_audio_on_complete() -> bool:
     return bool(_read_media_storage_config().get("delete_derived_on_complete"))
+
+
+def is_desktop_mode() -> bool:
+    return os.environ.get("ASRBOX_DESKTOP_MODE") == "1"
+
+
+def get_mcp_allowed_roots() -> list[Path]:
+    """Roots inside which the MCP server may ingest local media paths.
+
+    Deliberately excludes the data directory root itself: the database and
+    settings live there and must never become task media.
+    """
+    roots = [resolve_uploads_dir(), resolve_derived_audio_dir()]
+    configured = os.environ.get("ASRBOX_MCP_ALLOWED_ROOTS", "")
+    roots.extend(Path(value.strip()).expanduser().absolute() for value in configured.split(",") if value.strip())
+    return roots
+
+
+def path_within_roots(candidate: Path, roots: list[Path]) -> bool:
+    resolved = candidate.expanduser().resolve()
+    return any(resolved.is_relative_to(root.expanduser().resolve()) for root in roots)
 
 
 def update_media_storage_config(

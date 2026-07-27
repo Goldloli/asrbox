@@ -509,19 +509,12 @@ def test_concurrent_apply_creates_only_one_proofread_version(tmp_path: Path, mon
     finally:
         seed_db.close()
 
-    barrier = threading.Barrier(2)
-    original_is_stale = proofreading.is_stale
-
-    def synchronized_is_stale(db, current_run):
-        result = original_is_stale(db, current_run)
-        barrier.wait(timeout=5)
-        return result
-
-    monkeypatch.setattr(proofreading, "is_stale", synchronized_is_stale)
+    start_barrier = threading.Barrier(2)
 
     def apply_once() -> tuple[str, int | str]:
         db = db_session.SessionLocal()
         try:
+            start_barrier.wait(timeout=5)
             version = proofreading.apply_suggestions(db, run_id, [suggestion_id])
             return "applied", version.id
         except proofreading.ProofreadingError as exc:

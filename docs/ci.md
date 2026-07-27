@@ -14,12 +14,12 @@ It performs:
 4. Network dependency vulnerability audit.
 5. Locked backend development dependency installation.
 6. TypeScript typecheck.
-7. Production Web build.
-8. Bundled ffmpeg/ffprobe checksum, GPL configuration, license, and source-record verification.
-9. Backend test suite, excluding the separately invoked frozen-binary smoke test.
-10. Tauri `cargo check --locked` and `cargo test --locked`.
-11. Playwright public-beta browser smoke test.
-12. AI LLM provider and subtitle-proofreading browser regression tests.
+7. Maintained frontend unit tests through `test:frontend:unit`.
+8. Production Web build.
+9. Bundled ffmpeg/ffprobe checksum, GPL configuration, license, and source-record verification.
+10. Backend test suite, excluding the separately invoked frozen-binary smoke test.
+11. Tauri `cargo check --locked` and `cargo test --locked`.
+12. The complete maintained Playwright suite through `test:e2e:maintained`, including public-beta, LLM proofreading, About/update, model-storage/download, and persisted transcript-editing scenarios.
 
 The Ubuntu Docker job:
 
@@ -39,7 +39,7 @@ Run the closest local equivalent before merge:
 npm run check:open-source
 ```
 
-The script runs frozen Bun installation, Python package health and compilation, version/release checks, third-party verification, TypeScript, Web build, backend tests, Cargo, browser smoke coverage, and the AI LLM browser regression suite.
+The script runs frozen Bun installation, Python package health and compilation, version/release checks, third-party verification, TypeScript, maintained frontend unit tests, Web build, backend tests, Cargo, and the complete maintained browser suite.
 
 The network dependency audit is intentionally separate locally:
 
@@ -54,17 +54,20 @@ CI and Release always run that audit.
 ```bash
 npm run typecheck
 npm run build:web
+npm run test:frontend:unit
 npm run test:backend
 npm run test:backend:contract
 npm run test:backend:server
+npm run test:release-tools
 npm run test:e2e:smoke
 npm run test:e2e:llm
+npm run test:e2e:maintained
 npm run test:docker
 bunx playwright test app/e2e/models-download-controls.spec.ts
 cd tauri/src-tauri && cargo check --locked && cargo test --locked
 ```
 
-Real-model, long-audio, benchmark, provider, and frozen-binary suites have dedicated package scripts. Real-model runs require predownloaded models and legally supplied media and are not a default pull-request gate.
+Focused browser commands remain useful during iteration, but a maintained user-flow spec is not release-covered until it is included by `test:e2e:maintained`. Real-model, long-audio, benchmark, provider, and frozen-binary suites have dedicated package scripts. Real-model runs require predownloaded models and legally supplied media and are not a default pull-request gate.
 
 ## Release Workflow
 

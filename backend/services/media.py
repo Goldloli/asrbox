@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -10,6 +11,37 @@ from backend.services.errors import ASRboxError
 from backend.services.ffmpeg_tools import resolve_tools
 
 SUPPORTED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac", ".ogg"}
+DEFAULT_PROBE_TIMEOUT_SECONDS = 30
+DEFAULT_UNKNOWN_MEDIA_TIMEOUT_SECONDS = 6 * 60 * 60
+
+
+def _configured_timeout(default: int) -> int:
+    try:
+        return max(1, int(os.environ.get("ASRBOX_MEDIA_PROCESS_TIMEOUT_SECONDS", default)))
+    except ValueError:
+        return default
+
+
+def _media_timeout(duration_ms: int | None = None) -> int:
+    configured = os.environ.get("ASRBOX_MEDIA_PROCESS_TIMEOUT_SECONDS")
+    if configured:
+        return _configured_timeout(DEFAULT_UNKNOWN_MEDIA_TIMEOUT_SECONDS)
+    if duration_ms and duration_ms > 0:
+        return max(300, math.ceil(duration_ms / 1000 * 4 + 60))
+    return DEFAULT_UNKNOWN_MEDIA_TIMEOUT_SECONDS
+
+
+def _optional_nonnegative_float(value: object) -> float | None:
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed >= 0 else None
+
+
+def _optional_positive_int(value: object) -> int | None:
+    parsed = _optional_nonnegative_float(value)
+    return int(parsed) if parsed is not None and parsed > 0 else None
 
 
 def probe_media(path: Path) -> dict:
@@ -27,7 +59,14 @@ def probe_media(path: Path) -> dict:
     if not ffprobe.available:
         raise ASRboxError("FFPROBE_FAILED", f"ffprobe is required to inspect media files: {ffprobe.error or 'not found'}", stage="preprocessing", command=" ".join(command))
     try:
-        completed = subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_configured_timeout(DEFAULT_PROBE_TIMEOUT_SECONDS),
+        )
     except FileNotFoundError as exc:
         raise ASRboxError("FFPROBE_FAILED", "ffprobe is required to inspect media files", stage="preprocessing", command=" ".join(command)) from exc
     except subprocess.CalledProcessError as exc:
@@ -39,17 +78,34 @@ def probe_media(path: Path) -> dict:
             command=" ".join(command),
             stderr_excerpt=detail,
         ) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ASRboxError(
+            "FFPROBE_FAILED",
+            "ffprobe timed out while inspecting media",
+            stage="preprocessing",
+            command=" ".join(command),
+        ) from exc
 
-    raw = json.loads(completed.stdout or "{}")
+    try:
+        raw = json.loads(completed.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise ASRboxError(
+            "FFPROBE_FAILED",
+            "ffprobe returned invalid JSON",
+            stage="preprocessing",
+            command=" ".join(command),
+        ) from exc
     fmt = raw.get("format") or {}
     audio_streams = [stream for stream in raw.get("streams", []) if stream.get("codec_type") == "audio"]
     audio_stream = audio_streams[0] if audio_streams else {}
-    duration = fmt.get("duration") or audio_stream.get("duration")
+    duration = _optional_nonnegative_float(fmt.get("duration"))
+    if duration is None:
+        duration = _optional_nonnegative_float(audio_stream.get("duration"))
     return {
-        "duration_ms": int(float(duration) * 1000) if duration else None,
+        "duration_ms": int(duration * 1000) if duration is not None else None,
         "format": fmt.get("format_name"),
         "audio_codec": audio_stream.get("codec_name"),
-        "sample_rate": int(audio_stream["sample_rate"]) if audio_stream.get("sample_rate") else None,
+        "sample_rate": _optional_positive_int(audio_stream.get("sample_rate")),
         "channels": audio_stream.get("channels"),
         "has_audio_stream": bool(audio_streams),
         "audio_stream_count": len(audio_streams),
@@ -89,7 +145,14 @@ def prepare_media_for_asr(path: Path, *, output_dir: Path | None = None, output_
     if not ffmpeg.available:
         raise ASRboxError("FFMPEG_FAILED", f"ffmpeg is required to extract audio from media files: {ffmpeg.error or 'not found'}", stage="preprocessing", command=" ".join(command))
     try:
-        subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
+        subprocess.run(
+            command,
+            capture_output=True,
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_media_timeout(metadata.get("duration_ms")),
+        )
     except FileNotFoundError as exc:
         raise ASRboxError("FFMPEG_FAILED", "ffmpeg is required to extract audio from media files", stage="preprocessing", command=" ".join(command)) from exc
     except subprocess.CalledProcessError as exc:
@@ -102,6 +165,14 @@ def prepare_media_for_asr(path: Path, *, output_dir: Path | None = None, output_
             command=" ".join(command),
             stderr_excerpt=detail,
         ) from exc
+    except subprocess.TimeoutExpired as exc:
+        target.unlink(missing_ok=True)
+        raise ASRboxError(
+            "FFMPEG_FAILED",
+            "ffmpeg timed out while normalizing media",
+            stage="preprocessing",
+            command=" ".join(command),
+        ) from exc
     return target, metadata
 
 
@@ -111,9 +182,18 @@ def analyze_audio_quality(path: Path) -> dict:
         return {"warnings": [f"ffmpeg is not available for volume analysis: {ffmpeg.error or 'not found'}"]}
     command = [ffmpeg.path or "ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"]
     try:
-        completed = subprocess.run(command, capture_output=True, check=False, encoding="utf-8", errors="replace")
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_media_timeout(),
+        )
     except FileNotFoundError:
         return {"warnings": ["ffmpeg is not available for volume analysis"]}
+    except subprocess.TimeoutExpired:
+        return {"warnings": ["ffmpeg timed out during volume analysis"]}
     output = "\n".join([completed.stdout or "", completed.stderr or ""])
     mean_match = re.search(r"mean_volume:\s*(-?\d+(?:\.\d+)?) dB", output)
     max_match = re.search(r"max_volume:\s*(-?\d+(?:\.\d+)?) dB", output)
@@ -168,48 +248,73 @@ def split_audio_chunks(
 ) -> list[tuple[Path, int, int]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     chunks: list[tuple[Path, int, int]] = []
+    attempted_paths: list[Path] = []
     ffmpeg = resolve_tools(check_version=False)["ffmpeg"]
     start_ms = 0
     index = 1
     step_ms = max(1, window_ms - overlap_ms)
-    while start_ms < duration_ms:
-        end_ms = min(duration_ms, start_ms + window_ms)
-        target = output_dir / f"chunk-{index:04}.wav"
-        command = [
-            ffmpeg.path or "ffmpeg",
-            "-ss",
-            f"{start_ms / 1000:.3f}",
-            "-t",
-            f"{(end_ms - start_ms) / 1000:.3f}",
-            "-i",
-            str(audio_path),
-            "-ac",
-            "1",
-            "-ar",
-            "16000",
-            "-f",
-            "wav",
-            "-y",
-            str(target),
-        ]
-        if not ffmpeg.available:
-            raise ASRboxError("FFMPEG_FAILED", f"ffmpeg is required to split long media files: {ffmpeg.error or 'not found'}", stage="chunking", command=" ".join(command))
+    try:
+        while start_ms < duration_ms:
+            end_ms = min(duration_ms, start_ms + window_ms)
+            target = output_dir / f"chunk-{index:04}.wav"
+            attempted_paths.append(target)
+            command = [
+                ffmpeg.path or "ffmpeg",
+                "-ss",
+                f"{start_ms / 1000:.3f}",
+                "-t",
+                f"{(end_ms - start_ms) / 1000:.3f}",
+                "-i",
+                str(audio_path),
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-f",
+                "wav",
+                "-y",
+                str(target),
+            ]
+            if not ffmpeg.available:
+                raise ASRboxError("FFMPEG_FAILED", f"ffmpeg is required to split long media files: {ffmpeg.error or 'not found'}", stage="chunking", command=" ".join(command))
+            try:
+                subprocess.run(
+                    command,
+                    capture_output=True,
+                    check=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=_media_timeout(end_ms - start_ms),
+                )
+            except FileNotFoundError as exc:
+                raise ASRboxError("FFMPEG_FAILED", "ffmpeg is required to split long media files", stage="chunking", command=" ".join(command)) from exc
+            except subprocess.CalledProcessError as exc:
+                detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+                raise ASRboxError(
+                    "CHUNK_FAILED",
+                    f"Failed to split media chunk {index}: {detail}",
+                    stage="chunking",
+                    command=" ".join(command),
+                    stderr_excerpt=detail,
+                ) from exc
+            except subprocess.TimeoutExpired as exc:
+                raise ASRboxError(
+                    "CHUNK_FAILED",
+                    f"ffmpeg timed out while splitting media chunk {index}",
+                    stage="chunking",
+                    command=" ".join(command),
+                ) from exc
+            chunks.append((target, start_ms, end_ms))
+            if end_ms >= duration_ms:
+                break
+            start_ms += step_ms
+            index += 1
+        return chunks
+    except BaseException:
+        for path in attempted_paths:
+            path.unlink(missing_ok=True)
         try:
-            subprocess.run(command, capture_output=True, check=True, encoding="utf-8", errors="replace")
-        except FileNotFoundError as exc:
-            raise ASRboxError("FFMPEG_FAILED", "ffmpeg is required to split long media files", stage="chunking", command=" ".join(command)) from exc
-        except subprocess.CalledProcessError as exc:
-            detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
-            raise ASRboxError(
-                "CHUNK_FAILED",
-                f"Failed to split media chunk {index}: {detail}",
-                stage="chunking",
-                command=" ".join(command),
-                stderr_excerpt=detail,
-            ) from exc
-        chunks.append((target, start_ms, end_ms))
-        if end_ms >= duration_ms:
-            break
-        start_ms += step_ms
-        index += 1
-    return chunks
+            output_dir.rmdir()
+        except OSError:
+            pass
+        raise

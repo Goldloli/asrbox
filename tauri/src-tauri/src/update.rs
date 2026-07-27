@@ -2,6 +2,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
+use std::future::Future;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +19,7 @@ const USER_AGENT: &str = "ASRbox desktop update checker";
 const CANCELLED: &str = "__ASRBOX_UPDATE_CANCELLED__";
 const MAX_CHECKSUM_BYTES: usize = 1024 * 1024;
 const MAX_INSTALLER_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+const RESPONSE_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Serialize)]
 pub struct AppVersionInfo {
@@ -472,10 +474,12 @@ async fn download_file(
     let mut last_emit = Instant::now() - Duration::from_secs(1);
     let mut downloaded = 0u64;
 
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| format!("Failed while downloading installer: {error}"))?
+    while let Some(chunk) = await_with_idle_timeout(
+        response.chunk(),
+        RESPONSE_IDLE_TIMEOUT,
+        "Installer download",
+    )
+    .await?
     {
         ensure_not_cancelled(app)?;
         file.write_all(&chunk)
@@ -596,10 +600,12 @@ async fn read_bounded_text(
         return Err("Release checksum file is unexpectedly large.".to_string());
     }
     let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| format!("Failed to read release checksums: {error}"))?
+    while let Some(chunk) = await_with_idle_timeout(
+        response.chunk(),
+        RESPONSE_IDLE_TIMEOUT,
+        "Release checksum download",
+    )
+    .await?
     {
         if bytes.len().saturating_add(chunk.len()) > maximum_bytes {
             return Err("Release checksum file is unexpectedly large.".to_string());
@@ -607,6 +613,22 @@ async fn read_bounded_text(
         bytes.extend_from_slice(&chunk);
     }
     String::from_utf8(bytes).map_err(|_| "Release checksum file is not valid UTF-8.".to_string())
+}
+
+async fn await_with_idle_timeout<T>(
+    future: impl Future<Output = Result<T, reqwest::Error>>,
+    timeout: Duration,
+    operation: &str,
+) -> Result<T, String> {
+    tokio::time::timeout(timeout, future)
+        .await
+        .map_err(|_| {
+            format!(
+                "{operation} stalled for more than {} seconds.",
+                timeout.as_secs()
+            )
+        })?
+        .map_err(|error| format!("{operation} failed: {error}"))
 }
 
 fn github_client() -> Result<reqwest::Client, String> {
@@ -965,5 +987,18 @@ mod tests {
             Some("https://github.com/Goldloli/asrbox/issues/new/choose")
         );
         assert_eq!(about_link_url("https://example.com"), None);
+    }
+
+    #[test]
+    fn response_idle_timeout_is_bounded_and_diagnostic() {
+        tauri::async_runtime::block_on(async {
+            let result: Result<(), String> = await_with_idle_timeout(
+                std::future::pending::<Result<(), reqwest::Error>>(),
+                Duration::from_millis(5),
+                "Test download",
+            )
+            .await;
+            assert!(result.unwrap_err().contains("Test download stalled"));
+        });
     }
 }

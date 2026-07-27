@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import platform as platform_module
 import shutil
+import subprocess
 import sys
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from backend.services.ffmpeg_tools import resolve_tools
+
+RUNTIME_PROBE_CHILD_ENV = "ASRBOX_RUNTIME_PROBE_CHILD"
+RUNTIME_PROBE_TIMEOUT_SECONDS = 180
 
 
 def module_available(name: str) -> bool:
@@ -26,11 +33,11 @@ def module_import_error(name: str) -> str | None:
 
 
 def torchaudio_available() -> bool:
-    return module_import_error("torchaudio") is None
+    return bool(runtime_probe_snapshot()["torchaudio_available"])
 
 
 def funasr_available() -> bool:
-    return module_import_error("funasr") is None
+    return bool(runtime_probe_snapshot()["funasr_available"])
 
 
 def qwen3_asr_import_error() -> str | None:
@@ -47,7 +54,7 @@ def qwen3_asr_import_error() -> str | None:
 
 
 def qwen3_asr_available() -> bool:
-    return qwen3_asr_import_error() is None
+    return bool(runtime_probe_snapshot()["qwen3_asr_available"])
 
 
 def moss_transcribe_diarize_import_error() -> str | None:
@@ -69,7 +76,7 @@ def moss_transcribe_diarize_import_error() -> str | None:
 
 
 def moss_transcribe_diarize_available() -> bool:
-    return moss_transcribe_diarize_import_error() is None
+    return bool(runtime_probe_snapshot()["moss_transcribe_diarize_available"])
 
 
 def mlx_runtime_import_errors() -> tuple[str | None, str | None]:
@@ -87,7 +94,18 @@ def mlx_runtime_import_error() -> str | None:
     return None
 
 
-def detect_runtime() -> dict[str, Any]:
+def runtime_mlx_import_error() -> str | None:
+    snapshot = runtime_probe_snapshot()
+    core_error = snapshot.get("mlx_import_error")
+    whisper_error = snapshot.get("mlx_whisper_import_error")
+    if core_error:
+        return f"mlx.core import failed: {core_error}"
+    if whisper_error:
+        return f"mlx_whisper import failed: {whisper_error}"
+    return None
+
+
+def detect_runtime_in_process() -> dict[str, Any]:
     warnings: list[str] = []
     torch_available = module_available("torch")
     torch_cuda_available = False
@@ -180,4 +198,122 @@ def detect_runtime() -> dict[str, Any]:
         "transformers_qwen3_asr_available": qwen3_asr_runtime_available,
         "moss_transcribe_diarize_available": moss_runtime_available,
         "warnings": warnings,
+    }
+
+
+def detect_runtime() -> dict[str, Any]:
+    snapshot = runtime_probe_snapshot()
+    return {
+        **snapshot,
+        "warnings": list(snapshot.get("warnings", [])),
+    }
+
+
+@lru_cache(maxsize=1)
+def runtime_probe_snapshot() -> dict[str, Any]:
+    if os.environ.get(RUNTIME_PROBE_CHILD_ENV) == "1":
+        return detect_runtime_in_process()
+
+    command = _runtime_probe_command()
+    probe_env = os.environ.copy()
+    probe_env[RUNTIME_PROBE_CHILD_ENV] = "1"
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=RUNTIME_PROBE_TIMEOUT_SECONDS,
+            cwd=Path(__file__).resolve().parents[2],
+            env=probe_env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _failed_runtime_probe(f"{type(exc).__name__}: {exc}")
+
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        return _failed_runtime_probe(detail)
+    try:
+        payload = _parse_runtime_probe_output(completed.stdout)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        return _failed_runtime_probe(f"invalid probe output: {exc}")
+    return payload
+
+
+def _runtime_probe_command() -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--runtime-check", "all"]
+    return [sys.executable, "-m", "backend.server", "--runtime-check", "all"]
+
+
+def _parse_runtime_probe_output(output: str) -> dict[str, Any]:
+    last_error: json.JSONDecodeError | None = None
+    for line in reversed(output.splitlines()):
+        value = line.strip()
+        if not value:
+            continue
+        try:
+            payload = json.loads(value)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if not isinstance(payload, dict):
+            raise TypeError("runtime probe result is not an object")
+        required = {
+            "python_version",
+            "platform",
+            "torch_available",
+            "funasr_available",
+            "torchaudio_available",
+            "qwen3_asr_available",
+            "moss_transcribe_diarize_available",
+            "warnings",
+        }
+        missing = sorted(required - payload.keys())
+        if missing:
+            raise ValueError(f"runtime probe is missing: {', '.join(missing)}")
+        return payload
+    if last_error is not None:
+        raise last_error
+    raise ValueError("runtime probe produced no JSON")
+
+
+def _failed_runtime_probe(error: str) -> dict[str, Any]:
+    tools = resolve_tools()
+    ffmpeg = tools["ffmpeg"]
+    ffprobe = tools["ffprobe"]
+    return {
+        "python_version": sys.version.split()[0],
+        "platform": platform_module.platform(),
+        "ffmpeg_available": ffmpeg.available,
+        "ffprobe_available": ffprobe.available,
+        "ffmpeg_path": ffmpeg.path,
+        "ffprobe_path": ffprobe.path,
+        "ffmpeg_source": ffmpeg.source,
+        "ffprobe_source": ffprobe.source,
+        "ffmpeg_version": ffmpeg.version,
+        "ffprobe_version": ffprobe.version,
+        "ffmpeg_error": ffmpeg.error,
+        "ffprobe_error": ffprobe.error,
+        "torch_available": False,
+        "torch_cuda_available": False,
+        "torch_mps_available": False,
+        "cuda_device_name": None,
+        "cuda_capability": None,
+        "ctranslate2_available": False,
+        "faster_whisper_available": False,
+        "funasr_available": False,
+        "torchaudio_available": False,
+        "modelscope_available": False,
+        "huggingface_hub_available": False,
+        "pyannote_available": False,
+        "diarization_ready": False,
+        "mlx_available": False,
+        "mlx_whisper_available": False,
+        "mlx_import_error": error,
+        "mlx_whisper_import_error": error,
+        "qwen3_asr_available": False,
+        "transformers_qwen3_asr_available": False,
+        "moss_transcribe_diarize_available": False,
+        "warnings": [f"Runtime compatibility probe failed: {error}"],
     }
