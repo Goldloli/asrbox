@@ -8,7 +8,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.5`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.6`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -32,7 +32,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
 - 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
 
-**开发分支新增（未发布）：** 多语言字幕翻译，保留原文，支持独立译文修订、失败续译及六格式译文／双语导出。入口为“AI → 字幕翻译”，详见 [AI 使用指南](docs/ai-proofreading.md)。语言覆盖与翻译质量取决于所选 LLM。
+**0.1.6 新增：** 多语言字幕翻译，保留原文，支持独立译文修订、失败续译及六格式译文／双语导出。入口为“AI → 字幕翻译”，详见 [AI 使用指南](docs/ai-proofreading.md)。语言覆盖与翻译质量取决于所选 LLM。
 
 ### LLM 核验校对
 
@@ -75,7 +75,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.5` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.5) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.6` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.6) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
 
 桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把 DMG 下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 

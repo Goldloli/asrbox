@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.5`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.6`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -32,7 +32,7 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 
-**Development branch (unreleased):** multilingual subtitle translation with preserved sources, independent revisions, explicit resumption and six translated/bilingual export formats. Open AI → Subtitle translation; see the [AI guide](docs/ai-proofreading.en.md). Language coverage and quality depend on the selected LLM.
+**New in 0.1.6:** multilingual subtitle translation with preserved sources, independent revisions, explicit resumption and six translated/bilingual export formats. Open AI → Subtitle translation; see the [AI guide](docs/ai-proofreading.en.md). Language coverage and quality depend on the selected LLM.
 
 ### LLM proofreading
 
@@ -75,7 +75,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.5` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.5) and verify `SHA256SUMS.txt`.
+Download the Apple Silicon DMG from the [`v0.1.6` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.6) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the DMG to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 

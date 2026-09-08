@@ -63,9 +63,9 @@ LLM credentials, run records, and suggestions live in local SQLite and are inclu
 
 A 128k context window cannot be converted directly into `128000 / 30 Chinese characters` subtitle lines: instructions, JSON, punctuation, timestamps, output allowance, and the model tokenizer all consume tokens. ASRbox keeps safety headroom, and long transcripts remain subject to the selected model's real input/output limits.
 
-## Multilingual subtitle translation (unreleased)
+## Multilingual subtitle translation (0.1.6)
 
-The development branch adds AI → Subtitle translation using the same LLM providers. Sources are preserved. Proofreading is optional: select a saved proofread version if you want to translate corrected subtitles.
+Version 0.1.6 adds AI → Subtitle translation using the same LLM providers. Sources are preserved. Proofreading is optional: select a saved proofread version if you want to translate corrected subtitles.
 
 1. Select a completed task and a specific saved source version. Unsaved source edits are excluded.
 2. Choose source and target languages. Auto supports mixed source languages; the target must be explicit. Presets cover simplified/traditional Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Arabic, Hindi, Thai and Vietnamese. Custom names allow 1–80 Unicode characters without controls. Identical explicit languages are rejected; Chinese script conversion is allowed.

@@ -4,6 +4,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-08
+
 ### Added
 
 - Configurable Chat Completions protocol, thinking, output constraints and JSON/SSE transport for both translation and proofreading, including custom providers. Explicit built-in subtitle tests find usable output settings with bounded requests and protect against applying stale recommendations.
@@ -190,7 +192,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-rc.2...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/Goldloli/asrbox/compare/v0.1.5...v0.1.6
 [0.1.0-rc.2]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...v0.1.0-rc.2
 [0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1
 [0.1.0-rc.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-rc.1

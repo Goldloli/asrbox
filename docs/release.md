@@ -1,8 +1,8 @@
 # Release Process
 
-ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.5`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
+ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.6`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
 
-Current release: [`v0.1.5`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.5). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
+Current release: [`v0.1.6`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.6). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
 
 ## Version Sources
 
