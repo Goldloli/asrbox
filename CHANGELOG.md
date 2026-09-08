@@ -12,6 +12,7 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ### Fixed
 
+- Updated the transitive Nano ID dependency to 3.3.18 to address GHSA-2v37-7h3g-55p8 while preserving the existing dependency audit gate.
 - Ollama subtitle translation now requests non-thinking mode and a JSON Schema with required subtitle fields, IDs and count, supporting local thinking models. Both subtitle workflows now use the shared compatibility settings.
 - Subtitle translation now enforces a 90-second total request deadline even during provider keep-alives, shows batch waiting time, requests JSON without V4 thinking from DeepSeek, and explicitly requires every segment including the last one. Complete JSON code fences are accepted without weakening alignment validation.
 
