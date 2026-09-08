@@ -28,6 +28,9 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(models_router)
     app.include_router(llm_providers_router)
     app.include_router(providers_router)
+    from backend.routes.translation import router as translation_router
+
+    app.include_router(translation_router)
     app.include_router(proofreading_router)
     app.include_router(runtime_router)
     app.include_router(settings_router)

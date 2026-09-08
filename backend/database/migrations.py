@@ -56,6 +56,14 @@ def _create_llm_proofreading_tables(engine) -> None:
         Base.metadata.tables[name].create(bind=engine, checkfirst=True)
 
 
+def _create_translation_tables(engine) -> None:
+    for name in ("translation_runs", "translation_batches", "translation_versions"):
+        table = Base.metadata.tables[name]
+        table.create(bind=engine, checkfirst=True)
+        for index in table.indexes:
+            index.create(bind=engine, checkfirst=True)
+
+
 def run_migrations(engine, session_factory) -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -95,6 +103,11 @@ def run_migrations(engine, session_factory) -> None:
             ),
         ),
         ("20260721_001_llm_proofreading", lambda: _create_llm_proofreading_tables(engine)),
+        ("20260906_001_subtitle_translation", lambda: _create_translation_tables(engine)),
+        ("20260908_001_llm_compatibility", lambda: _add_columns(
+            engine, inspect(engine), set(inspect(engine).get_table_names()),
+            [("llm_providers", "compatibility_json", "TEXT NOT NULL DEFAULT '{}'" )],
+        )),
     ]
 
     db = session_factory()

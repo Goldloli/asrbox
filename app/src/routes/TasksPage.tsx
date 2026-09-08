@@ -635,6 +635,13 @@ export function TasksPage() {
                   </Link>
                 </Button>
               )}
+              {selectedTask.status === 'completed' && selectedTask.segments.length > 0 && (
+                <Button asChild variant="secondary" className="w-fit">
+                  <Link to="/ai" search={{ task: selectedTask.id, mode: 'translation' }}>
+                    <BrainCircuit className="size-4" />{t('translation.title')}
+                  </Link>
+                </Button>
+              )}
               {selectedTask.status === 'completed' && (
                 <div className="grid gap-3 rounded-xl border app-control p-3">
                   <div className="flex items-center justify-between gap-3">

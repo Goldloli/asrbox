@@ -32,6 +32,8 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 
+**Development branch (unreleased):** multilingual subtitle translation with preserved sources, independent revisions, explicit resumption and six translated/bilingual export formats. Open AI → Subtitle translation; see the [AI guide](docs/ai-proofreading.en.md). Language coverage and quality depend on the selected LLM.
+
 ### LLM proofreading
 
 Connect Ollama or any OpenAI-compatible LLM to automatically check subtitles for typos, omissions, and obvious recognition errors, with ready-to-apply fix suggestions:

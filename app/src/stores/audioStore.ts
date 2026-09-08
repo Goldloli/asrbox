@@ -10,6 +10,8 @@ interface AudioState {
   audioVolume: number;
   audioIsOpen: boolean;
   audioShouldPlay: boolean;
+  audioUnavailable: boolean;
+  setAudioUnavailable: (unavailable: boolean) => void;
   openAudio: (payload: { taskId: string; url: string; title: string; startAt?: number; play?: boolean }) => void;
   closeAudio: () => void;
   setAudioCurrentTime: (time: number) => void;
@@ -29,6 +31,8 @@ export const useAudioStore = create<AudioState>()((set) => ({
   audioVolume: 0.85,
   audioIsOpen: false,
   audioShouldPlay: false,
+  audioUnavailable: false,
+  setAudioUnavailable: (audioUnavailable) => set({ audioUnavailable }),
   openAudio: ({ taskId, url, title, startAt = 0, play = true }) =>
     set({
       activeAudioTaskId: taskId,
@@ -37,6 +41,7 @@ export const useAudioStore = create<AudioState>()((set) => ({
       audioCurrentTime: Math.max(0, startAt),
       audioIsOpen: true,
       audioShouldPlay: play,
+      audioUnavailable: false,
     }),
   closeAudio: () =>
     set({

@@ -523,6 +523,8 @@ function failureFeedback(code: string | null | undefined, t: ReturnType<typeof u
   if (normalized.includes('RATE_LIMIT')) return { title: t('proofreading.errorRateTitle'), body: t('proofreading.errorRateBody'), settings: false };
   if (normalized.includes('TIMEOUT')) return { title: t('proofreading.errorTimeoutTitle'), body: t('proofreading.errorTimeoutBody'), settings: false };
   if (normalized.includes('CONTEXT') || normalized.includes('TOO_LONG')) return { title: t('proofreading.errorContextTitle'), body: t('proofreading.errorContextBody'), settings: true };
+  if (normalized.includes('PARAMETERS_REJECTED') || normalized.includes('FORMAT_UNSUPPORTED')) return { title: t('proofreading.errorCompatibilityTitle'), body: t('proofreading.errorCompatibilityBody'), settings: true };
+  if (normalized.includes('TRUNCATED') || normalized.includes('REFUSED')) return { title: t('proofreading.errorResponseTitle'), body: t('proofreading.errorIncompleteBody'), settings: true };
   if (normalized.includes('INVALID_RESPONSE') || normalized.includes('EMPTY_RESPONSE') || normalized.includes('STRUCTURED')) return { title: t('proofreading.errorResponseTitle'), body: t('proofreading.errorResponseBody'), settings: true };
   if (normalized.includes('UNAVAILABLE') || normalized.includes('NETWORK') || normalized.includes('CONNECTION')) return { title: t('proofreading.errorNetworkTitle'), body: t('proofreading.errorNetworkBody'), settings: false };
   if (normalized.includes('PROVIDER') || normalized.includes('MODEL') || normalized.includes('HTTP')) return { title: t('proofreading.errorConfigTitle'), body: t('proofreading.errorConfigBody'), settings: true };

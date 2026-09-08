@@ -146,11 +146,13 @@ def create_app() -> FastAPI:
 
 def _mark_interrupted_tasks() -> None:
     from backend.services.proofreading import mark_interrupted_runs
+    from backend.services.translation import mark_interrupted_runs as mark_translation_interrupted
 
     db = db_session.SessionLocal()
     try:
         mark_interrupted_tasks(db)
         mark_interrupted_runs(db)
+        mark_translation_interrupted(db)
     finally:
         db.close()
 

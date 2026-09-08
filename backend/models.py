@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+import unicodedata
 
-from pydantic import BaseModel, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+
+from backend.translation_languages import LANGUAGE_NAMES
 
 TaskStatus = Literal[
     "created",
@@ -246,7 +249,31 @@ class LLMProviderPresetListResponse(BaseModel):
     items: list[LLMProviderPresetResponse]
 
 
+class LLMCompatibility(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    protocol: Literal["auto", "openai", "deepseek", "ollama", "qwen", "glm"] = "auto"
+    thinking: Literal["auto", "default", "disabled"] = "auto"
+    output_format: Literal["auto", "json_schema", "json_object", "prompt"] = "auto"
+    transport: Literal["json", "sse"] = "json"
+
+
+class LLMCapabilityCheck(BaseModel):
+    ok: bool = False
+    error_code: str | None = None
+
+
+class LLMCapabilityTestResponse(BaseModel):
+    ok: bool
+    message: str
+    provider_updated_at: datetime
+    requests_made: int
+    translation: LLMCapabilityCheck
+    proofreading: LLMCapabilityCheck
+    recommended: LLMCompatibility | None = None
+
+
 class LLMProviderCreate(BaseModel):
+    compatibility: LLMCompatibility = Field(default_factory=LLMCompatibility)
     name: str = Field(..., min_length=1, max_length=120)
     preset: str = Field(..., min_length=1, max_length=40)
     base_url: str
@@ -256,6 +283,8 @@ class LLMProviderCreate(BaseModel):
 
 
 class LLMProviderUpdate(BaseModel):
+    compatibility: LLMCompatibility | None = None
+    expected_updated_at: datetime | None = None
     name: str | None = Field(None, min_length=1, max_length=120)
     preset: str | None = Field(None, min_length=1, max_length=40)
     base_url: str | None = None
@@ -265,6 +294,7 @@ class LLMProviderUpdate(BaseModel):
 
 
 class LLMProviderResponse(BaseModel):
+    compatibility: LLMCompatibility = Field(default_factory=LLMCompatibility)
     id: str
     name: str
     preset: str
@@ -620,6 +650,124 @@ class TranscriptVersionResponse(BaseModel):
     provider_id: str | None = None
     created_at: datetime
     summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class TranslationLanguage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["auto", "preset", "custom"]
+    code: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_choice(self):
+        if self.kind == "auto":
+            if self.code is not None or self.name is not None:
+                raise ValueError("Automatic language cannot include a code or name")
+        elif self.kind == "preset":
+            if self.code not in LANGUAGE_NAMES or self.name is not None:
+                raise ValueError("Invalid translation language preset")
+        else:
+            if self.code is not None or self.name is None:
+                raise ValueError("Custom language requires a name only")
+            if any(unicodedata.category(c).startswith("C") for c in self.name):
+                raise ValueError("Language names cannot contain control characters")
+            self.name = self.name.strip()
+            if not 1 <= len(self.name) <= 80:
+                raise ValueError("Language name must contain 1 to 80 characters")
+        return self
+
+
+class TranslationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider_id: str = Field(min_length=1)
+    source_version_id: int = Field(gt=0)
+    source_language: TranslationLanguage
+    target_language: TranslationLanguage
+
+    @model_validator(mode="after")
+    def validate_pair(self):
+        if self.target_language.kind == "auto":
+            raise ValueError("Choose a target language")
+        source, target = self.source_language, self.target_language
+        if source.kind == target.kind and (
+            source.kind == "preset" and source.code == target.code
+            or source.kind == "custom" and unicodedata.normalize("NFKC", source.name).casefold() == unicodedata.normalize("NFKC", target.name).casefold()
+        ):
+            raise ValueError("Source and target languages must differ")
+        return self
+
+
+class TranslationTextUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    id: int
+    text: str = Field(min_length=1, max_length=100_000)
+
+
+class TranslationEditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    base_version_id: int = Field(gt=0)
+    segments: list[TranslationTextUpdate] = Field(min_length=1)
+
+
+class TranslationRunResponse(BaseModel):
+    id: str
+    task_id: str
+    source_version_id: int
+    source_language: TranslationLanguage
+    target_language: TranslationLanguage
+    source_is_current: bool
+    llm_provider_id: str | None
+    provider_name: str
+    provider_preset: str
+    model_name: str
+    status: Literal["queued", "running", "completed", "failed", "cancelled", "interrupted"]
+    attempt: int
+    total_batches: int
+    completed_batches: int
+    total_segments: int
+    completed_segments: int
+    latest_translation_version_id: int | None
+    can_retry: bool
+    can_edit: bool
+    can_export: bool
+    error_code: str | None
+    error: str | None
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+
+
+class TranslationRunListResponse(BaseModel):
+    items: list[TranslationRunResponse]
+
+
+class TranslationVersionSummary(BaseModel):
+    id: int
+    run_id: str
+    revision: int
+    version_type: Literal["translate", "edit"]
+    parent_version_id: int | None
+    created_at: datetime
+
+
+class TranslationVersionListResponse(BaseModel):
+    items: list[TranslationVersionSummary]
+
+
+class TranslationSegmentResponse(BaseModel):
+    id: int
+    start: float
+    end: float
+    speaker: str | None = None
+    source_text: str
+    text: str
+
+
+class TranslationVersionResponse(TranslationVersionSummary):
+    source_version_id: int
+    source_language: TranslationLanguage
+    target_language: TranslationLanguage
+    segments: list[TranslationSegmentResponse]
 
 
 class ProofreadingCreateRequest(BaseModel):

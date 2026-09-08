@@ -199,3 +199,7 @@ docker image rm asrbox:local
 ```bash
 docker volume rm asrbox-data
 ```
+
+## 字幕翻译（未发布）
+
+开发分支的 Web UI 在“AI → 字幕翻译”使用与校对相同的 LLM 设置。宿主机 Ollama 地址仍为 `http://host.docker.internal:11434/v1`。原文、翻译检查点和全部译文版本随 `/data` 中的 SQLite 持久化；容器重启后活动翻译标记为中断，需手动继续，不会自动向提供商发送请求。导出由浏览器下载，不能让 Web 页面选择宿主机任意路径。完整步骤、取消费用边界和降级说明见 [AI 指南](ai-proofreading.md)。

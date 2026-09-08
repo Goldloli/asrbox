@@ -2,7 +2,9 @@
 
 ## Purpose
 规定本地应用数据边界、本地与在线处理区分、备份恢复安全、敏感数据排除、引用媒体的备份与清理范围、容器存储生命周期、LLM 校对数据边界与模型存储迁移恢复。
+
 ## Requirements
+
 ### Requirement: Local application data boundary
 ASRbox 托管的桌面用户媒体、提取的音频、字幕、设置、模型文件、导出、备份、诊断与 SQLite 数据库 SHALL 存储在文档化的、用户控制的应用数据、导出、显式选择的模型存储或显式选择的媒体存储位置，而不是源码仓库或应用包内。桌面任务 MAY 引用位于用户原始位置的媒体而不复制；此时 ASRbox SHALL NOT 向该位置所在目录写入任何内容，也 SHALL NOT 删除、移动或重命名被引用的文件。
 
@@ -105,3 +107,22 @@ Model-storage relocation SHALL preserve the configured source and its original d
 - **WHEN** old-root deletion fails after a verified target becomes active
 - **THEN** ASRbox identifies both paths and requires explicit cleanup rather than automatically deleting either verified copy
 
+### Requirement: LLM 翻译传输与持久化边界
+
+翻译 SHALL 沿用实际 endpoint 的本机／第三方披露以及 LLM 凭据保护。请求 SHALL 只包含语言设置、段落标识、文本和有限相邻文本；不得发送音视频、文件名、本地路径或把凭据放入 prompt。翻译运行、已验证批次和译文历史 SHALL 存放于既有本地应用数据库和敏感备份边界。prompt、字幕、译文、原始响应与完整凭据 SHALL 从常规日志和诊断包排除。
+
+#### Scenario: 用户启动云端翻译或本机翻译
+- **WHEN** 用户选择有效 LLM 提供商
+- **THEN** 界面以实际 endpoint 区分 loopback 与第三方处理，在启动前以非阻塞说明展示提供商、模型和文本传输边界，不额外要求隐私确认弹窗
+
+#### Scenario: 用户备份或恢复翻译历史
+- **WHEN** 数据库包含翻译检查点、结果或人工修订，且用户执行应用备份／恢复
+- **THEN** 历史及其来源关联随一致性数据库快照保存／恢复，恢复后的活动运行按中断处理；文档明确备份包含敏感文本和现有凭据
+
+#### Scenario: 翻译失败后收集诊断
+- **WHEN** 提供商返回无效内容或翻译后台发生错误
+- **THEN** 日志和诊断仅记录清理后错误及允许的元数据，不包含来源／译文／prompt／原始响应或完整凭据
+
+#### Scenario: 删除提供商或所属任务
+- **WHEN** 用户删除 LLM 提供商，或删除满足原有删除条件的所属转写任务
+- **THEN** 删除提供商保留已完成译文及身份记录；删除任务则清理其全部翻译运行、检查点和修订，同时不触碰用户引用的原始媒体

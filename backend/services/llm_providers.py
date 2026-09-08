@@ -1,22 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import json
 import os
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
-import requests
 from sqlalchemy.orm import Session
 
-from backend.database.models import LLMProvider, ProofreadingRun
+from backend.database.models import LLMProvider, ProofreadingRun, TranslationRun
 from backend.models import (
     LLMProviderCreate,
+    LLMCompatibility,
     LLMProviderPresetResponse,
     LLMProviderResponse,
     LLMProviderTestResponse,
     LLMProviderUpdate,
 )
 
+from backend.services.llm_compatibility import (
+    LLMProviderError, MAX_RESPONSE_BYTES, bounded_completion as _bounded_completion,
+    completion_content, request_body, settings,
+)
 
 PRESETS = (
     LLMProviderPresetResponse(
@@ -66,13 +72,6 @@ PRESETS = (
 
 PRESETS_BY_ID = {item.id: item for item in PRESETS}
 CLOUD_PRESETS = {"minimax", "kimi", "deepseek", "qwen", "glm"}
-
-
-class LLMProviderError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
 
 
 def list_presets() -> list[LLMProviderPresetResponse]:
@@ -160,6 +159,7 @@ def validate_usable(provider: LLMProvider) -> None:
 
 def to_response(row: LLMProvider) -> LLMProviderResponse:
     return LLMProviderResponse(
+        compatibility=settings(row),
         id=row.id,
         name=row.name,
         preset=row.preset,
@@ -181,6 +181,7 @@ def list_providers(db: Session) -> list[LLMProviderResponse]:
 def create_provider(db: Session, payload: LLMProviderCreate) -> LLMProviderResponse:
     _validate_preset(payload.preset)
     row = LLMProvider(
+        compatibility_json=payload.compatibility.model_dump_json(),
         name=payload.name,
         preset=payload.preset,
         base_url=validate_base_url(payload.base_url),
@@ -199,28 +200,29 @@ def update_provider(db: Session, provider_id: str, patch: LLMProviderUpdate) -> 
     if row is None:
         return None
     data = patch.model_dump(exclude_unset=True)
-    if "name" in data:
-        if data["name"] is None:
-            raise ValueError("LLM provider name is required")
-        row.name = data["name"]
+    expected = data.pop("expected_updated_at", None)
+    updates = {}
+    for key in ("name", "preset", "base_url", "enabled", "compatibility"):
+        if key in data and data[key] is None:
+            raise ValueError(f"LLM provider {key} is required")
     if "preset" in data:
-        if data["preset"] is None:
-            raise ValueError("LLM provider preset is required")
         _validate_preset(data["preset"])
-        row.preset = data["preset"]
     if "base_url" in data:
-        if data["base_url"] is None:
-            raise ValueError("LLM provider base URL is required")
-        row.base_url = validate_base_url(data["base_url"])
+        data["base_url"] = validate_base_url(data["base_url"])
+    if "compatibility" in data:
+        updates["compatibility_json"] = LLMCompatibility.model_validate(data.pop("compatibility")).model_dump_json()
     if "api_key" in data:
-        row.api_key_secret = data["api_key"]
-    if "default_model" in data:
-        row.default_model = data["default_model"]
-    if "enabled" in data:
-        if data["enabled"] is None:
-            raise ValueError("LLM provider enabled state is required")
-        row.enabled = data["enabled"]
-    row.updated_at = datetime.now(UTC)
+        updates["api_key_secret"] = data.pop("api_key")
+    updates.update(data)
+    updates["updated_at"] = datetime.now(UTC)
+    query = db.query(LLMProvider).filter(LLMProvider.id == provider_id)
+    if expected is not None:
+        # SQLite stores naive UTC datetimes; apply recommendations only to their exact config revision.
+        expected = expected.astimezone(UTC).replace(tzinfo=None) if expected.tzinfo else expected
+        query = query.filter(LLMProvider.updated_at == expected)
+    if query.update(updates, synchronize_session=False) != 1:
+        db.rollback()
+        raise LLMProviderError("LLM_PROVIDER_CHANGED", "Provider changed; test the current configuration again")
     db.commit()
     db.refresh(row)
     return to_response(row)
@@ -234,6 +236,9 @@ def delete_provider(db: Session, provider_id: str) -> bool:
         {ProofreadingRun.llm_provider_id: None},
         synchronize_session="fetch",
     )
+    db.query(TranslationRun).filter(TranslationRun.llm_provider_id == provider_id).update(
+        {TranslationRun.llm_provider_id: None}, synchronize_session="fetch",
+    )
     db.delete(row)
     db.commit()
     return True
@@ -243,44 +248,42 @@ def get_provider_row(db: Session, provider_id: str) -> LLMProvider | None:
     return db.query(LLMProvider).filter(LLMProvider.id == provider_id).first()
 
 
-def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, timeout: float = 30) -> str:
+def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, timeout: float = 30,
+                    max_response_bytes: int | None = None, structured_translation: bool = False,
+                    response_schema: dict | None = None) -> str:
     validate_usable(provider)
     headers = {"Content-Type": "application/json"}
     if provider.api_key_secret:
         headers["Authorization"] = f"Bearer {provider.api_key_secret}"
-    try:
-        response = requests.post(
-            f"{provider.base_url.rstrip('/')}/chat/completions",
-            headers=headers,
-            json={
-                "model": provider.default_model,
-                "messages": messages,
-                "stream": False,
-            },
-            timeout=timeout,
-            allow_redirects=False,
-        )
-    except requests.Timeout as exc:
-        raise LLMProviderError("LLM_PROVIDER_TIMEOUT", "LLM provider timed out") from exc
-    except requests.RequestException as exc:
-        raise LLMProviderError("LLM_PROVIDER_UNAVAILABLE", "LLM provider request failed") from exc
-
+    body = request_body(provider, messages, structured=structured_translation or response_schema is not None,
+                        schema=response_schema)
+    url = f"{provider.base_url.rstrip('/')}/chat/completions"
+    response = asyncio.run(_bounded_completion(url, headers, body, timeout,
+                                               max_response_bytes if max_response_bytes is not None else MAX_RESPONSE_BYTES))
     if response.status_code in {401, 403}:
         raise LLMProviderError("LLM_PROVIDER_AUTH_FAILED", "LLM provider rejected credentials")
     if response.status_code == 429:
         raise LLMProviderError("LLM_PROVIDER_RATE_LIMITED", "LLM provider rate limit reached")
     if _is_context_too_long(response):
         raise LLMProviderError("LLM_PROVIDER_CONTEXT_TOO_LONG", "LLM provider context limit exceeded")
+    if response.status_code in {400, 422}:
+        # Only classify known parameter rejection; never expose a provider body or guess from model text.
+        try:
+            detail = json.dumps(response.json()).lower()
+        except (ValueError, RecursionError):
+            detail = ""
+        if any(key in detail for key in ("response_format", "json_schema", "json_object")) and any(
+            word in detail for word in ("unsupported", "not support", "not supported", "invalid", "unknown")
+        ):
+            raise LLMProviderError("LLM_OUTPUT_FORMAT_UNSUPPORTED", "Provider rejected the output format; run capability testing")
+        raise LLMProviderError("LLM_PARAMETERS_REJECTED", "Provider rejected the request; review protocol, thinking and streaming settings")
     if not 200 <= response.status_code < 300:
         raise LLMProviderError("LLM_PROVIDER_HTTP_ERROR", f"LLM provider returned HTTP {response.status_code}")
     try:
         payload = response.json()
-        content = payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned an invalid response") from exc
-    if not isinstance(content, str) or not content.strip():
-        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned an empty response")
-    return content
+    except (ValueError, RecursionError) as exc:
+        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned invalid JSON") from exc
+    return completion_content(payload)
 
 
 def _is_context_too_long(response) -> bool:
@@ -290,7 +293,7 @@ def _is_context_too_long(response) -> bool:
         return False
     try:
         payload = response.json()
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return False
 
     values: list[str] = []

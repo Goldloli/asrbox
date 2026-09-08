@@ -4,6 +4,17 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- Configurable Chat Completions protocol, thinking, output constraints and JSON/SSE transport for both translation and proofreading, including custom providers. Explicit built-in subtitle tests find usable output settings with bounded requests and protect against applying stale recommendations.
+
+- AI subtitle translation between preset or custom languages, preserving source snapshots with independent immutable translation revisions, explicit cancellation/resumption, saved batch progress, and TXT/SRT/VTT/ASS/JSON/Markdown translated or bilingual exports.
+
+### Fixed
+
+- Ollama subtitle translation now requests non-thinking mode and a JSON Schema with required subtitle fields, IDs and count, supporting local thinking models. Both subtitle workflows now use the shared compatibility settings.
+- Subtitle translation now enforces a 90-second total request deadline even during provider keep-alives, shows batch waiting time, requests JSON without V4 thinking from DeepSeek, and explicitly requires every segment including the last one. Complete JSON code fences are accepted without weakening alignment validation.
+
 ## [0.1.5] - 2026-07-27
 
 ### Changed

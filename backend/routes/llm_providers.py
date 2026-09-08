@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from backend.database import get_db
 from backend.models import (
     LLMProviderCreate,
+    LLMCapabilityTestResponse,
     LLMProviderListResponse,
     LLMProviderPresetListResponse,
     LLMProviderResponse,
@@ -43,6 +45,8 @@ async def update_provider(
 ):
     try:
         provider = llm_providers.update_provider(db, provider_id, payload)
+    except llm_providers.LLMProviderError as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": exc.message}) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if provider is None:
@@ -59,7 +63,16 @@ async def delete_provider(provider_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{provider_id}/test", response_model=LLMProviderTestResponse)
 async def test_provider(provider_id: str, db: Session = Depends(get_db)):
-    result = llm_providers.test_provider(db, provider_id)
+    result = await run_in_threadpool(llm_providers.test_provider, db, provider_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="LLM provider not found")
+    return result
+
+
+@router.post("/{provider_id}/test-capabilities", response_model=LLMCapabilityTestResponse)
+async def test_capabilities(provider_id: str, db: Session = Depends(get_db)):
+    from backend.services.llm_capabilities import test_capabilities as check
+    result = await run_in_threadpool(check, db, provider_id)
     if result is None:
         raise HTTPException(status_code=404, detail="LLM provider not found")
     return result

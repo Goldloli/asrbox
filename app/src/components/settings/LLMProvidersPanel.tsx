@@ -1,14 +1,16 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BrainCircuit, CheckCircle2, HardDrive, Loader2, Pencil, Plus, TestTube2, Trash2, Wifi, XCircle } from 'lucide-react';
-import { apiClient, type LLMProvider, type LLMProviderPreset, type LLMProviderTestResult } from '../../lib/api';
+import { apiClient, type LLMProvider, type LLMProviderPreset, type LLMCompatibility, type LLMProviderTestResult } from '../../lib/api';
 import { queryKeys, useLLMProviderPresetsQuery, useLLMProvidersQuery } from '../../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../weiui';
 import { ConfirmAction } from '../ConfirmAction';
 import { toastErrorMessage, useToast } from '../Toast';
+import { LLMCompatibilityFields, LLMCapabilityPanel, defaultCompatibility } from './LLMCompatibility';
 import { useI18n } from '../../lib/i18n';
 
 type FormState = {
+  compatibility: LLMCompatibility;
   name: string;
   preset: LLMProviderPreset['id'];
   base_url: string;
@@ -18,6 +20,7 @@ type FormState = {
 };
 
 const emptyForm: FormState = {
+  compatibility: defaultCompatibility,
   name: '',
   preset: 'deepseek',
   base_url: 'https://api.deepseek.com',
@@ -106,6 +109,7 @@ export function LLMProvidersPanel() {
                 <span className="break-words">{testResults[provider.id].message}</span>
               </p>
             )}
+            <LLMCapabilityPanel provider={provider} onSaved={refresh} />
             <div className="flex flex-wrap justify-end gap-2">
               <Button size="sm" variant="secondary" onClick={() => test.mutate(provider.id)} disabled={test.isPending && test.variables === provider.id}>
                 {test.isPending && test.variables === provider.id ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}
@@ -167,6 +171,7 @@ function LLMProviderForm({ provider, presets, onSaved }: {
   useEffect(() => {
     if (!provider) return;
     setForm({
+      compatibility: provider.compatibility ?? defaultCompatibility,
       name: provider.name,
       preset: provider.preset,
       base_url: provider.base_url,
@@ -179,6 +184,7 @@ function LLMProviderForm({ provider, presets, onSaved }: {
   const mutation = useMutation({
     mutationFn: () => {
       const payload = {
+        compatibility: form.compatibility,
         name: form.name.trim(),
         preset: form.preset,
         base_url: form.base_url.trim(),
@@ -242,6 +248,7 @@ function LLMProviderForm({ provider, presets, onSaved }: {
         <span className="text-sm text-app-soft">{t('providers.enabled')}</span>
         <Switch checked={form.enabled} onCheckedChange={(enabled) => setForm({ ...form, enabled })} />
       </div>
+      <LLMCompatibilityFields value={form.compatibility} onChange={(compatibility) => setForm({ ...form, compatibility })} />
       {mutation.error && <ErrorState error={mutation.error} />}
       <Button disabled={mutation.isPending}>
         {mutation.isPending && <Loader2 className="size-4 animate-spin" />}

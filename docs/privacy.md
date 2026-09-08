@@ -119,3 +119,9 @@ See [Docker deployment](docker.md) for backup and restore commands. Volume delet
 ## Reporting Privacy or Security Issues
 
 Do not place credentials, private media, full diagnostic archives, or sensitive transcripts in a public issue. Follow the private reporting process in [SECURITY.md](../SECURITY.md).
+
+## Subtitle translation (unreleased)
+
+Translation shares the LLM endpoint and credential boundaries above. Starting explicitly sends only source/target language settings, target segment IDs/text and limited neighboring text. Media, filenames, local paths, timing, speaker labels and confidence values are excluded. Provider handling and charges depend on the selected endpoint. Cancellation cannot retract a request already received by the provider.
+
+Translation runs, sanitized error codes, validated batch checkpoints and immutable translation revisions are stored in `asrbox.db`, included in consistent backups and deleted with the source task. Provider deletion preserves completed translation history. Prompts, raw responses, translated text and checkpoint text are excluded from diagnostic bundles and routine logs. Credentials are used in HTTP authentication, never copied into run snapshots or prompts. Resuming is explicit and may resend a batch processed remotely before its checkpoint was saved.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { BrainCircuit, Clock3, FileAudio, Languages, Search } from 'lucide-react';
+import { TranslationPanel } from '../components/transcript/TranslationPanel';
 import { ProofreadingPanel } from '../components/transcript/ProofreadingPanel';
 import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader } from '../components/weiui';
 import { formatDate, formatDuration } from '../lib/format';
@@ -11,28 +12,29 @@ import { cn } from '../lib/cn';
 export function AIPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { task?: string };
+  const search = useSearch({ strict: false }) as { task?: string; mode?: string; run?: string };
+  const translationMode = search.mode === 'translation';
   const tasksQuery = useTasksQuery();
   const [query, setQuery] = useState('');
   const tasks = tasksQuery.data?.items ?? [];
   const eligibleTasks = useMemo(() => (
     tasks
-      .filter((task) => task.status === 'completed' && task.segments.length > 0)
+      .filter((task) => (task.status === 'completed' && task.segments.length > 0) || (translationMode && task.id === search.task))
       .sort((left, right) => Date.parse(right.completed_at ?? right.updated_at) - Date.parse(left.completed_at ?? left.updated_at))
-  ), [tasks]);
+  ), [tasks, translationMode, search.task]);
   const visibleTasks = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return normalized ? eligibleTasks.filter((task) => task.filename.toLocaleLowerCase().includes(normalized)) : eligibleTasks;
   }, [eligibleTasks, query]);
-  const selectedTask = eligibleTasks.find((task) => task.id === search.task) ?? eligibleTasks[0];
+  const selectedTask = search.task ? eligibleTasks.find((task) => task.id === search.task) : eligibleTasks[0];
 
   useEffect(() => {
     if (!tasksQuery.isSuccess || search.task || !selectedTask) return;
-    navigate({ to: '/ai', search: { task: selectedTask.id }, replace: true });
-  }, [navigate, search.task, selectedTask, tasksQuery.isSuccess]);
+    navigate({ to: '/ai', search: { task: selectedTask.id, ...(translationMode ? { mode: 'translation' } : {}) }, replace: true });
+  }, [navigate, search.task, selectedTask, tasksQuery.isSuccess, translationMode]);
 
   const selectTask = (taskId: string) => {
-    navigate({ to: '/ai', search: { task: taskId }, replace: true });
+    navigate({ to: '/ai', search: { task: taskId, ...(translationMode ? { mode: 'translation' } : {}) }, replace: true });
   };
 
   return (
@@ -41,9 +43,14 @@ export function AIPage() {
         <PanelHeader
           eyebrow={t('ai.eyebrow')}
           title={t('ai.title')}
-          description={t('ai.description')}
+          description={t('translation.description')}
         />
       </Panel>
+
+      <nav className="flex flex-wrap gap-2" aria-label={t('ai.title')}>
+        <Button asChild variant={translationMode ? 'secondary' : 'primary'}><Link to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode ? 'page' : undefined}>{t('translation.proofreading')}</Link></Button>
+        <Button asChild variant={translationMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id, mode: 'translation' }} replace aria-current={translationMode ? 'page' : undefined}>{t('translation.title')}</Link></Button>
+      </nav>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <Panel className="min-w-0 overflow-hidden lg:sticky lg:top-0 lg:max-h-[calc(100dvh-150px)]">
@@ -116,10 +123,10 @@ export function AIPage() {
 
         <div className="min-w-0">
           {selectedTask ? (
-            <ProofreadingPanel task={selectedTask} />
+            translationMode ? <TranslationPanel key={selectedTask.id} task={selectedTask} runId={search.run} /> : <ProofreadingPanel task={selectedTask} />
           ) : (
             <Panel>
-              <EmptyState title={t('ai.chooseTask')} body={t('ai.chooseTaskBody')} icon={<BrainCircuit className="size-5" />} />
+              {search.task && tasksQuery.isSuccess ? <ErrorState error={t('translation.missingTask')} /> : <EmptyState title={t('ai.chooseTask')} body={t('ai.chooseTaskBody')} icon={<BrainCircuit className="size-5" />} />}
             </Panel>
           )}
         </div>

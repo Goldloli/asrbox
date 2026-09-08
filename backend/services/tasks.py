@@ -1274,6 +1274,9 @@ def delete_task(db: Session, task_id: str) -> bool:
             synchronize_session=False
         )
         db.query(ProofreadingRun).filter(ProofreadingRun.task_id == task_id).delete()
+        from backend.services.translation import delete_for_task
+
+        delete_for_task(db, task_id)
         db.query(TranscriptVersion).filter(TranscriptVersion.task_id == task_id).delete()
         db.query(TaskLog).filter(TaskLog.task_id == task_id).delete()
         db.delete(row)

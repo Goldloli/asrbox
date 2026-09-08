@@ -293,7 +293,25 @@ export interface LLMProviderPreset {
   local_default: boolean;
 }
 
+export interface LLMCompatibility {
+  protocol: 'auto' | 'openai' | 'deepseek' | 'ollama' | 'qwen' | 'glm';
+  thinking: 'auto' | 'default' | 'disabled';
+  output_format: 'auto' | 'json_schema' | 'json_object' | 'prompt';
+  transport: 'json' | 'sse';
+}
+
+export interface LLMCapabilityTestResult {
+  ok: boolean;
+  message: string;
+  provider_updated_at: string;
+  requests_made: number;
+  translation: { ok: boolean; error_code: string | null };
+  proofreading: { ok: boolean; error_code: string | null };
+  recommended: LLMCompatibility | null;
+}
+
 export interface LLMProvider {
+  compatibility: LLMCompatibility;
   id: string;
   name: string;
   preset: LLMProviderPreset['id'];
@@ -311,6 +329,66 @@ export interface LLMProviderTestResult {
   message: string;
   error_code?: string | null;
 }
+
+export type TranslationLanguage =
+  | { kind: 'auto'; code?: null; name?: null }
+  | { kind: 'preset'; code: string; name?: null }
+  | { kind: 'custom'; name: string; code?: null };
+
+export interface TranslationInput {
+  provider_id: string;
+  source_version_id: number;
+  source_language: TranslationLanguage;
+  target_language: TranslationLanguage;
+}
+
+export interface TranslationRun {
+  id: string;
+  task_id: string;
+  source_version_id: number;
+  source_language: TranslationLanguage;
+  target_language: TranslationLanguage;
+  source_is_current: boolean;
+  llm_provider_id: string | null;
+  provider_name: string;
+  provider_preset: string;
+  model_name: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+  attempt: number;
+  total_batches: number;
+  completed_batches: number;
+  total_segments: number;
+  completed_segments: number;
+  latest_translation_version_id: number | null;
+  can_retry: boolean;
+  can_edit: boolean;
+  can_export: boolean;
+  error_code: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface TranslationVersionSummary {
+  id: number;
+  run_id: string;
+  revision: number;
+  version_type: 'translate' | 'edit';
+  parent_version_id: number | null;
+  created_at: string;
+}
+
+export interface TranslationVersion extends TranslationVersionSummary {
+  source_version_id: number;
+  source_language: TranslationLanguage;
+  target_language: TranslationLanguage;
+  segments: Array<{ id: number; start: number; end: number; speaker: string | null; source_text: string; text: string }>;
+}
+
+export type TranslationExportMode = 'translated' | 'bilingual';
+export type TranslationExportOrder = 'source-first' | 'target-first';
+export type TranslationExportFormat = 'txt' | 'srt' | 'vtt' | 'ass' | 'json' | 'md';
 
 export type ProofreadingRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'interrupted' | 'applied';
 
@@ -860,8 +938,46 @@ class ApiClient {
     return this.request<{ message: string }>(`/llm-providers/${id}`, { method: 'DELETE' });
   }
 
+  testLLMCapabilities(id: string) {
+    return this.request<LLMCapabilityTestResult>(`/llm-providers/${id}/test-capabilities`, { method: 'POST' });
+  }
+
   testLLMProvider(id: string) {
     return this.request<LLMProviderTestResult>(`/llm-providers/${id}/test`, { method: 'POST' });
+  }
+
+  listTranslationRuns(taskId: string) {
+    return this.request<{ items: TranslationRun[] }>(`/tasks/${encodeURIComponent(taskId)}/translation-runs`);
+  }
+
+  getTranslationRun(taskId: string, runId: string) {
+    return this.request<TranslationRun>(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}`);
+  }
+
+  createTranslationRun(taskId: string, input: TranslationInput) {
+    return this.request<TranslationRun>(`/tasks/${encodeURIComponent(taskId)}/translation-runs`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  translationAction(taskId: string, runId: string, action: 'cancel' | 'retry') {
+    return this.request<TranslationRun>(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}/${action}`, { method: 'POST' });
+  }
+
+  listTranslationVersions(taskId: string, runId: string) {
+    return this.request<{ items: TranslationVersionSummary[] }>(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}/versions`);
+  }
+
+  getTranslationVersion(taskId: string, runId: string, versionId: number) {
+    return this.request<TranslationVersion>(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}/versions/${versionId}`);
+  }
+
+  editTranslationVersion(taskId: string, runId: string, baseVersionId: number, segments: Array<{ id: number; text: string }>) {
+    return this.request<TranslationVersion>(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}/versions`, {
+      method: 'POST', body: JSON.stringify({ base_version_id: baseVersionId, segments }),
+    });
+  }
+
+  exportTranslation(taskId: string, runId: string, versionId: number, format: TranslationExportFormat, mode: TranslationExportMode, order: TranslationExportOrder) {
+    return this.resourceRequest(`/tasks/${encodeURIComponent(taskId)}/translation-runs/${encodeURIComponent(runId)}/versions/${versionId}/export/${format}?mode=${mode}&order=${order}`);
   }
 
   listProofreadingRuns(taskId: string) {

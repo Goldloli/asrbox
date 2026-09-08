@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
+import { translationI18n } from './translationI18n';
 import { useUiStore, type Locale } from '../stores/uiStore';
 
 const dictionaries = {
   en: {
+    ...translationI18n.en,
     'app.subtitle': 'local transcription workbench',
     'app.skipToContent': 'Skip to content',
     'status.backendOnline': 'Backend online',
@@ -430,6 +432,9 @@ const dictionaries = {
     'ai.chooseTask': 'Choose a transcript',
     'ai.chooseTaskBody': 'Select an available transcript on the left to begin.',
 
+    'proofreading.errorCompatibilityTitle': 'Compatibility settings rejected',
+    'proofreading.errorCompatibilityBody': 'Open provider settings, review protocol, thinking and transport, then test translation and proofreading.',
+    'proofreading.errorIncompleteBody': 'The model output was truncated or refused. Incomplete suggestions were not saved. Check provider settings or choose another model.',
     'llmProviders.eyebrow': 'AI configuration',
     'llmProviders.title': 'LLM providers',
     'llmProviders.description': 'Configure independent OpenAI-compatible language models for transcript proofreading.',
@@ -724,6 +729,7 @@ const dictionaries = {
     'about.releases': 'GitHub Releases',
   },
   zh: {
+    ...translationI18n.zh,
     'app.subtitle': '本地转写工作台',
     'app.skipToContent': '跳到主内容',
     'status.backendOnline': '后端在线',
@@ -1151,6 +1157,9 @@ const dictionaries = {
     'ai.chooseTask': '选择一份字幕',
     'ai.chooseTaskBody': '从左侧选择可用字幕后开始核对。',
 
+    'proofreading.errorCompatibilityTitle': '平台拒绝兼容设置',
+    'proofreading.errorCompatibilityBody': '请到提供商设置检查协议、思考模式和响应方式，再测试翻译与校对。',
+    'proofreading.errorIncompleteBody': '模型输出被截断或拒绝，不完整建议未保存。请检查提供商设置或更换模型。',
     'llmProviders.eyebrow': 'AI 配置',
     'llmProviders.title': 'LLM 提供商',
     'llmProviders.description': '独立配置用于字幕校对的 OpenAI 兼容大语言模型。',

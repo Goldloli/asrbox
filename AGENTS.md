@@ -61,7 +61,7 @@ OpenSpec 产出的文档（proposal、design、tasks 等 artifact）应优先使
 
 ### 工件生成（openspec CLI）
 
-`/opsx:*` 斜杠命令的技能定义在 `.codex/skills/openspec-*/SKILL.md`，底层是 `openspec` CLI。无论由哪个 agent 执行，都遵循同一流程：
+OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex 可用 `$openspec-...` 调用（旧版入口为 `/opsx:*`），底层是 `openspec` CLI。无论由哪个 agent 执行，都遵循同一流程：
 
 1. `openspec new change <kebab-name>` 创建脚手架。
 2. 按 `openspec status --change <name> --json` 报告的依赖序（proposal → design + specs → tasks）逐个写工件；写每个工件前用 `openspec instructions <artifact> --change <name> --json` 取模板与规则。

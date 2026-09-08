@@ -397,3 +397,58 @@ test('mobile navigation exposes AI without horizontal overflow', async ({ page }
   await expect(page.getByRole('navigation').getByRole('link', { name: 'AI' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
 });
+
+test('custom compatibility settings and explicit subtitle tests apply only to the tested revision', async ({ page }) => {
+  const compatibility = { protocol: 'auto', thinking: 'auto', output_format: 'auto', transport: 'json' };
+  let saved = { ...provider, compatibility };
+  let capabilityCalls = 0;
+  await mockProofreading(page, { providers: () => [saved] });
+  await page.route(`${serverUrl}/llm-providers/deepseek/test`, (route) => route.fulfill({ json: { ok: true, message: 'Connected' } }));
+  await page.route(`${serverUrl}/llm-providers/deepseek`, async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.expected_updated_at && body.expected_updated_at !== saved.updated_at) {
+      return route.fulfill({ status: 409, json: { detail: { code: 'LLM_PROVIDER_CHANGED', message: 'Provider changed; test again' } } });
+    }
+    saved = { ...saved, ...body, updated_at: '2026-09-08T03:00:01Z' };
+    await route.fulfill({ json: saved });
+  });
+  await page.route(`${serverUrl}/llm-providers/deepseek/test-capabilities`, (route) => {
+    capabilityCalls++;
+    return route.fulfill({ json: {
+      ok: true, message: 'Samples passed', provider_updated_at: saved.updated_at, requests_made: 4,
+      translation: { ok: true, error_code: null }, proofreading: { ok: true, error_code: null },
+      recommended: { protocol: 'qwen', thinking: 'disabled', output_format: 'prompt', transport: 'sse' },
+    } });
+  });
+  await page.goto('/settings?tab=llm');
+  await expect(page.getByText(/up to 6 requests and 3 minutes/)).toBeVisible();
+  expect(capabilityCalls).toBe(0);
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByText('Translation and proofreading compatibility', { exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Parameter protocol' }).click();
+  await page.getByRole('option', { name: 'Qwen / DashScope', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Thinking mode' }).click();
+  await page.getByRole('option', { name: 'Keep model default', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Response transport' }).click();
+  await page.getByRole('option', { name: 'Streaming response (SSE)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => saved.compatibility.protocol).toBe('qwen');
+  expect(saved.compatibility.thinking).toBe('default');
+  expect(saved.compatibility.transport).toBe('sse');
+  expect(capabilityCalls).toBe(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Test translation and proofreading', exact: true }).click();
+  await expect(page.getByText('Translation：Passed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Proofreading：Passed', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Apply tested settings' }).click();
+  await expect(page.getByText('Sample-tested settings applied.', { exact: true })).toBeVisible();
+  expect(saved.compatibility.output_format).toBe('prompt');
+  expect(saved.compatibility.thinking).toBe('disabled');
+  // A concurrent remote edit makes an otherwise successful test recommendation stale.
+  await page.getByRole('button', { name: 'Test translation and proofreading', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Apply tested settings' })).toBeVisible();
+  saved = { ...saved, updated_at: '2026-09-08T03:00:02Z' };
+  await page.getByRole('button', { name: 'Apply tested settings' }).click();
+  await expect(page.getByText(/Provider changed; test again/)).toBeVisible();
+});

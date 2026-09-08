@@ -21,13 +21,14 @@ export function PersistentAudioPlayer() {
   const setAudioDuration = useAudioStore((state) => state.setAudioDuration);
   const setAudioLoop = useAudioStore((state) => state.setAudioLoop);
   const setAudioVolume = useAudioStore((state) => state.setAudioVolume);
+  const setAudioUnavailable = useAudioStore((state) => state.setAudioUnavailable);
   const setAudioShouldPlay = useAudioStore((state) => state.setAudioShouldPlay);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     audio.volume = audioVolume;
-  }, [audioVolume]);
+  }, [audioVolume, audioIsOpen]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -45,7 +46,7 @@ export function PersistentAudioPlayer() {
     } else {
       audio.pause();
     }
-  }, [audioShouldPlay, setAudioShouldPlay]);
+  }, [audioShouldPlay, activeAudioUrl, audioIsOpen, setAudioShouldPlay]);
 
   if (!audioIsOpen || !activeAudioUrl) return null;
 
@@ -123,7 +124,12 @@ export function PersistentAudioPlayer() {
           loop={audioLoop}
           preload="metadata"
           className="hidden"
-          onLoadedMetadata={(event) => setAudioDuration(event.currentTarget.duration || 0)}
+          onLoadedMetadata={(event) => {
+            const audio = event.currentTarget;
+            setAudioDuration(audio.duration || 0);
+            audio.currentTime = Math.min(useAudioStore.getState().audioCurrentTime, audio.duration || 0);
+          }}
+          onError={() => { setAudioUnavailable(true); setAudioShouldPlay(false); }}
           onTimeUpdate={(event) => setAudioCurrentTime(event.currentTarget.currentTime)}
           onPlay={() => setAudioShouldPlay(true)}
           onPause={() => setAudioShouldPlay(false)}

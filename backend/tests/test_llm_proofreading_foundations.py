@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 import os
+import json
+import httpx
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
+
+
+def _mock_http(monkeypatch, handler):
+    from backend.services import llm_compatibility
+    client = httpx.AsyncClient
+    def factory(**kwargs):
+        assert kwargs['follow_redirects'] is False
+        return client(transport=httpx.MockTransport(handler), **kwargs)
+    monkeypatch.setattr(llm_compatibility.httpx, 'AsyncClient', factory)
 
 
 def _database(tmp_path: Path):
@@ -294,11 +305,7 @@ def test_llm_connection_test_validates_provider_before_request(
 
     db_session = _database(tmp_path)
     db = db_session.SessionLocal()
-    monkeypatch.setattr(
-        llm_providers.requests,
-        "post",
-        lambda *_args, **_kwargs: pytest.fail("invalid provider must not make a request"),
-    )
+    _mock_http(monkeypatch, lambda request: pytest.fail("invalid provider must not make a request"))
     try:
         provider = LLMProvider(
             name="Cloud LLM",
@@ -327,10 +334,7 @@ def test_llm_connection_test_rejects_redirect_without_following_it(tmp_path: Pat
     db_session = _database(tmp_path)
     db = db_session.SessionLocal()
 
-    class Response:
-        status_code = 302
-
-    monkeypatch.setattr(llm_providers.requests, "post", lambda *_args, **_kwargs: Response())
+    _mock_http(monkeypatch, lambda request: httpx.Response(302, headers={'location': 'https://untrusted.example'}))
     try:
         provider = LLMProvider(
             name="Cloud LLM",
@@ -372,15 +376,7 @@ def test_llm_connection_test_classifies_context_too_long(
     db_session = _database(tmp_path)
     db = db_session.SessionLocal()
 
-    class Response:
-        def __init__(self) -> None:
-            self.status_code = status_code
-
-        @staticmethod
-        def json():
-            return body
-
-    monkeypatch.setattr(llm_providers.requests, "post", lambda *_args, **_kwargs: Response())
+    _mock_http(monkeypatch, lambda request: httpx.Response(status_code, json=body))
     try:
         provider = LLMProvider(
             name="Cloud LLM",
@@ -411,18 +407,12 @@ def test_llm_connection_test_uses_sanitized_content_free_request(tmp_path: Path,
     db = db_session.SessionLocal()
     calls: list[dict] = []
 
-    class Response:
-        status_code = 200
+    def fake_post(request):
+        calls.append({'url': str(request.url), 'headers': request.headers,
+                      'json': json.loads(request.content), 'timeout': request.extensions['timeout']['read']})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
 
-        @staticmethod
-        def json():
-            return {"choices": [{"message": {"content": "OK"}}]}
-
-    def fake_post(url, **kwargs):
-        calls.append({"url": url, **kwargs})
-        return Response()
-
-    monkeypatch.setattr(llm_providers.requests, "post", fake_post)
+    _mock_http(monkeypatch, fake_post)
     try:
         provider = LLMProvider(
             id="cloud-llm",
@@ -444,7 +434,7 @@ def test_llm_connection_test_uses_sanitized_content_free_request(tmp_path: Path,
         assert calls[0]["json"]["model"] == "configured-model"
         assert calls[0]["json"]["stream"] is False
         assert "transcript" not in str(calls[0]["json"]).lower()
-        assert calls[0]["allow_redirects"] is False
+        assert len(calls) == 1  # Mock factory also asserts redirects are disabled.
         assert calls[0]["timeout"] > 0
     finally:
         db.close()

@@ -38,6 +38,15 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
     routes = _registered_routes(client.app)
 
     expected = {
+        ("GET", "/tasks/{task_id}/translation-runs"),
+        ("POST", "/tasks/{task_id}/translation-runs"),
+        ("GET", "/tasks/{task_id}/translation-runs/{run_id}"),
+        ("POST", "/tasks/{task_id}/translation-runs/{run_id}/cancel"),
+        ("POST", "/tasks/{task_id}/translation-runs/{run_id}/retry"),
+        ("GET", "/tasks/{task_id}/translation-runs/{run_id}/versions"),
+        ("POST", "/tasks/{task_id}/translation-runs/{run_id}/versions"),
+        ("GET", "/tasks/{task_id}/translation-runs/{run_id}/versions/{version_id}"),
+        ("GET", "/tasks/{task_id}/translation-runs/{run_id}/versions/{version_id}/export/{fmt}"),
         ("GET", "/"),
         ("GET", "/api-info"),
         ("POST", "/auth/resource-ticket"),
@@ -54,6 +63,7 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("DELETE", "/llm-providers/{provider_id}"),
         ("PUT", "/llm-providers/{provider_id}"),
         ("POST", "/llm-providers/{provider_id}/test"),
+        ("POST", "/llm-providers/{provider_id}/test-capabilities"),
         ("GET", "/models/active-downloads"),
         ("GET", "/models/benchmark"),
         ("POST", "/models/benchmark"),
@@ -337,3 +347,99 @@ def test_media_ingest_storage_contract_is_typed(tmp_path: Path) -> None:
     body = response.json()
     assert body["ingest_mode"] in {"reference", "copy"}
     assert body["runtime"] in {"desktop", "container"}
+
+
+def test_translation_contract_and_serialized_responses(tmp_path, monkeypatch):
+    from backend.database import session as database
+    from backend.services import translation, llm_providers
+    from backend.tests.test_proofreading_service import _completed_task
+    from backend.tests.test_translation_service import echo
+
+    monkeypatch.setattr(translation, 'enqueue', lambda *a: None)
+    monkeypatch.setattr(llm_providers, 'chat_completion', echo)
+    with make_client(tmp_path) as client:
+        # Seed after lifespan recovery, so active-state checks exercise the intended state.
+        with database.SessionLocal() as db:
+            task, provider, source = _completed_task(db)
+            task_id, provider_id, source_id = task.id, provider.id, source.id
+        base = f'/tasks/{task_id}/translation-runs'
+        response = client.post(base, json={'provider_id': provider_id, 'source_version_id': source_id,
+            'source_language': {'kind': 'auto'}, 'target_language': {'kind': 'preset', 'code': 'ar'}})
+        assert response.status_code == 200, response.text
+        expected = {'id', 'task_id', 'source_version_id', 'source_language', 'target_language', 'source_is_current',
+            'llm_provider_id', 'provider_name', 'provider_preset', 'model_name', 'status', 'attempt', 'total_batches',
+            'completed_batches', 'total_segments', 'completed_segments', 'latest_translation_version_id', 'can_retry',
+            'can_edit', 'can_export', 'error_code', 'error', 'created_at', 'updated_at', 'completed_at'}
+        run = response.json()
+        assert set(run) == expected and run['status'] == 'queued'
+        assert client.post(base, json={'provider_id': provider_id, 'source_version_id': source_id,
+            'source_language': {'kind': 'auto'}, 'target_language': {'kind': 'preset', 'code': 'fr'}}).status_code == 409
+        run_url = f"{base}/{run['id']}"
+        assert client.get(base).json()['items'][0] == run
+        translation.execute_run(run['id'], run['attempt'])
+        result = client.get(run_url).json()
+        assert set(result) == expected
+        assert result['can_edit'] and result['can_export'] and not result['can_retry']
+        assert result['completed_segments'] == result['total_segments'] == 2
+        vid = result['latest_translation_version_id']
+        summaries = client.get(f'{run_url}/versions').json()['items']
+        assert set(summaries[0]) == {'id', 'run_id', 'revision', 'version_type', 'parent_version_id', 'created_at'}
+        version = client.get(f'{run_url}/versions/{vid}').json()
+        assert set(version) == set(summaries[0]) | {'source_version_id', 'source_language', 'target_language', 'segments'}
+        assert set(version['segments'][0]) == {'id', 'start', 'end', 'speaker', 'source_text', 'text'}
+        for fmt in ['txt', 'srt', 'vtt', 'ass', 'json', 'md']:
+            download = client.get(f'{run_url}/versions/{vid}/export/{fmt}?mode=bilingual')
+            assert download.status_code == 200 and 'attachment' in download.headers['content-disposition']
+            assert download.headers['access-control-expose-headers'] == 'Content-Disposition'
+        assert client.get(f'/tasks/foreign/translation-runs/{run["id"]}').status_code == 404
+        assert client.get(f'{run_url}/versions/999').status_code == 404
+        assert client.get(f'{run_url}/versions/{vid}/export/srt?mode=invalid').status_code == 400
+        assert client.post(f'{run_url}/versions', json={'base_version_id': vid, 'segments': [{'id': 1, 'text': 'missing second'}]}).status_code == 400
+        saved = client.post(f'{run_url}/versions', json={'base_version_id': vid, 'segments': [{'id': 1, 'text': 'bonjour'}, {'id': 2, 'text': 'salut'}]})
+        assert saved.status_code == 200 and saved.json()['revision'] == 2
+        assert client.post(f'{run_url}/retry').status_code == 409
+        assert client.post(f'{run_url}/cancel').status_code == 409
+        schemas = client.get('/openapi.json').json()
+        for path, methods in schemas['paths'].items():
+            if 'translation-runs' not in path or '/export/' in path:
+                continue
+            for operation in methods.values():
+                assert '$ref' in operation['responses']['200']['content']['application/json']['schema']
+
+
+def test_llm_compatibility_contract_and_stale_recommendation(tmp_path, monkeypatch):
+    from backend.tests.test_translation_execution import mock_transport
+    from backend.tests.test_llm_compatibility import sample_reply
+    mock_transport(monkeypatch, sample_reply)
+    with make_client(tmp_path) as client:
+        original = client.post('/llm-providers', json={
+            'name': 'Synthetic', 'preset': 'custom', 'base_url': 'http://localhost:12345/v1',
+            'default_model': 'synthetic', 'api_key': 'private-key',
+        })
+        assert original.status_code == 200
+        row = original.json()
+        assert row['compatibility'] == {'protocol': 'auto', 'thinking': 'auto', 'output_format': 'auto', 'transport': 'json'}
+        path = '/llm-providers/' + row['id']
+        checked = client.post(path + '/test-capabilities')
+        assert checked.status_code == 200
+        result = checked.json()
+        assert set(result) == {'ok', 'message', 'provider_updated_at', 'requests_made', 'translation', 'proofreading', 'recommended'}
+        assert result['ok'] and result['requests_made'] == 2
+        assert result['translation'] == result['proofreading'] == {'ok': True, 'error_code': None}
+        assert result['provider_updated_at'] == row['updated_at']
+        assert result['recommended']['output_format'] == 'json_schema'
+        assert 'private-key' not in checked.text and 'I have' not in checked.text
+        update = {'compatibility': result['recommended'], 'expected_updated_at': result['provider_updated_at']}
+        saved = client.put(path, json=update)
+        assert saved.status_code == 200 and saved.json()['compatibility'] == result['recommended']
+        assert client.put(path, json=update).status_code == 409
+        listing = client.get('/llm-providers').json()['items'][0]
+        assert listing['compatibility'] == result['recommended']
+        for invalid in ({'protocol': 'unknown'}, {'headers': {'Authorization': 'override'}}, {'transport': 'other'}):
+            assert client.put(path, json={'compatibility': invalid}).status_code == 422
+        assert client.put(path, json={'compatibility': None}).status_code == 400
+        assert client.post('/llm-providers/missing/test-capabilities').status_code == 404
+        schema = client.app.openapi()
+        properties = schema['components']['schemas']['LLMProviderResponse']['properties']
+        assert 'compatibility' in properties
+        assert 'LLMCapabilityTestResponse' in str(schema['paths'][path.replace(row['id'], '{provider_id}') + '/test-capabilities'])

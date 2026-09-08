@@ -405,7 +405,7 @@ def test_parse_suggestions_accepts_changed_targets_and_filters_unchanged() -> No
 @pytest.mark.parametrize(
     "payload",
     [
-        "```json\n{\"suggestions\": []}\n```",
+        "Explanation\n```json\n{\"suggestions\": []}\n```",
         '{"suggestions":[{"segment_id":99,"suggested_text":"x","reason":"x"}]}',
         '{"suggestions":[{"segment_id":1,"suggested_text":"a","reason":"x"},{"segment_id":1,"suggested_text":"b","reason":"x"}]}',
         '{"suggestions":[{"segment_id":1,"suggested_text":"","reason":"x"}]}',

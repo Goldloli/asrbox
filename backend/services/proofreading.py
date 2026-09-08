@@ -21,6 +21,7 @@ from backend.database.models import (
 )
 from backend.models import ProofreadingRunResponse, ProofreadingSuggestionResponse, TranscriptSegment
 from backend.services import llm_providers
+from backend.services.llm_compatibility import json_object
 from backend.services import versions as version_service
 from backend.services.task_transitions import task_transition_lock
 from backend.utils.transcript_text import transcript_text_from_segments
@@ -133,8 +134,8 @@ def parse_suggestions(
     targets: list[dict[str, int | str]],
 ) -> list[ParsedSuggestion]:
     try:
-        payload = _ProofreadingPayload.model_validate(json.loads(content))
-    except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+        payload = _ProofreadingPayload.model_validate(json_object(content), strict=True)
+    except (json.JSONDecodeError, ValidationError, TypeError, ValueError, RecursionError) as exc:
         raise ProofreadingError(
             "LLM_INVALID_RESPONSE",
             "LLM provider returned invalid structured suggestions",
@@ -425,6 +426,16 @@ def _messages_for_batch(batch: ProofreadingBatch) -> list[dict[str, str]]:
     ]
 
 
+def response_schema(target_ids):
+    return {"type": "object", "additionalProperties": False, "required": ["suggestions"],
+        "properties": {"suggestions": {"type": "array", "maxItems": len(target_ids),
+            "items": {"type": "object", "additionalProperties": False,
+                "required": ["segment_id", "suggested_text", "reason"],
+                "properties": {"segment_id": {"type": "integer", "enum": target_ids},
+                    "suggested_text": {"type": "string", "minLength": 1},
+                    "reason": {"type": "string", "minLength": 1}}}}}}
+
+
 def execute_run(db: Session, run_id: str) -> None:
     run = db.query(ProofreadingRun).filter(ProofreadingRun.id == run_id).first()
     if run is None or run.status not in ACTIVE_RUN_STATUSES:
@@ -448,6 +459,7 @@ def execute_run(db: Session, run_id: str) -> None:
                 provider,
                 _messages_for_batch(batch),
                 timeout=90,
+                response_schema=response_schema([int(item["id"]) for item in batch.targets]),
             )
             collected.extend(parse_suggestions(content, batch.targets))
             run.completed_batches = index

@@ -26,7 +26,7 @@
     "test:e2e:smoke": "playwright test app/e2e/public-beta-smoke.spec.ts",
     "test:e2e:llm": "playwright test app/e2e/llm-proofreading.spec.ts",
     "test:e2e:about": "playwright test app/e2e/about-updates.spec.ts",
-    "test:e2e:maintained": "playwright test app/e2e/public-beta-smoke.spec.ts app/e2e/llm-proofreading.spec.ts app/e2e/about-updates.spec.ts app/e2e/model-storage-settings.spec.ts app/e2e/models-download-controls.spec.ts app/e2e/transcript-editing.spec.ts",
+    "test:e2e:maintained": "playwright test app/e2e/public-beta-smoke.spec.ts app/e2e/llm-proofreading.spec.ts app/e2e/llm-translation.spec.ts app/e2e/about-updates.spec.ts app/e2e/model-storage-settings.spec.ts app/e2e/models-download-controls.spec.ts app/e2e/transcript-editing.spec.ts",
     "test:frontend:unit": "bun test app/src",
     "check:open-source": "./scripts/check-open-source-readiness.sh",
     "typecheck": "tsc -p app/tsconfig.json --noEmit && cd web && tsc --noEmit",

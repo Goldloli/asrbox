@@ -36,6 +36,11 @@ const tasksRoute = createRoute({
 const aiRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/ai',
+  validateSearch: (search: Record<string, unknown>): { task?: string; mode?: 'translation'; run?: string } => ({
+    ...(typeof search.task === 'string' ? { task: search.task } : {}),
+    ...(search.mode === 'translation' ? { mode: 'translation' as const } : {}),
+    ...(typeof search.run === 'string' && search.mode === 'translation' ? { run: search.run } : {}),
+  }),
   component: withSuspense(AIPage),
 });
 

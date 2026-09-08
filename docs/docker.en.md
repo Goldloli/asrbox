@@ -152,3 +152,7 @@ docker image rm asrbox:local
 ```
 
 Only after confirming a backup, permanently remove data with `docker volume rm asrbox-data`.
+
+## Subtitle translation (unreleased)
+
+The development Web UI uses the existing LLM settings under AI → Subtitle translation. Host Ollama remains reachable at `http://host.docker.internal:11434/v1`. Sources, batch checkpoints and translation revisions persist in SQLite under `/data`. Container restarts mark active runs interrupted; explicit resumption is required and no provider request is automatically sent. Exports download through the browser and cannot select arbitrary host filesystem paths. See the [AI guide](ai-proofreading.en.md) for steps, cancellation charges and downgrade constraints.

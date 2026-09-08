@@ -112,16 +112,20 @@ export function Select({
   onValueChange,
   options,
   placeholder = 'Select',
+  disabled = false,
+  'aria-label': ariaLabel,
 }: {
   value: string;
   onValueChange: (value: string) => void;
   options: Array<{ value: string; label: string; disabled?: boolean }>;
   placeholder?: string;
+  disabled?: boolean;
+  'aria-label'?: string;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
-      <SelectPrimitive.Trigger className="flex h-10 w-full items-center justify-between rounded-lg border app-control px-3 text-sm outline-none focus:border-[color:var(--app-accent)] focus:ring-2 focus:ring-[color:var(--app-accent)]/15">
-        <SelectPrimitive.Value placeholder={placeholder} />
+    <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectPrimitive.Trigger aria-label={ariaLabel} className="flex h-10 w-full min-w-0 items-center justify-between rounded-lg border app-control px-3 text-sm outline-none focus:border-[color:var(--app-accent)] focus:ring-2 focus:ring-[color:var(--app-accent)]/15">
+        <span className="min-w-0 truncate"><SelectPrimitive.Value placeholder={placeholder} /></span>
         <SelectPrimitive.Icon><ChevronDown className="size-4 text-app-muted" /></SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
