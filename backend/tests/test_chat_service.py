@@ -99,3 +99,21 @@ def test_provider_deletion_preserves_session(setup):
     assert llm_providers.delete_provider(db, provider.id) is True
     db.expire_all()
     assert chat.get_session(db, session.id).provider_id is None
+
+
+def test_followup_question_falls_back_to_previous_user_message(setup):
+    db, _, _ = setup
+    session = chat.create_session(db)
+    chat.add_message(db, session.id, role="user", content="如何恢复字幕的历史版本？")
+    chat.add_message(db, session.id, role="assistant", content="恢复会创建新版本。")
+    messages = chat.build_context_messages(db, chat.get_session(db, session.id), "这个操作会影响原始字幕吗？")
+    assert "版本历史" in messages[0]["content"]
+
+
+def test_subtitle_injection_includes_timestamps(setup):
+    db, _, _ = setup
+    task, _, _ = _completed_task(db, task_id="chat-ts-task", texts=["第一句话"])
+    session = chat.create_session(db, task_id=task.id)
+    messages = chat.build_context_messages(db, chat.get_session(db, session.id), "总结一下")
+    subtitle = next(message["content"] for message in messages if "绑定任务的字幕内容" in message["content"])
+    assert "[00:00] 第一句话" in subtitle

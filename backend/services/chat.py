@@ -21,6 +21,8 @@ EVENT_ERROR = "error"
 SYSTEM_PROMPT = (
     "你是 ASRbox 的内置助手，回答两类问题：ASRbox 软件的使用方法，以及用户当前绑定转写任务的字幕内容。"
     "回答只能基于下面提供的内置资料、字幕内容和会话历史；资料没有覆盖的内容要明确说明不知道，不要编造软件功能。"
+    "回答字幕内容问题时，只依据字幕文本本身：引用原文作答，不要推测、联想或补充字幕之外的信息；"
+    "字幕每行开头的方括号是该句的时间戳（分:秒），涉及时间位置的问题用它来回答。"
 )
 NO_KNOWLEDGE_HINT = "本次问题未命中内置答疑资料；若问题超出资料范围，请明确说明，而不是编造功能。"
 MAX_CONTEXT_CHARS = 100_000
@@ -129,7 +131,21 @@ def session_to_response(row: ChatSession) -> ChatSessionResponse:
 
 
 def build_context_messages(db: Session, session: ChatSession, content: str) -> list[dict[str, str]]:
+    history = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.id.asc())
+        .all()
+    )
     hits = chat_knowledge.search(content)
+    if not hits:
+        previous_user = next(
+            (message.content for message in reversed(history)
+             if message.role == "user" and message.content.strip()),
+            "",
+        )
+        if previous_user:
+            hits = chat_knowledge.search(f"{previous_user} {content}")
     system = SYSTEM_PROMPT
     if hits:
         system += "\n\n以下内置答疑资料可能与本次问题相关：\n" + "\n\n".join(
@@ -142,15 +158,11 @@ def build_context_messages(db: Session, session: ChatSession, content: str) -> l
         version_id = versions.latest_version_id(db, session.task_id)
         if version_id is not None:
             version = versions.get_version(db, session.task_id, version_id)
-            subtitle = "\n".join(segment.text for segment in version.segments) if version else ""
+            subtitle = "\n".join(
+                f"[{_format_timestamp(segment.start)}] {segment.text}" for segment in version.segments
+            ) if version else ""
             if subtitle.strip():
                 messages.append({"role": "system", "content": "以下是用户当前绑定任务的字幕内容：\n" + subtitle})
-    history = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.session_id == session.id)
-        .order_by(ChatMessage.id.asc())
-        .all()
-    )
     prefix = len(messages)
     messages.extend(
         {"role": message.role, "content": message.content}
@@ -166,6 +178,11 @@ def build_context_messages(db: Session, session: ChatSession, content: str) -> l
             "Subtitle and conversation exceed the provider context limit; unbind the task or shorten the history",
         )
     return messages
+
+
+def _format_timestamp(start_seconds: float) -> str:
+    total_seconds = max(0, int(start_seconds))
+    return f"{total_seconds // 60:02d}:{total_seconds % 60:02d}"
 
 
 def _context_chars(messages: list[dict[str, str]]) -> int:

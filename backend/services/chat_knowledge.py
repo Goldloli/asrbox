@@ -35,8 +35,13 @@ def load_chunks(path: Path | None = None) -> list[dict]:
     return list(_load(str(path or DATA_FILE)))
 
 
+BRAND_TOKENS = ("asrbox",)
+
+
 def _bigrams(text: str) -> set[str]:
     normalized = "".join(text.lower().split())
+    for token in BRAND_TOKENS:
+        normalized = normalized.replace(token, "")
     if len(normalized) < 2:
         return {normalized} if normalized else set()
     return {normalized[index:index + 2] for index in range(len(normalized) - 1)}

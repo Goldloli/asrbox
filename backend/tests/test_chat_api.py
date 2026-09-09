@@ -159,7 +159,7 @@ def test_streaming_delta_done_and_context_boundary(tmp_path: Path, monkeypatch) 
         sent = captured["messages"]
         assert sent[0]["role"] == "system" and "导出" in sent[0]["content"]
         combined = json.dumps(sent, ensure_ascii=False)
-        assert "绑定任务的字幕内容" in combined
+        assert "[00:00] 绑定任务的字幕内容" in combined
         assert sent[-1] == {"role": "user", "content": "支持哪些导出格式？"}
         assert "其他任务的机密字幕" not in combined
         assert "chat-secret-key" not in combined

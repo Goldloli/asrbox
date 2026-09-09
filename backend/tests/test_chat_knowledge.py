@@ -60,3 +60,9 @@ def test_packaging_includes_knowledge_file():
     source = (REPO_ROOT / 'backend' / 'build_binary.py').read_text(encoding='utf-8')
     assert 'chat_knowledge.json' in source
     assert 'backend/data' in source
+
+
+def test_brand_name_alone_does_not_match():
+    assert chat_knowledge.search('ASRbox 能帮我写工作周报吗？') == []
+    hits = chat_knowledge.search('ASRbox 支持哪些本地模型？')
+    assert hits and hits[0]['title'] == '支持哪些本地模型'

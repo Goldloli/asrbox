@@ -14,7 +14,7 @@ Replies render incrementally, typewriter-style. Click Stop while a reply is gene
 
 ## Binding a transcript task
 
-The Bound transcript selector at the top of a chat binds a completed transcription task to the session, or selects “No transcript (app Q&A only)”. When bound, each question includes the full text of the task's current subtitle version (the same notion of “current version” used by proofreading and translation); newer versions are picked up automatically. The binding persists with the session and can be changed or removed at any time.
+The Bound transcript selector at the top of a chat binds a completed transcription task to the session, or selects “No transcript (app Q&A only)”. When bound, each question includes the full text of the task's current subtitle version (the same notion of “current version” used by proofreading and translation), with every line carrying its mm:ss timestamp so the assistant can answer “where in the subtitle was this said” questions; newer versions are picked up automatically. The binding persists with the session and can be changed or removed at any time.
 
 If the bound subtitles and chat history exceed the model's usable context, ASRbox reports the context-length problem before sending instead of silently truncating the subtitles; unbind the task or switch to a model with a larger context.
 
