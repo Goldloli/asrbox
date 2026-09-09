@@ -1,4 +1,5 @@
 import { useServerStore } from '../stores/serverStore';
+import { consumeChatSseResponse } from './eventStream';
 
 export type TaskStatus =
   | 'created'
@@ -329,6 +330,35 @@ export interface LLMProviderTestResult {
   ok: boolean;
   message: string;
   error_code?: string | null;
+}
+
+export type ChatMessageRole = 'user' | 'assistant';
+export type ChatMessageStatus = 'complete' | 'partial' | 'error';
+
+export interface ChatMessage {
+  id: number;
+  session_id: string;
+  role: ChatMessageRole;
+  content: string;
+  status: ChatMessageStatus;
+  created_at: string;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  task_id?: string | null;
+  provider_id?: string | null;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSession extends ChatSessionSummary {
+  messages: ChatMessage[];
+}
+
+export interface ChatSessionListResponse {
+  items: ChatSessionSummary[];
 }
 
 export type TranslationLanguage =
@@ -945,6 +975,40 @@ class ApiClient {
 
   testLLMProvider(id: string) {
     return this.request<LLMProviderTestResult>(`/llm-providers/${id}/test`, { method: 'POST' });
+  }
+
+  createChatSession(input: { task_id?: string | null; provider_id?: string | null; title?: string }) {
+    return this.request<ChatSession>('/chat/sessions', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  listChatSessions() {
+    return this.request<ChatSessionListResponse>('/chat/sessions');
+  }
+
+  getChatSession(id: string) {
+    return this.request<ChatSession>(`/chat/sessions/${encodeURIComponent(id)}`);
+  }
+
+  updateChatSession(id: string, patch: { task_id?: string | null; provider_id?: string | null }) {
+    return this.request<ChatSession>(`/chat/sessions/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+
+  deleteChatSession(id: string) {
+    return this.request<{ message: string }>(`/chat/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  streamChatMessage(
+    sessionId: string,
+    content: string,
+    options: { signal: AbortSignal; onDelta?: (content: string) => void },
+  ) {
+    return consumeChatSseResponse<ChatMessage>({
+      url: `${this.baseUrl()}/chat/sessions/${encodeURIComponent(sessionId)}/messages`,
+      apiToken: useServerStore.getState().apiToken,
+      content,
+      signal: options.signal,
+      onDelta: options.onDelta,
+    });
   }
 
   listTranslationRuns(taskId: string) {

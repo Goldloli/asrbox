@@ -18,6 +18,8 @@ export const queryKeys = {
   providers: ['providers'] as const,
   llmProviderPresets: ['llm-providers', 'presets'] as const,
   llmProviders: ['llm-providers'] as const,
+  chatSessions: ['chat', 'sessions'] as const,
+  chatSession: (id: string) => ['chat', 'sessions', id] as const,
   proofreadingRuns: (taskId: string) => ['tasks', taskId, 'proofreading-runs'] as const,
   proofreadingRun: (taskId: string, runId: string) => ['tasks', taskId, 'proofreading-runs', runId] as const,
   translationRuns: (taskId: string) => ['tasks', taskId, 'translation-runs'] as const,
@@ -80,6 +82,19 @@ export function useLLMProviderPresetsQuery() {
 
 export function useLLMProvidersQuery() {
   return useQuery({ queryKey: queryKeys.llmProviders, queryFn: () => apiClient.listLLMProviders(), retry: 1 });
+}
+
+export function useChatSessionsQuery() {
+  return useQuery({ queryKey: queryKeys.chatSessions, queryFn: () => apiClient.listChatSessions(), retry: 1 });
+}
+
+export function useChatSessionQuery(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.chatSession(id ?? ''),
+    queryFn: () => apiClient.getChatSession(id!),
+    enabled: Boolean(id),
+    retry: 1,
+  });
 }
 
 export function useSettingsQuery() {

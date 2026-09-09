@@ -22,9 +22,9 @@
 
 ## 5. 前端 ChatPanel
 
-- [ ] 5.1 `app/src/lib/api.ts` 增加 chat typed 方法与 SSE 流消费（复用 eventStream 解析模式）。验证：`npm run typecheck` 通过
-- [ ] 5.2 `AIPage` 新增 `mode: 'chat'` tab 与 `ChatPanel`：会话列表、消息流、打字机渲染、停止按钮、任务绑定选择器、提供商选择器。验证：前端单测覆盖流式渲染与错误展示，接入 `test:frontend:unit`
-- [ ] 5.3 空状态与引导：无提供商时引导前往设置；无任务时纯答疑模式。验证：Playwright 场景覆盖提问全流程，接入 `test:e2e:maintained`
+- [x] 5.1 `app/src/lib/api.ts` 增加 chat typed 方法与 SSE 流消费（复用 eventStream 解析模式）。验证：`npm run typecheck` 通过
+- [x] 5.2 `AIPage` 新增 `mode: 'chat'` tab 与 `ChatPanel`：会话列表、消息流、打字机渲染、停止按钮、任务绑定选择器、提供商选择器。验证：前端单测覆盖流式渲染与错误展示，接入 `test:frontend:unit`
+- [x] 5.3 空状态与引导：无提供商时引导前往设置；无任务时纯答疑模式。验证：Playwright 场景覆盖提问全流程，接入 `test:e2e:maintained`
 
 ## 6. 打包与文档
 

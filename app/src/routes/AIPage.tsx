@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { BrainCircuit, Clock3, FileAudio, Languages, Search } from 'lucide-react';
+import { BrainCircuit, Clock3, FileAudio, Languages, MessagesSquare, Search } from 'lucide-react';
 import { TranslationPanel } from '../components/transcript/TranslationPanel';
 import { ProofreadingPanel } from '../components/transcript/ProofreadingPanel';
+import { ChatPanel } from '../components/transcript/ChatPanel';
 import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader } from '../components/weiui';
 import { formatDate, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -14,6 +15,7 @@ export function AIPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { task?: string; mode?: string; run?: string };
   const translationMode = search.mode === 'translation';
+  const chatMode = search.mode === 'chat';
   const tasksQuery = useTasksQuery();
   const [query, setQuery] = useState('');
   const tasks = tasksQuery.data?.items ?? [];
@@ -29,9 +31,9 @@ export function AIPage() {
   const selectedTask = search.task ? eligibleTasks.find((task) => task.id === search.task) : eligibleTasks[0];
 
   useEffect(() => {
-    if (!tasksQuery.isSuccess || search.task || !selectedTask) return;
+    if (chatMode || !tasksQuery.isSuccess || search.task || !selectedTask) return;
     navigate({ to: '/ai', search: { task: selectedTask.id, ...(translationMode ? { mode: 'translation' } : {}) }, replace: true });
-  }, [navigate, search.task, selectedTask, tasksQuery.isSuccess, translationMode]);
+  }, [navigate, search.task, selectedTask, tasksQuery.isSuccess, translationMode, chatMode]);
 
   const selectTask = (taskId: string) => {
     navigate({ to: '/ai', search: { task: taskId, ...(translationMode ? { mode: 'translation' } : {}) }, replace: true });
@@ -48,10 +50,14 @@ export function AIPage() {
       </Panel>
 
       <nav className="flex flex-wrap gap-2" aria-label={t('ai.title')}>
-        <Button asChild variant={translationMode ? 'secondary' : 'primary'}><Link to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode ? 'page' : undefined}>{t('translation.proofreading')}</Link></Button>
+        <Button asChild variant={!translationMode && !chatMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode && !chatMode ? 'page' : undefined}>{t('translation.proofreading')}</Link></Button>
         <Button asChild variant={translationMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id, mode: 'translation' }} replace aria-current={translationMode ? 'page' : undefined}>{t('translation.title')}</Link></Button>
+        <Button asChild variant={chatMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ mode: 'chat' }} replace aria-current={chatMode ? 'page' : undefined}><MessagesSquare className="size-4" />{t('chat.tab')}</Link></Button>
       </nav>
 
+      {chatMode ? (
+        <ChatPanel tasks={eligibleTasks} />
+      ) : (
       <div className="grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <Panel className="min-w-0 overflow-hidden lg:sticky lg:top-0 lg:max-h-[calc(100dvh-150px)]">
           <PanelHeader title={t('ai.tasksTitle')} description={t('ai.tasksDescription')} />
@@ -131,6 +137,7 @@ export function AIPage() {
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
