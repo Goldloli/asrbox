@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-import resource
 import time
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows 无 resource 模块
+    resource = None
 
 from sqlalchemy.orm import Session
 
@@ -97,7 +101,10 @@ def _run_benchmark(db: Session, request: ModelBenchmarkRequest) -> list[ModelBen
         realtime_factor = None
         if duration_ms and wall_time_ms:
             realtime_factor = round((wall_time_ms / 1000) / (duration_ms / 1000), 3)
-        peak_memory_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 2)
+        if resource is not None:
+            peak_memory_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 2)
+        else:
+            peak_memory_mb = None
         row = ModelBenchmark(
             model_name=model_name,
             engine=engine,
