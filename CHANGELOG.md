@@ -2,6 +2,12 @@
 
 All notable ASRbox changes are documented here. The format follows Keep a Changelog, and versions follow Semantic Versioning while the project is pre-1.0.
 
+## [0.1.8] - 2026-09-09
+
+### Added
+
+- AI chat assistant in a new Chat tab on the AI page: answers app-usage questions from a built-in offline knowledge base distilled from the user docs (keyword retrieval with canonical-question weighting, no vector model or external service), and answers questions about the current subtitle version of a bound transcription task (summaries, whether a line appears, mm:ss time positions). Replies stream token by token over per-request SSE and can be stopped with partial content kept; sessions and messages persist locally with cascade delete. Prompt-injection guarding refuses to reveal system instructions and treats injected knowledge/subtitle text as data. The privacy boundary matches proofreading: only session messages, the bound transcript, and matched knowledge passages are sent.
+
 ## [0.1.7] - 2026-09-09
 
 ### Fixed

@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.7`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.8`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -33,13 +33,19 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 - Ask app-usage or bound-subtitle questions in AI → Chat, with streamed answers and locally persisted chat history.
 
-**New and fixed in 0.1.7:** local model selectors and download guidance now label each model's supported CPU/GPU inference devices (CUDA, MPS, MLX); Whisper-family models no longer hallucinate long runs of repeated words on silent or musical passages, and Qwen3-ASR output is no longer silently truncated at a fixed 512-token budget. See the [local models guide](docs/models.md) for safeguard details.
+**New in 0.1.8:** the AI page gains a Chat assistant — it answers app-usage questions from a built-in offline knowledge base distilled from the user docs (keyword retrieval, no vector model needed), or answers questions about the current subtitle version of a bound task (summaries, whether a line appears and where). Replies stream token by token and can be stopped anytime; sessions persist locally. Prompt-injection guarding and privacy boundaries match subtitle proofreading. See the [AI chat guide](docs/ai-chat.md).
 
 ### LLM proofreading
 
 Connect Ollama or any OpenAI-compatible LLM to automatically check subtitles for typos, omissions, and obvious recognition errors, with ready-to-apply fix suggestions:
 
 ![LLM proofreading demo](assets/asrbox-llm-proofread.gif)
+
+### AI chat and subtitle translation
+
+In “AI → Chat”, ask your configured LLM directly: app-usage questions (answered from a built-in offline knowledge base), or bind a transcript task and ask it to summarize, find a quote and where it appears; replies stream in and sessions persist locally. “AI → Translation” offers multilingual translation with bilingual export:
+
+![AI chat and subtitle translation demo](assets/asrbox-ai-chat.gif)
 
 ## Docker deployment
 
@@ -76,7 +82,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## macOS desktop
 
-Download the Apple Silicon DMG from the [`v0.1.7` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.7) and verify `SHA256SUMS.txt`.
+Download the Apple Silicon DMG from the [`v0.1.8` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.8) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the DMG to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 

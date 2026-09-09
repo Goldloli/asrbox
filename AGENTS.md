@@ -101,6 +101,9 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - 前端代码使用带类型的响应，不得依赖内部 `options_json` key。
 - 受维护的路由、字段和事件只有在同步更新 OpenSpec、producer、typed consumer、contract test 和项目负责维护的文档后才能变更。
 - 新增响应字段必须同时声明到 FastAPI 的 `response_model`（pydantic 模型）：service 层产出但模型未声明的字段会被静默丢弃，且必须在 API 测试中断言该字段存在（binary smoke 等发布门禁不覆盖全部字段）。
+- 面向前端的 LLM 流式响应使用每请求 SSE（如 chat 的 delta/done/error 事件，worker 线程经有界 queue 桥接到 async 生成器）；全局 `/events` 的事件类型集合是冻结 contract，不得为单请求流式场景扩展它。带 `on_delta` 的 LLM 调用强制上游 `stream=True`，上游返回整段 JSON 时一次性回调全文，调用方无需区分。
+- 新增随应用分发的数据文件（如 `backend/data/` 下的知识库）时，必须同步：`.gitignore` 反排除（仓库根 `data/` 规则会误伤）、`backend/build_binary.py` 的 `--add-data`、`_MEIPASS` 冻结路径解析，并覆盖 frozen 路径测试与打包静态断言。
+- `weiui` Select 的 option value 不允许空字符串（Radix 会在渲染时抛错导致下拉无法打开）；"不绑定"等空态选项必须使用哨兵值（如 `__none__`）。
 - 新增 Tauri 网络或文件系统能力时，不得让 WebView 向特权 command 传入并决定任意 URL、仓库或目标路径；应由 Rust 侧解析并校验可信来源、资源名称和文件目标，同时覆盖允许与拒绝路径测试，并保持 Web runtime 显式降级。
 - 除非使用经过批准且许可合规的 fixture，否则用户媒体、字幕、模型、数据库、备份和诊断不得进入仓库或发布包。
 
