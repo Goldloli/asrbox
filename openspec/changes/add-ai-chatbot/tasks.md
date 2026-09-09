@@ -1,17 +1,17 @@
 ## 1. 流式 LLM 传输层
 
-- [ ] 1.1 在 `backend/services/llm_compatibility.py` 的 `bounded_completion` 增加可选 `on_delta` 回调：SSE 上游逐 chunk 回调增量，JSON 上游整段回调一次；`backend/services/llm_providers.py` `chat_completion` 透传该参数，默认 None 行为不变。验证：新增单元测试覆盖 SSE 增量、JSON 回退、中途断流三种路径，且现有校对/翻译测试全部通过
-- [ ] 1.2 为流式中断（网络错误/上游错误）增加分类错误传递，验证：错误码测试与现有 `LLM_PROVIDER_*` 分类一致
+- [x] 1.1 在 `backend/services/llm_compatibility.py` 的 `bounded_completion` 增加可选 `on_delta` 回调：SSE 上游逐 chunk 回调增量，JSON 上游整段回调一次；`backend/services/llm_providers.py` `chat_completion` 透传该参数，默认 None 行为不变。验证：新增单元测试覆盖 SSE 增量、JSON 回退、中途断流三种路径，且现有校对/翻译测试全部通过
+- [x] 1.2 为流式中断（网络错误/上游错误）增加分类错误传递，验证：错误码测试与现有 `LLM_PROVIDER_*` 分类一致
 
 ## 2. 数据模型与持久化
 
-- [ ] 2.1 在 `backend/database/models.py` 新增 `ChatSession`、`ChatMessage` 模型（含 status: complete/partial/error），在 `backend/database/migrations.py` 登记建表 migration。验证：migration 测试（新库建表 + 已有库升级）通过
-- [ ] 2.2 实现 `backend/services/chat.py`：会话 CRUD（创建/列表/详情/删除级联）、消息持久化、标题生成。验证：service 层 pytest 通过
+- [x] 2.1 在 `backend/database/models.py` 新增 `ChatSession`、`ChatMessage` 模型（含 status: complete/partial/error），在 `backend/database/migrations.py` 登记建表 migration。验证：migration 测试（新库建表 + 已有库升级）通过
+- [x] 2.2 实现 `backend/services/chat.py`：会话 CRUD（创建/列表/详情/删除级联）、消息持久化、标题生成。验证：service 层 pytest 通过
 
 ## 3. 答疑知识库
 
-- [ ] 3.1 整理 `docs/` 用户文档（README、docker、models、labels、ai-proofreading、privacy、release 等）为 `backend/data/chat_knowledge.json` chunks（title/text/keywords/source_doc），覆盖用户高频问题：转写流程、模型管理、LLM 配置、校对/翻译、版本恢复、导出格式、隐私边界、桌面/Web 差异。验证：校验脚本确认 JSON 结构合法且 source_doc 均存在
-- [ ] 3.2 实现 `backend/services/chat_knowledge.py` 关键词检索（字符 bigram 打分 + 阈值 + top-N），零命中返回空。验证：检索单元测试覆盖中文查询命中、零命中、阈值过滤
+- [x] 3.1 整理 `docs/` 用户文档（README、docker、models、labels、ai-proofreading、privacy、release 等）为 `backend/data/chat_knowledge.json` chunks（title/text/keywords/source_doc），覆盖用户高频问题：转写流程、模型管理、LLM 配置、校对/翻译、版本恢复、导出格式、隐私边界、桌面/Web 差异。验证：校验脚本确认 JSON 结构合法且 source_doc 均存在
+- [x] 3.2 实现 `backend/services/chat_knowledge.py` 关键词检索（字符 bigram 打分 + 阈值 + top-N），零命中返回空。验证：检索单元测试覆盖中文查询命中、零命中、阈值过滤
 
 ## 4. Chat API 路由
 

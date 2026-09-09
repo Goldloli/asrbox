@@ -12,6 +12,7 @@ dist/
 build/
 *.spec
 data/
+!backend/data/
 frontend-audit-screenshots/
 playwright-report/
 test-results/
