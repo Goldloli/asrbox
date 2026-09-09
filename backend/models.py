@@ -1009,3 +1009,44 @@ class MCPTranscribeRequest(BaseModel):
     provider_id: str | None = None
     language: str | None = None
     output_formats: list[str] = Field(default_factory=lambda: ["txt", "srt", "json"])
+
+
+class ChatSessionCreate(BaseModel):
+    task_id: str | None = None
+    provider_id: str | None = None
+    title: str = Field("", max_length=120)
+
+
+class ChatSessionUpdate(BaseModel):
+    task_id: str | None = None
+    provider_id: str | None = None
+
+
+class ChatMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=20000)
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    session_id: str
+    role: Literal["user", "assistant"]
+    content: str
+    status: Literal["complete", "partial", "error"]
+    created_at: datetime
+
+
+class ChatSessionSummaryResponse(BaseModel):
+    id: str
+    task_id: str | None = None
+    provider_id: str | None = None
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatSessionResponse(ChatSessionSummaryResponse):
+    messages: list[ChatMessageResponse] = Field(default_factory=list)
+
+
+class ChatSessionListResponse(BaseModel):
+    items: list[ChatSessionSummaryResponse]

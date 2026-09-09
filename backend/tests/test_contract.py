@@ -53,6 +53,12 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("GET", "/batches/{batch_id}"),
         ("GET", "/batches/{batch_id}/export.zip"),
         ("POST", "/batches/{batch_id}/retry-failed"),
+        ("GET", "/chat/sessions"),
+        ("POST", "/chat/sessions"),
+        ("DELETE", "/chat/sessions/{session_id}"),
+        ("GET", "/chat/sessions/{session_id}"),
+        ("PATCH", "/chat/sessions/{session_id}"),
+        ("POST", "/chat/sessions/{session_id}/messages"),
         ("GET", "/diagnostics/error-codes"),
         ("GET", "/events"),
         ("GET", "/health"),
@@ -409,6 +415,44 @@ def test_translation_contract_and_serialized_responses(tmp_path, monkeypatch):
                 continue
             for operation in methods.values():
                 assert '$ref' in operation['responses']['200']['content']['application/json']['schema']
+
+
+def test_chat_contract_is_typed(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    schema = client.app.openapi()
+
+    message_fields = schema["components"]["schemas"]["ChatMessageResponse"]["properties"]
+    assert set(message_fields) == {"id", "session_id", "role", "content", "status", "created_at"}
+    assert set(message_fields["role"]["enum"]) == {"user", "assistant"}
+    assert set(message_fields["status"]["enum"]) == {"complete", "partial", "error"}
+
+    session_fields = schema["components"]["schemas"]["ChatSessionResponse"]["properties"]
+    assert {
+        "id",
+        "task_id",
+        "provider_id",
+        "title",
+        "messages",
+        "created_at",
+        "updated_at",
+    } <= session_fields.keys()
+
+    paths = schema["paths"]
+    for path, operation in (
+        ("/chat/sessions", "post"),
+        ("/chat/sessions/{session_id}", "get"),
+        ("/chat/sessions/{session_id}", "patch"),
+    ):
+        ref = paths[path][operation]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("ChatSessionResponse")
+    list_ref = paths["/chat/sessions"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert list_ref.endswith("ChatSessionListResponse")
+    stream = paths["/chat/sessions/{session_id}/messages"]["post"]["responses"]["200"]
+    assert "text/event-stream" in stream["content"]
+
+    from backend.services import chat
+
+    assert (chat.EVENT_DELTA, chat.EVENT_DONE, chat.EVENT_ERROR) == ("delta", "done", "error")
 
 
 def test_llm_compatibility_contract_and_stale_recommendation(tmp_path, monkeypatch):

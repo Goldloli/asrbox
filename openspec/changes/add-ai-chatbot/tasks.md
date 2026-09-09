@@ -15,10 +15,10 @@
 
 ## 4. Chat API 路由
 
-- [ ] 4.1 实现 `backend/routes/chat.py`：会话 CRUD REST 路由 + `POST /chat/sessions/{id}/messages` SSE 流式路由（queue 桥接 worker 线程、断开协作式取消、partial 落库、错误分类映射）。验证：API 测试覆盖会话生命周期、流式 delta/done/error、中止保留 partial、无可用提供商 4xx
-- [ ] 4.2 上下文组装：system prompt + 知识段落 + `versions.latest_version_id` 当前字幕 + 历史裁剪；字幕超长返回 `LLM_PROVIDER_CONTEXT_TOO_LONG`。验证：mock `chat_completion` 断言注入内容边界（只含该会话消息/绑定字幕/命中段落），隐私测试复刻 proofreading privacy 模式
-- [ ] 4.3 更新 `backend/tests/test_contract.py` 路由冻结清单与响应 contract 断言。验证：`npm run test:backend:contract` 通过
-- [ ] 4.4 事件循环响应测试：流式等待期间其他 coroutine 仍可运行（AGENTS.md 异步路由约束）。验证：该测试通过
+- [x] 4.1 实现 `backend/routes/chat.py`：会话 CRUD REST 路由 + `POST /chat/sessions/{id}/messages` SSE 流式路由（queue 桥接 worker 线程、断开协作式取消、partial 落库、错误分类映射）。验证：API 测试覆盖会话生命周期、流式 delta/done/error、中止保留 partial、无可用提供商 4xx
+- [x] 4.2 上下文组装：system prompt + 知识段落 + `versions.latest_version_id` 当前字幕 + 历史裁剪；字幕超长返回 `LLM_PROVIDER_CONTEXT_TOO_LONG`。验证：mock `chat_completion` 断言注入内容边界（只含该会话消息/绑定字幕/命中段落），隐私测试复刻 proofreading privacy 模式
+- [x] 4.3 更新 `backend/tests/test_contract.py` 路由冻结清单与响应 contract 断言。验证：`npm run test:backend:contract` 通过
+- [x] 4.4 事件循环响应测试：流式等待期间其他 coroutine 仍可运行（AGENTS.md 异步路由约束）。验证：该测试通过
 
 ## 5. 前端 ChatPanel
 
