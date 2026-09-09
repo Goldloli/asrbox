@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 from backend.services import chat_knowledge
@@ -48,3 +49,14 @@ def test_top_n_limits_results():
     hits = chat_knowledge.search('字幕导出', chunks, top_n=2, threshold=0.1)
     assert len(hits) == 2
     assert chat_knowledge.search('字幕导出', chunks, top_n=0, threshold=0.1) == []
+
+
+def test_frozen_data_file_resolution(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
+    assert chat_knowledge._default_data_file() == tmp_path / 'backend' / 'data' / 'chat_knowledge.json'
+
+
+def test_packaging_includes_knowledge_file():
+    source = (REPO_ROOT / 'backend' / 'build_binary.py').read_text(encoding='utf-8')
+    assert 'chat_knowledge.json' in source
+    assert 'backend/data' in source

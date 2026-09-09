@@ -28,5 +28,5 @@
 
 ## 6. 打包与文档
 
-- [ ] 6.1 打包脚本包含 `chat_knowledge.json`（`scripts/build-server.sh` 等），验证：构建产物中文件存在
-- [ ] 6.2 更新用户文档（新功能说明）与 README 功能列表。验证：`openspec validate --changes add-ai-chatbot` 与 `npm run check:open-source` 通过
+- [x] 6.1 打包脚本包含 `chat_knowledge.json`（`scripts/build-server.sh` 等），验证：构建产物中文件存在
+- [x] 6.2 更新用户文档（新功能说明）与 README 功能列表。验证：`openspec validate --changes add-ai-chatbot` 与 `npm run check:open-source` 通过

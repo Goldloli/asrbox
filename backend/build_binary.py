@@ -55,6 +55,9 @@ def _write_funasr_module_manifest(build_root: Path) -> Path:
 def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
     root = Path(__file__).resolve().parent
     funasr_manifest = _write_funasr_module_manifest(root.parent / "build")
+    knowledge_file = root / "data" / "chat_knowledge.json"
+    if not knowledge_file.is_file():
+        raise SystemExit(f"chat knowledge file is missing: {knowledge_file}")
     args = [
         sys.executable,
         "-m",
@@ -70,6 +73,8 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "funasr",
         "--add-data",
         f"{funasr_manifest}:.",
+        "--add-data",
+        f"{knowledge_file}:backend/data",
         "--exclude-module",
         "torchcodec",
         "--runtime-hook",

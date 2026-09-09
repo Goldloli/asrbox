@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "chat_knowledge.json"
+
+def _default_data_file() -> Path:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass) / "backend" / "data" / "chat_knowledge.json"
+    return Path(__file__).resolve().parent.parent / "data" / "chat_knowledge.json"
+
+
+DATA_FILE = _default_data_file()
 DEFAULT_TOP_N = 3
 DEFAULT_THRESHOLD = 0.2
 
