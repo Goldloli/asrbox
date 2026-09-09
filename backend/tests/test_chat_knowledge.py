@@ -11,7 +11,7 @@ def test_knowledge_file_structure_and_source_docs():
     chunks = json.loads((REPO_ROOT / 'backend' / 'data' / 'chat_knowledge.json').read_text(encoding='utf-8'))
     assert len(chunks) >= 10
     for chunk in chunks:
-        assert set(chunk) == {'title', 'text', 'keywords', 'source_doc'}
+        assert {'title', 'text', 'keywords', 'source_doc'} <= set(chunk) <= {'title', 'text', 'keywords', 'source_doc', 'questions'}
         assert isinstance(chunk['title'], str) and chunk['title']
         assert isinstance(chunk['text'], str) and chunk['text']
         assert isinstance(chunk['keywords'], list) and chunk['keywords']

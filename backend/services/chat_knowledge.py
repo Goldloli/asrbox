@@ -28,6 +28,9 @@ def _load(path: str) -> tuple[dict, ...]:
             isinstance(chunk.get(key), str) and chunk[key] for key in ("title", "text", "source_doc")
         ) or not isinstance(chunk.get("keywords"), list):
             raise ValueError("chat knowledge chunk has an invalid structure")
+        questions = chunk.get("questions", [])
+        if not isinstance(questions, list) or not all(isinstance(item, str) for item in questions):
+            raise ValueError("chat knowledge chunk questions must be a list of strings")
     return tuple(chunks)
 
 
@@ -47,8 +50,8 @@ def _bigrams(text: str) -> set[str]:
     return {normalized[index:index + 2] for index in range(len(normalized) - 1)}
 
 
-def _haystack(chunk: dict) -> str:
-    return " ".join([chunk["title"], *chunk["keywords"], chunk["text"]])
+QUESTIONS_WEIGHT = 3
+TITLE_KEYWORDS_WEIGHT = 2
 
 
 def search(query: str, chunks: list[dict] | None = None, *, top_n: int = DEFAULT_TOP_N,
@@ -58,9 +61,17 @@ def search(query: str, chunks: list[dict] | None = None, *, top_n: int = DEFAULT
         return []
     scored = []
     for chunk in chunks if chunks is not None else load_chunks():
-        overlap = len(query_bigrams & _bigrams(_haystack(chunk)))
-        score = overlap / len(query_bigrams)
-        if score >= threshold:
-            scored.append((score, chunk))
+        questions = _bigrams(" ".join(chunk.get("questions", [])))
+        headline = _bigrams(" ".join([chunk["title"], *chunk["keywords"]]))
+        body = _bigrams(chunk["text"])
+        overlap = len(query_bigrams & (questions | headline | body))
+        if overlap / len(query_bigrams) < threshold:
+            continue
+        rank = (
+            QUESTIONS_WEIGHT * len(query_bigrams & questions)
+            + TITLE_KEYWORDS_WEIGHT * len(query_bigrams & headline)
+            + len(query_bigrams & body)
+        )
+        scored.append((rank, chunk))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [chunk for _, chunk in scored[:top_n]]

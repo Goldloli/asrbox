@@ -51,6 +51,8 @@ type MockState = {
   deleted: boolean;
   streamBody: string;
   streamDelayMs: number;
+  taskId: string | null;
+  lastPatch: Record<string, unknown> | null;
 };
 
 function sseBody(events: Array<[string, unknown]>) {
@@ -60,7 +62,7 @@ function sseBody(events: Array<[string, unknown]>) {
 function sessionSummary(state: MockState) {
   return {
     id: 'chat-1',
-    task_id: null,
+    task_id: state.taskId,
     provider_id: provider.id,
     title: state.messages.find((message) => message.role === 'user')?.content ?? '',
     created_at: '2026-09-09T10:01:00Z',
@@ -90,7 +92,10 @@ async function mockChat(page: Page, state: MockState, options: { providers?: unk
       return route.fulfill({ json: { message: 'deleted' } });
     }
     if (method === 'PATCH') {
-      return route.fulfill({ json: { ...sessionSummary(state), ...(route.request().postDataJSON() ?? {}), messages: state.messages } });
+      const patch = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      state.lastPatch = patch;
+      if ('task_id' in patch) state.taskId = patch.task_id as string | null;
+      return route.fulfill({ json: { ...sessionSummary(state), messages: state.messages } });
     }
     return route.fulfill({ json: { ...sessionSummary(state), messages: state.messages } });
   });
@@ -114,7 +119,7 @@ async function mockChat(page: Page, state: MockState, options: { providers?: unk
 }
 
 const okState = (): MockState => {
-  const state: MockState = { sessionCreated: false, messages: [], deleted: false, streamBody: '', streamDelayMs: 0 };
+  const state: MockState = { sessionCreated: false, messages: [], deleted: false, streamBody: '', streamDelayMs: 0, taskId: null, lastPatch: null };
   const answer: ChatMessage = {
     id: 2,
     session_id: 'chat-1',
@@ -153,7 +158,7 @@ test('chat tab answers a question with streamed deltas and persists the reply', 
 });
 
 test('shows a classified error when the provider fails mid-stream', async ({ page }) => {
-  const state: MockState = { sessionCreated: false, messages: [], deleted: false, streamDelayMs: 0, streamBody: '' };
+  const state: MockState = { sessionCreated: false, messages: [], deleted: false, streamBody: '', streamDelayMs: 0, taskId: null, lastPatch: null };
   state.streamBody = sseBody([
     ['delta', { content: '半截回答' }],
     ['error', { code: 'LLM_PROVIDER_RATE_LIMITED', message: 'LLM provider rate limit reached', message_id: 2 }],
@@ -206,4 +211,52 @@ test('deletes a persisted chat session after confirmation', async ({ page }) => 
   await page.getByRole('button', { name: 'Delete', exact: true }).first().click();
   await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
   await expect(page.getByText('No chats yet')).toBeVisible();
+});
+
+test('binds and unbinds a transcript task via the labelled selectors', async ({ page }) => {
+  const state = okState();
+  await mockChat(page, state);
+  await page.goto('/ai?mode=chat');
+
+  await expect(page.getByText('Model selection')).toBeVisible();
+  await expect(page.getByText('Feature: bind a transcript for Q&A')).toBeVisible();
+
+  await page.getByPlaceholder('Ask about ASRbox or the bound subtitles…').fill('你好');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 10_000 });
+
+  const bindSelect = page.getByRole('combobox', { name: 'Bound transcript' });
+  await bindSelect.click();
+  await page.getByRole('option', { name: 'interview.wav' }).click();
+  expect(state.lastPatch).toMatchObject({ task_id: 'chat-task' });
+  await expect(bindSelect).toContainText('interview.wav');
+
+  await bindSelect.click();
+  await page.getByRole('option', { name: 'No transcript (app Q&A only)' }).click();
+  expect(state.lastPatch).toMatchObject({ task_id: null });
+  await expect(bindSelect).toContainText('No transcript');
+});
+
+test('renders assistant markdown as rich text', async ({ page }) => {
+  const state: MockState = { sessionCreated: false, messages: [], deleted: false, streamBody: '', streamDelayMs: 0, taskId: null, lastPatch: null };
+  const markdown = '支持这些格式：\n\n- **SRT**\n- `VTT`';
+  const answer: ChatMessage = {
+    id: 2,
+    session_id: 'chat-1',
+    role: 'assistant',
+    content: markdown,
+    status: 'complete',
+    created_at: '2026-09-09T10:02:05Z',
+  };
+  state.streamBody = sseBody([['delta', { content: markdown }], ['done', { message: answer }]]);
+  state.messages.push(answer);
+  await mockChat(page, state);
+  await page.goto('/ai?mode=chat');
+
+  await page.getByPlaceholder('Ask about ASRbox or the bound subtitles…').fill('支持哪些格式？');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByRole('strong').filter({ hasText: 'SRT' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('listitem').filter({ hasText: 'VTT' })).toBeVisible();
+  await expect(page.locator('code').filter({ hasText: 'VTT' })).toBeVisible();
 });

@@ -30,3 +30,11 @@
 
 - [x] 6.1 打包脚本包含 `chat_knowledge.json`（`scripts/build-server.sh` 等），验证：构建产物中文件存在
 - [x] 6.2 更新用户文档（新功能说明）与 README 功能列表。验证：`openspec validate --changes add-ai-chatbot` 与 `npm run check:open-source` 通过
+
+## 7. 实机测试反馈修复
+
+- [x] 7.1 修复绑定任务选择器：Radix Select 不允许空字符串 value，改用哨兵值 `__none__` 表示"不绑定"。验证：typecheck + e2e 覆盖解绑流程
+- [x] 7.2 选择器上方增加功能标签（模型选择/绑定字幕任务），中英 i18n。验证：typecheck + e2e 可见性断言
+- [x] 7.3 助手回答 Markdown 渲染（react-markdown + remark-gfm，依赖审计通过）。验证：e2e 断言富文本渲染
+- [x] 7.4 系统提示词注入防护（拒绝透露系统指令、资料/字幕视为数据）。验证：system prompt 内容测试 + 真实模型攻击实测
+- [x] 7.5 知识库扩充预置 FAQ 答案（快速上手总览、对话功能自身）+ 检索 questions 字段加权（问法3/标题关键词2/正文1，阈值保持非加权口径）。验证：16 条检索用例全对 + 现有知识测试通过

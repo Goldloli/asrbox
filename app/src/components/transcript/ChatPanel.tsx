@@ -10,8 +10,11 @@ import { cn } from '../../lib/cn';
 import { queryKeys, useChatSessionQuery, useChatSessionsQuery, useLLMProvidersQuery } from '../../lib/queries';
 import { useUiStore } from '../../stores/uiStore';
 import { ConfirmAction } from '../ConfirmAction';
+import { Markdown } from '../Markdown';
 import { toastErrorMessage, useToast } from '../Toast';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Select, Textarea } from '../weiui';
+
+const UNBOUND_TASK = '__none__';
 
 type StreamDraft = { sessionId: string; userContent: string; content: string };
 type StreamFailure = { code: string; message: string };
@@ -193,31 +196,37 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
       <Panel className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
         <div className="grid gap-3 border-b app-border p-4">
           <div className="grid gap-2 sm:grid-cols-2">
-            <Select
-              value={providerId}
-              onValueChange={(value) => {
-                setProviderId(value);
-                setLastProviderId(value);
-                if (selectedId) updateBinding.mutate({ provider_id: value });
-              }}
-              placeholder={t('chat.chooseProvider')}
-              aria-label={t('chat.chooseProvider')}
-              options={enabledProviders.map((provider) => ({
-                value: provider.id,
-                label: `${provider.name} · ${provider.default_model ?? ''}`,
-              }))}
-            />
-            <Select
-              value={session?.task_id ?? ''}
-              onValueChange={(value) => selectedId && updateBinding.mutate({ task_id: value || null })}
-              disabled={!session}
-              placeholder={t('chat.bindTask')}
-              aria-label={t('chat.bindTask')}
-              options={[
-                { value: '', label: t('chat.noTask') },
-                ...tasks.map((task) => ({ value: task.id, label: task.filename })),
-              ]}
-            />
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-app-muted">{t('chat.providerLabel')}</span>
+              <Select
+                value={providerId}
+                onValueChange={(value) => {
+                  setProviderId(value);
+                  setLastProviderId(value);
+                  if (selectedId) updateBinding.mutate({ provider_id: value });
+                }}
+                placeholder={t('chat.chooseProvider')}
+                aria-label={t('chat.chooseProvider')}
+                options={enabledProviders.map((provider) => ({
+                  value: provider.id,
+                  label: `${provider.name} · ${provider.default_model ?? ''}`,
+                }))}
+              />
+            </label>
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-app-muted">{t('chat.bindTaskLabel')}</span>
+              <Select
+                value={session?.task_id ?? UNBOUND_TASK}
+                onValueChange={(value) => selectedId && updateBinding.mutate({ task_id: value === UNBOUND_TASK ? null : value })}
+                disabled={!session}
+                placeholder={t('chat.bindTask')}
+                aria-label={t('chat.bindTask')}
+                options={[
+                  { value: UNBOUND_TASK, label: t('chat.noTask') },
+                  ...tasks.map((task) => ({ value: task.id, label: task.filename })),
+                ]}
+              />
+            </label>
           </div>
           <p className="text-xs text-app-muted">
             {session?.task_id
@@ -241,10 +250,10 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
                 <p className="whitespace-pre-wrap break-words text-sm leading-6 text-app">{draft.userContent}</p>
               </div>
               <div className="max-w-[85%] justify-self-start rounded-lg border app-border bg-[var(--app-control)] px-3 py-2">
-                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-app">
-                  {draft.content || t('chat.thinking')}
-                  <span className="ml-1 inline-block size-2 animate-pulse rounded-full bg-[var(--app-accent)] align-middle" />
-                </p>
+                {draft.content ? <Markdown content={draft.content} /> : (
+                  <p className="text-sm leading-6 text-app">{t('chat.thinking')}</p>
+                )}
+                <span className="ml-1 inline-block size-2 animate-pulse rounded-full bg-[var(--app-accent)] align-middle" />
               </div>
             </div>
           )}
@@ -300,7 +309,11 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           ? 'border-[color:var(--app-accent)]/40 bg-[var(--app-accent-soft)]'
           : 'app-border bg-[var(--app-control)]',
       )}>
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-app">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-app">{message.content}</p>
+        ) : (
+          <Markdown content={message.content} />
+        )}
       </div>
       <div className={cn('flex items-center gap-2 text-xs text-app-muted', isUser && 'justify-end')}>
         {message.status === 'partial' && <Badge tone="neutral">{t('chat.partialBadge')}</Badge>}
