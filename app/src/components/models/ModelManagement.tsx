@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, DownloadCloud, HardDrive, Info, Pause, Play,
 import { type ModelProgress, type ModelStatus } from '../../lib/api';
 import { formatBytes, formatPercent } from '../../lib/format';
 import { isRecommendedModel, modelCategory, type ModelDetails } from '../../lib/modelCatalog';
+import { modelDeviceLabelKeys, modelDeviceSummaryKey } from '../../lib/modelDevices';
 import { useI18n } from '../../lib/i18n';
 import { ConfirmAction } from '../ConfirmAction';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, Progress } from '../weiui';
@@ -73,6 +74,7 @@ export function ModelListRow({
   const isPaused = progress?.status === 'paused';
   const hasDownloadError = Boolean(progress?.error || model.download_error);
   const storageUnavailable = model.storage_status === 'unavailable' || model.storage_status === 'migrating' || model.storage_status === 'read_only';
+  const deviceLabels = modelDeviceLabelKeys(model.supported_devices);
 
   return (
     <article className="grid gap-2 rounded-lg border app-control px-3 py-3">
@@ -88,6 +90,7 @@ export function ModelListRow({
             </Badge>
             {pinned && <Badge tone="accent">{t('models.pinned')}</Badge>}
             {model.compatible === false && <Badge tone="danger">{t('common.incompatible')}</Badge>}
+            <Badge tone="accent">{t(modelDeviceSummaryKey(model.supported_devices))}</Badge>
           </div>
           <p className="mt-1 truncate text-xs text-app-muted">
             {model.model_name} · {model.engine} · {model.runtime} · {model.model_size} · {model.size_mb} MB
@@ -117,6 +120,7 @@ export function ModelListRow({
                 <div className="grid gap-2 text-sm md:grid-cols-2">
                   <StorageMetric label={t('models.bestFor')} value={bestFor} />
                   <StorageMetric label={t('models.runtime')} value={model.runtime} />
+                  <StorageMetric label={t('models.deviceSupport')} value={deviceLabels.map((key) => t(key)).join(' / ')} />
                   <StorageMetric label={t('models.size')} value={`${model.size_mb} MB`} />
                   <StorageMetric label={t('models.categoryAll')} value={modelCategory(model)} />
                 </div>
@@ -125,6 +129,7 @@ export function ModelListRow({
                   {model.loaded && <Badge tone="accent">{t('common.loaded')}</Badge>}
                   {model.cache_detected && <Badge tone="neutral">{formatBytes((model.cache_size_mb ?? 0) * 1024 * 1024)}</Badge>}
                 </div>
+                <p className="text-xs leading-5 text-app-muted">{t('models.deviceSupportHint')}</p>
                 {error && (
                   <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
                     {error}
@@ -205,6 +210,13 @@ export function ModelListRow({
             <div className="grid gap-1.5">
               <p className="text-xs text-app-muted">{t('models.detailLanguages')}</p>
               <p className="text-sm text-app-soft">{details.languages}</p>
+            </div>
+            <div className="grid gap-1.5">
+              <p className="text-xs text-app-muted">{t('models.deviceSupport')}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {deviceLabels.map((key) => <Badge key={key} tone={key === 'models.deviceCpu' ? 'neutral' : 'accent'}>{t(key)}</Badge>)}
+              </div>
+              <p className="text-xs leading-5 text-app-muted">{t('models.deviceSupportHint')}</p>
             </div>
             {details.bestFor.length > 0 && (
               <div className="grid gap-1.5">

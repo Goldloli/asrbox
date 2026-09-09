@@ -14,7 +14,7 @@ RUN bun run build:web
 
 FROM python:3.13-slim-bookworm AS runtime
 
-ARG APP_VERSION=0.1.6
+ARG APP_VERSION=0.1.7
 LABEL org.opencontainers.image.title="ASRbox" \
       org.opencontainers.image.description="Local-first transcription and LLM subtitle proofreading workspace" \
       org.opencontainers.image.source="https://github.com/Goldloli/asrbox" \

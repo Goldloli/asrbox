@@ -7,6 +7,7 @@ import { formatBytes } from '../lib/format';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, modelDetails, type ModelCategory } from '../lib/modelCatalog';
+import { modelDeviceSummaryKey } from '../lib/modelDevices';
 import { useI18n } from '../lib/i18n';
 import { BenchmarkCard, createModelGroups, ModelListRow, StorageMetric } from '../components/models/ModelManagement';
 
@@ -238,6 +239,10 @@ export function ModelsPage() {
                 </div>
                 <p className="text-sm leading-6 text-app-muted">{modelDescription(guideRecommendedModel, locale)}</p>
                 <p className="text-xs text-app-muted">{modelBestFor(guideRecommendedModel, locale)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="accent">{t(modelDeviceSummaryKey(guideRecommendedModel.supported_devices))}</Badge>
+                  <span className="text-xs text-app-muted">{t('models.deviceSupportHint')}</span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={() => setCategory(guideCategory)}>
                     {t('models.showMatches')}

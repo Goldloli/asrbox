@@ -150,7 +150,7 @@ class TransformersWhisperBackend:
                 )
             self._pipelines[model_config.model_name] = pipeline
 
-        generate_kwargs = {}
+        generate_kwargs = {"no_repeat_ngram_size": int(options.get("no_repeat_ngram_size", 3))}
         language = options.get("language")
         if language and language != "auto":
             generate_kwargs["language"] = language
@@ -213,6 +213,10 @@ class FasterWhisperBackend:
         kwargs = {
             "vad_filter": bool(options.get("vad", True)),
             "word_timestamps": bool(options.get("word_timestamps", False)),
+            "condition_on_previous_text": bool(options.get("condition_on_previous_text", False)),
+            "no_repeat_ngram_size": int(options.get("no_repeat_ngram_size", 3)),
+            "repetition_penalty": float(options.get("repetition_penalty", 1.1)),
+            "hallucination_silence_threshold": float(options.get("hallucination_silence_threshold", 2.0)),
         }
         language = options.get("language")
         if language and language != "auto":
@@ -319,7 +323,9 @@ class MLXWhisperBackend:
             detail = MLX_WHISPER_IMPORT_ERROR or "mlx_whisper is not installed"
             raise RuntimeError(f"mlx_whisper runtime is unavailable: {detail}")
         language = options.get("language")
-        kwargs = {}
+        kwargs = {
+            "condition_on_previous_text": bool(options.get("condition_on_previous_text", False)),
+        }
         if language and language != "auto":
             kwargs["language"] = language
         result = mlx_whisper.transcribe(audio_path, path_or_hf_repo=str(_model_path(model_config.model_name)), **kwargs)
@@ -407,7 +413,11 @@ class Qwen3ASRBackend:
         dtype = getattr(model, "dtype", None)
         if hasattr(inputs, "to") and device is not None:
             inputs = inputs.to(device, dtype) if dtype is not None else inputs.to(device)
-        output_ids = model.generate(**inputs, max_new_tokens=int(options.get("max_new_tokens", 512)))
+        max_new_tokens = options.get("max_new_tokens")
+        if not max_new_tokens:
+            duration_minutes = len(audio) / 16000 / 60
+            max_new_tokens = min(8192, max(1024, math.ceil(duration_minutes * 320)))
+        output_ids = model.generate(**inputs, max_new_tokens=int(max_new_tokens))
         input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else getattr(inputs, "input_ids", None)
         generated_ids = output_ids
         try:

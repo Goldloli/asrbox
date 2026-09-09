@@ -10,6 +10,7 @@ const modelStatus = (overrides: Record<string, unknown>) => ({
   size_mb: 290,
   languages: ['auto', 'zh', 'en'],
   runtime: 'torch',
+  supported_devices: ['cpu', 'cuda', 'mps'],
   supports_timestamps: true,
   supports_word_timestamps: false,
   supports_diarization: false,
@@ -73,6 +74,8 @@ test('model page shows usable storage rows and download controls', async ({ page
   await expect(downloadsPanel.getByRole('button', { name: 'Pause' })).toBeVisible();
   await expect(downloadsPanel.getByRole('button', { name: 'Stop' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+  const whisperCard = page.locator('article').filter({ hasText: 'Whisper Base' }).first();
+  await expect(whisperCard.getByText('CPU / GPU', { exact: true })).toBeVisible();
 
   const storagePanel = page.getByRole('heading', { name: 'Model storage' }).locator('xpath=ancestor::section[1]');
   await expect(storagePanel).toContainText('/tmp/asrbox/models');
@@ -98,6 +101,7 @@ test('model page expands detailed model intro for a natively diarizing model', a
           repo_id: 'OpenMOSS-Team/MOSS-Transcribe-Diarize',
           model_size: '0.9b',
           size_mb: 1900,
+          supported_devices: ['cpu', 'cuda'],
           supports_diarization: true,
         }),
       ],
@@ -119,5 +123,40 @@ test('model page expands detailed model intro for a natively diarizing model', a
   await expect(card.getByText('End-to-end transcription + speaker diarization in one pass')).toBeVisible();
   await expect(card.getByText('Language coverage')).toBeVisible();
   await expect(card.getByText(/50\+ languages/)).toBeVisible();
+  await expect(card.getByText('Supported devices')).toBeVisible();
+  await expect(card.getByText('CPU', { exact: true })).toBeVisible();
+  await expect(card.getByText('NVIDIA GPU', { exact: true })).toBeVisible();
+  await expect(card.getByText('The device actually used depends on this computer and the available runtime.')).toBeVisible();
   await expect(card.getByText('Known limitations')).toBeVisible();
+});
+
+test('transcription model selector shows compact CPU and GPU support', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
+  });
+  await page.route('**/models/status', (route) => route.fulfill({
+    json: {
+      models: [
+        modelStatus({ downloaded: true, compatible: true }),
+        modelStatus({
+          model_name: 'mlx-whisper-turbo',
+          display_name: 'MLX Whisper Turbo',
+          engine: 'mlx_whisper',
+          runtime: 'mlx',
+          supported_devices: ['mlx'],
+          downloaded: true,
+          compatible: true,
+        }),
+      ],
+    },
+  }));
+
+  await page.goto('/');
+
+  const modelField = page.getByText('Model', { exact: true }).locator('..');
+  await expect(modelField).toContainText('CPU / GPU');
+  await modelField.getByRole('combobox').click();
+  await expect(page.getByRole('option', { name: /Whisper Base · CPU \/ GPU/ })).toBeVisible();
+  await expect(page.getByRole('option', { name: /MLX Whisper Turbo · GPU only/ })).toBeVisible();
+  await expect(modelField.getByText('The device actually used depends on this computer and the available runtime.')).toBeVisible();
 });

@@ -2,7 +2,16 @@
 
 All notable ASRbox changes are documented here. The format follows Keep a Changelog, and versions follow Semantic Versioning while the project is pre-1.0.
 
-## [Unreleased]
+## [0.1.7] - 2026-09-09
+
+### Fixed
+
+- Qwen3-ASR local transcription no longer silently truncates output at a fixed 512-token budget; the default output budget now scales with audio duration (320 tokens per minute, floored at 1024, capped at 8192) and can still be overridden per task.
+- Local Whisper-family engines (faster-whisper, mlx-whisper, transformers-whisper) now default to anti-hallucination decoding (no cross-window prompt carry-over plus repeat suppression), and subtitle post-processing collapses long repeated-token runs, so low-quality or silent audio no longer produces hundreds of repeated words such as "par par par ...". Quality reports now also flag English word-level repetition as `REPETITIVE_TRANSCRIPT`.
+
+### Added
+
+- Local model selectors and download guidance now show whether each maintained ASR model supports CPU and/or GPU inference, with specific CUDA, MPS, and MLX labels and a reminder that the active device depends on the current hardware and runtime.
 
 ## [0.1.6] - 2026-09-08
 

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
+
+InferenceDevice = Literal["cpu", "cuda", "mps", "mlx"]
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,7 @@ class ASRModelConfig:
     repo_id: str | None
     model_size: str
     size_mb: int
+    supported_devices: list[InferenceDevice]
     languages: list[str] = field(default_factory=list)
     runtime: str = "auto"
     supports_timestamps: bool = True
@@ -60,6 +64,7 @@ def _whisper_config(model_size: str, repo_id: str, size_mb: int, display_suffix:
         repo_id=repo_id,
         model_size=model_size,
         size_mb=size_mb,
+        supported_devices=["cpu", "cuda", "mps"],
         languages=COMMON_WHISPER_LANGUAGES,
         runtime="torch",
         supports_word_timestamps=False,
@@ -78,6 +83,7 @@ def _faster_whisper_config(model_size: str, repo_id: str, size_mb: int, display_
         repo_id=repo_id,
         model_size=model_size,
         size_mb=size_mb,
+        supported_devices=["cpu", "cuda"],
         languages=COMMON_WHISPER_LANGUAGES,
         runtime="ctranslate2",
         supports_word_timestamps=True,
@@ -95,6 +101,7 @@ def _qwen3_asr_config(model_size: str, repo_id: str, size_mb: int, display_suffi
         repo_id=repo_id,
         model_size=model_size,
         size_mb=size_mb,
+        supported_devices=["cpu", "cuda", "mps"],
         languages=[
             "auto",
             "zh",
@@ -145,6 +152,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             repo_id="OpenMOSS-Team/MOSS-Transcribe-Diarize",
             model_size="0.9b",
             size_mb=1900,
+            supported_devices=["cpu", "cuda"],
             languages=["auto", "zh", "en", "ja", "ko", "fr", "de", "es", "pt", "it", "ru", "th", "vi", "tl", "ur", "tr"],
             runtime="transformers",
             supports_timestamps=True,
@@ -164,6 +172,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             repo_id="mlx-community/whisper-large-v3-turbo",
             model_size="turbo",
             size_mb=1600,
+            supported_devices=["mlx"],
             languages=COMMON_WHISPER_LANGUAGES,
             runtime="mlx",
             supports_word_timestamps=True,
@@ -181,6 +190,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             repo_id="iic/SenseVoiceSmall",
             model_size="small",
             size_mb=900,
+            supported_devices=["cpu", "cuda"],
             languages=["auto", "zh", "en", "ja", "ko", "yue"],
             runtime="funasr",
             supports_word_timestamps=True,

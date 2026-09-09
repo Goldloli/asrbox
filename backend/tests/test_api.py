@@ -1125,6 +1125,14 @@ def test_funasr_backend_cleans_sensevoice_tags_and_maps_segments(monkeypatch) ->
     assert result.raw_result_summary["items"] == 1
 
 
+class _FakeLength:
+    def __init__(self, length: int) -> None:
+        self._length = length
+
+    def __len__(self) -> int:
+        return self._length
+
+
 def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path, monkeypatch) -> None:
     from backend.backends.local_asr import Qwen3ASRBackend
     from backend.backends.registry import get_model_config
@@ -1134,7 +1142,7 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
     monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
 
     calls: list[tuple[str, dict]] = []
-    audio_samples = object()
+    audio_samples = _FakeLength(16000)
 
     def fake_load_audio(audio, sampling_rate, backend):
         calls.append(("load_audio", {"audio": audio, "sampling_rate": sampling_rate, "backend": backend}))

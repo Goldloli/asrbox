@@ -378,6 +378,7 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 size_mb=item.size_mb,
                 languages=item.languages,
                 runtime=item.runtime,
+                supported_devices=item.supported_devices,
                 supports_timestamps=item.supports_timestamps,
                 supports_word_timestamps=item.supports_word_timestamps,
                 supports_diarization=item.supports_diarization,

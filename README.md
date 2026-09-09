@@ -8,7 +8,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.6`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.7`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -32,7 +32,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
 - 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
 
-**0.1.6 新增：** 多语言字幕翻译，保留原文，支持独立译文修订、失败续译及六格式译文／双语导出。入口为“AI → 字幕翻译”，详见 [AI 使用指南](docs/ai-proofreading.md)。语言覆盖与翻译质量取决于所选 LLM。
+**0.1.7 新增与修复：** 本地模型选择与下载引导现在标注各模型支持的 CPU/GPU 推理设备（CUDA、MPS、MLX）；修复 Whisper 系模型在静音或音乐段幻觉出大量重复词（如连续数百个相同单词）的问题，以及 Qwen3-ASR 长音频输出在固定 512 token 处静默截断的问题。防护细节见 [本地模型文档](docs/models.md)。
 
 ### LLM 核验校对
 
@@ -75,7 +75,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## macOS 桌面端
 
-从 [`v0.1.6` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.6) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.7` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.7) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
 
 桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把 DMG 下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 
@@ -103,7 +103,7 @@ xattr -cr /Applications/ASRbox.app
 4. 提交后在“任务”查看进度、日志和转写结果。
 5. 编辑字幕或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
 
-ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MOSS-Transcribe-Diarize。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
+ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和“模型”页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
 
 ## AI 字幕核对
 

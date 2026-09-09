@@ -21,6 +21,7 @@ import {
 } from '../lib/transcriptionOptions';
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
 import { desktopCapabilities, type DesktopMediaFile } from '../lib/desktopCapabilities';
+import { modelDeviceSummaryKey } from '../lib/modelDevices';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 const activeTaskStatuses = new Set(['queued', 'importing', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
@@ -498,13 +499,13 @@ export function TranscribePage() {
             />
           </Field>
           {backend === 'local' ? (
-            <Field label={t('transcribe.model')}>
+            <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
               <Select
                 value={modelName}
                 onValueChange={setModelName}
-                options={(models.length ? models : [{ model_name: modelName, display_name: modelName }]).map((model) => ({
+                options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
                   value: model.model_name,
-                  label: `${model.display_name}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
+                  label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
                   disabled: 'compatible' in model && model.compatible === false,
                 }))}
               />

@@ -22,6 +22,12 @@ def analyze(task: TranscriptionTask, segments: list[TranscriptSegment], audio_qu
         _char, count = counts.most_common(1)[0]
         if count / len(words) > 0.45:
             warnings.append("REPETITIVE_TRANSCRIPT")
+    tokens = [token.lower() for token in stripped.split()]
+    if len(tokens) >= 20:
+        counts = Counter(tokens)
+        _token, count = counts.most_common(1)[0]
+        if count / len(tokens) > 0.45 and "REPETITIVE_TRANSCRIPT" not in warnings:
+            warnings.append("REPETITIVE_TRANSCRIPT")
     overlaps = 0
     invalid_times = 0
     last_end = -1.0

@@ -75,6 +75,7 @@ class ASRModelStatus(BaseModel):
     size_mb: int
     languages: list[str]
     runtime: str
+    supported_devices: list[Literal["cpu", "cuda", "mps", "mlx"]]
     supports_timestamps: bool
     supports_word_timestamps: bool
     supports_diarization: bool

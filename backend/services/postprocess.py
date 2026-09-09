@@ -19,6 +19,26 @@ def clean_text(text: str, *, traditional_to_simplified: bool = False) -> str:
     return value
 
 
+_REPETITION_RUN_THRESHOLD = 6
+_REPETITION_KEEP = 2
+_CHAR_RUN_RE = re.compile(r"(.)\1{%d,}" % (_REPETITION_RUN_THRESHOLD - 1))
+
+
+def _collapse_repetitions(text: str) -> str:
+    collapsed = _CHAR_RUN_RE.sub(lambda match: match.group(1) * _REPETITION_KEEP, text)
+    tokens = collapsed.split(" ")
+    result: list[str] = []
+    index = 0
+    while index < len(tokens):
+        end = index + 1
+        while end < len(tokens) and tokens[end].lower() == tokens[index].lower():
+            end += 1
+        run = tokens[index:end]
+        result.extend(run[:_REPETITION_KEEP] if len(run) >= _REPETITION_RUN_THRESHOLD else run)
+        index = end
+    return " ".join(result)
+
+
 def _split_text(text: str, max_chars: int) -> list[str]:
     if len(text) <= max_chars:
         return [text]
@@ -44,7 +64,7 @@ def process_segments(
             id=index,
             start=segment.start,
             end=segment.end,
-            text=clean_text(segment.text, traditional_to_simplified=traditional_to_simplified),
+            text=_collapse_repetitions(clean_text(segment.text, traditional_to_simplified=traditional_to_simplified)),
             speaker=segment.speaker,
             confidence=segment.confidence,
         )
@@ -57,7 +77,7 @@ def process_segments(
             duration_ms = int((segment.end - segment.start) * 1000)
             if merged and duration_ms < min_duration_ms and merged[-1].speaker == segment.speaker:
                 previous = merged[-1]
-                previous.text = clean_text(f"{previous.text} {segment.text}")
+                previous.text = _collapse_repetitions(clean_text(f"{previous.text} {segment.text}"))
                 previous.end = max(previous.end, segment.end)
             else:
                 merged.append(segment)

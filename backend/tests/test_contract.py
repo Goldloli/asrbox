@@ -246,10 +246,14 @@ def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:
         "last_verified_at",
         "storage_status",
         "storage_error",
+        "supported_devices",
     ]:
         assert key in model
     downloaded_schema = client.app.openapi()["components"]["schemas"]["ASRModelStatus"]["properties"]["downloaded"]
     assert {item.get("type") for item in downloaded_schema["anyOf"]} == {"boolean", "null"}
+    devices_schema = client.app.openapi()["components"]["schemas"]["ASRModelStatus"]["properties"]["supported_devices"]
+    assert devices_schema["type"] == "array"
+    assert set(devices_schema["items"]["enum"]) == {"cpu", "cuda", "mps", "mlx"}
 
 
 def test_model_storage_contract_is_typed(tmp_path: Path) -> None:

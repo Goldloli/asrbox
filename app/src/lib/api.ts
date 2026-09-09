@@ -133,6 +133,7 @@ export interface ModelStatus {
   size_mb: number;
   languages: string[];
   runtime: string;
+  supported_devices: Array<'cpu' | 'cuda' | 'mps' | 'mlx'>;
   supports_timestamps: boolean;
   supports_word_timestamps: boolean;
   supports_diarization: boolean;

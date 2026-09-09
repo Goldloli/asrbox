@@ -20,31 +20,33 @@ The backend derives this from `<data-root>/models/`. A development backend defau
 
 Docker uses `/data/models/` inside the persistent volume. Provider caches are also redirected below `/data/cache/`, so container recreation does not force a complete redownload.
 
-Model Management displays the resolved directory, per-model bytes, total model bytes, and free/total filesystem capacity. Actual size can exceed the catalog estimate because upstream repositories change and interrupted downloads can retain resumable cache files.
+Model Management displays the resolved directory, per-model bytes, total model bytes, free/total filesystem capacity, and each model's supported inference devices. Actual size can exceed the catalog estimate because upstream repositories change and interrupted downloads can retain resumable cache files.
 
 ## Catalog
 
 Sizes are registry estimates, not exact download promises.
 
-| Model id | Engine | Preferred source | Estimated size | Word timestamps |
-| --- | --- | --- | ---: | --- |
-| `whisper-base` | Transformers Whisper | Hugging Face | 290 MB | No |
-| `whisper-small` | Transformers Whisper | Hugging Face | 967 MB | No |
-| `whisper-medium` | Transformers Whisper | Hugging Face | 3,060 MB | No |
-| `whisper-large-v3` | Transformers Whisper | Hugging Face | 6,200 MB | No |
-| `whisper-large-v3-turbo` | Transformers Whisper | Hugging Face | 1,600 MB | No |
-| `faster-whisper-base` | Faster Whisper / CTranslate2 | Hugging Face | 145 MB | Yes |
-| `faster-whisper-small` | Faster Whisper / CTranslate2 | Hugging Face | 466 MB | Yes |
-| `faster-whisper-medium` | Faster Whisper / CTranslate2 | Hugging Face | 1,500 MB | Yes |
-| `faster-whisper-large-v3` | Faster Whisper / CTranslate2 | Hugging Face | 3,100 MB | Yes |
-| `faster-whisper-large-v3-turbo` | Faster Whisper / CTranslate2 | Hugging Face | 1,600 MB | Yes |
-| `mlx-whisper-turbo` | MLX Whisper | ModelScope, then Hugging Face | 1,600 MB | Yes |
-| `sensevoice-small` | FunASR | ModelScope | 900 MB | Yes |
-| `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | ModelScope, then Hugging Face | 1,600 MB | No |
-| `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | ModelScope, then Hugging Face | 3,900 MB | No |
-| `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | ModelScope, then Hugging Face | 1,900 MB | No |
+| Model id | Engine | Supported inference devices | Preferred source | Estimated size | Word timestamps |
+| --- | --- | --- | --- | ---: | --- |
+| `whisper-base` | Transformers Whisper | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | Hugging Face | 290 MB | No |
+| `whisper-small` | Transformers Whisper | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | Hugging Face | 967 MB | No |
+| `whisper-medium` | Transformers Whisper | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | Hugging Face | 3,060 MB | No |
+| `whisper-large-v3` | Transformers Whisper | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | Hugging Face | 6,200 MB | No |
+| `whisper-large-v3-turbo` | Transformers Whisper | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | Hugging Face | 1,600 MB | No |
+| `faster-whisper-base` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 145 MB | Yes |
+| `faster-whisper-small` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 466 MB | Yes |
+| `faster-whisper-medium` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 1,500 MB | Yes |
+| `faster-whisper-large-v3` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 3,100 MB | Yes |
+| `faster-whisper-large-v3-turbo` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 1,600 MB | Yes |
+| `mlx-whisper-turbo` | MLX Whisper | Apple GPU (MLX; Apple Silicon only) | ModelScope, then Hugging Face | 1,600 MB | Yes |
+| `sensevoice-small` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope | 900 MB | Yes |
+| `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 1,600 MB | No |
+| `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 3,900 MB | No |
+| `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 1,900 MB | No |
 
 The estimates add up to roughly 28.2 GiB. A real all-model installation may use more or less space.
+
+These device labels describe the execution paths supported by each ASRbox engine; they do not assert that the listed accelerator is present or active on the current machine. The runtime keeps its existing automatic selection and fallback behavior, so the device actually used depends on available hardware and runtime support.
 
 ## Choosing a Model
 
@@ -58,6 +60,12 @@ The estimates add up to roughly 28.2 GiB. A real all-model installation may use 
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
+
+## Transcription Safeguards
+
+Whisper-family engines (Transformers Whisper, Faster Whisper, MLX Whisper) decode with anti-hallucination defaults: no cross-window prompt carry-over, plus repeated-ngram suppression where the engine supports it. These defaults stop a hallucination in one decoding window from reinforcing itself into hundreds of repeated words on silent or musical passages. Qwen3-ASR sizes its output token budget from audio duration instead of a fixed cap, so long recordings are not silently truncated.
+
+As an engine-independent safety net, post-processing collapses any token repeated six or more times in a row down to two occurrences without changing segment timing, and the task Quality report flags `REPETITIVE_TRANSCRIPT` for both character-level (Chinese) and word-level (English) repetition.
 
 ## Download Controls
 

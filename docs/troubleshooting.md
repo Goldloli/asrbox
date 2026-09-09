@@ -168,6 +168,8 @@ For security, custom download directories must be chosen through the native fold
 
 Music, crowd noise, overlapping speakers, poor microphones, and unsupported languages can reduce accuracy even when the runtime is healthy.
 
+If the transcript shows long runs of a repeated word or character, check the Quality tab for `REPETITIVE_TRANSCRIPT`. Current releases decode Whisper-family models with anti-hallucination defaults and collapse extreme repeated runs during post-processing, so retranscribing the task applies those safeguards; a persistent warning after retranscription usually means a silent, musical, or very low-quality audio section.
+
 ## AI Subtitle Proofreading Fails
 
 - **Connection failed**: start Ollama or check DNS, firewall, proxy, and provider URL. Docker reaches host Ollama at `http://host.docker.internal:11434/v1`.
