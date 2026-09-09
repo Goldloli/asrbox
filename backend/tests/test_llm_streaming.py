@@ -74,3 +74,28 @@ def test_no_callback_keeps_existing_behavior(setup, monkeypatch):
     mock_transport(monkeypatch, lambda request: httpx.Response(
         200, headers={'content-type': 'text/event-stream'}, stream=TrackedBody(data)))
     assert llm_providers.chat_completion(provider, []) == '你好'
+
+
+def test_delta_caller_forces_stream_request_even_with_json_transport(setup, monkeypatch):
+    provider = configured(setup, transport='json')
+    calls = []
+    def reply(request):
+        calls.append(json.loads(request.content))
+        data = event({'content': '流式'}) + event({}, 'stop') + b'data: [DONE]\n\n'
+        return httpx.Response(200, headers={'content-type': 'text/event-stream'}, stream=TrackedBody(data))
+    mock_transport(monkeypatch, reply)
+    deltas = []
+    assert llm_providers.chat_completion(provider, [], on_delta=deltas.append) == '流式'
+    assert calls[0]['stream'] is True
+    assert deltas == ['流式']
+
+
+def test_no_delta_caller_keeps_configured_transport(setup, monkeypatch):
+    provider = configured(setup, transport='json')
+    calls = []
+    def reply(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(200, json={'choices': [{'message': {'content': 'OK'}, 'finish_reason': 'stop'}]})
+    mock_transport(monkeypatch, reply)
+    assert llm_providers.chat_completion(provider, []) == 'OK'
+    assert calls[0]['stream'] is False

@@ -28,6 +28,7 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
   const providers = useLLMProvidersQuery();
   const sessions = useChatSessionsQuery();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingTaskId, setPendingTaskId] = useState(UNBOUND_TASK);
   const detail = useChatSessionQuery(selectedId);
   const [providerId, setProviderId] = useState('');
   const [input, setInput] = useState('');
@@ -83,7 +84,10 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
     let sessionId = selectedId;
     if (!sessionId) {
       try {
-        const created = await apiClient.createChatSession({ provider_id: providerId || null });
+        const created = await apiClient.createChatSession({
+          provider_id: providerId || null,
+          task_id: pendingTaskId === UNBOUND_TASK ? null : pendingTaskId,
+        });
         sessionId = created.id;
         setSelectedId(created.id);
       } catch (error) {
@@ -142,11 +146,12 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
   }
 
   const streaming = draft !== null;
-  const boundTask = session?.task_id ? tasks.find((task) => task.id === session.task_id) : undefined;
+  const effectiveTaskId = session ? session.task_id : (pendingTaskId === UNBOUND_TASK ? null : pendingTaskId);
+  const boundTask = effectiveTaskId ? tasks.find((task) => task.id === effectiveTaskId) : undefined;
 
   return (
-    <div className="grid min-w-0 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-      <Panel className="min-w-0 overflow-hidden lg:sticky lg:top-0 lg:max-h-[calc(100dvh-150px)]">
+    <div className="grid min-w-0 gap-4 lg:h-[calc(100dvh-210px)] lg:min-h-[480px] lg:grid-cols-[300px_minmax(0,1fr)]">
+      <Panel className="flex min-w-0 flex-col overflow-hidden lg:h-full">
         <PanelHeader title={t('chat.sessionsTitle')} description={t('chat.sessionsDescription')} />
         <div className="border-b app-border p-2">
           <Button variant="secondary" className="w-full" disabled={streaming} onClick={() => setSelectedId(null)}>
@@ -157,7 +162,7 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
         {sessions.isSuccess && sessions.data.items.length === 0 && (
           <EmptyState title={t('chat.noSessions')} body={t('chat.noSessionsBody')} icon={<BrainCircuit className="size-5" />} />
         )}
-        <div className="grid max-h-[440px] gap-1 overflow-auto p-2 lg:max-h-[calc(100dvh-310px)]">
+        <div className="grid max-h-[300px] min-h-0 flex-1 content-start gap-1 overflow-auto p-2 lg:max-h-none">
           {(sessions.data?.items ?? []).map((item) => {
             const active = item.id === selectedId;
             return (
@@ -216,9 +221,11 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
             <label className="grid min-w-0 gap-1.5">
               <span className="text-xs font-medium text-app-muted">{t('chat.bindTaskLabel')}</span>
               <Select
-                value={session?.task_id ?? UNBOUND_TASK}
-                onValueChange={(value) => selectedId && updateBinding.mutate({ task_id: value === UNBOUND_TASK ? null : value })}
-                disabled={!session}
+                value={session ? (session.task_id ?? UNBOUND_TASK) : pendingTaskId}
+                onValueChange={(value) => {
+                  if (selectedId) updateBinding.mutate({ task_id: value === UNBOUND_TASK ? null : value });
+                  else setPendingTaskId(value);
+                }}
                 placeholder={t('chat.bindTask')}
                 aria-label={t('chat.bindTask')}
                 options={[
@@ -229,13 +236,13 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
             </label>
           </div>
           <p className="text-xs text-app-muted">
-            {session?.task_id
-              ? t('chat.boundTaskHint', { name: boundTask?.filename ?? session.task_id })
+            {effectiveTaskId
+              ? t('chat.boundTaskHint', { name: boundTask?.filename ?? effectiveTaskId })
               : t('chat.qaOnlyHint')}
           </p>
         </div>
 
-        <div ref={scrollRef} className="grid max-h-[calc(100dvh-360px)] min-h-[300px] content-start gap-3 overflow-auto p-4">
+        <div ref={scrollRef} className="grid min-h-[300px] content-start gap-3 overflow-auto p-4 lg:min-h-0">
           {detail.error && <ErrorState error={detail.error} />}
           {!session && !streaming && (
             <EmptyState title={t('chat.startTitle')} body={t('chat.startBody')} icon={<MessageSquarePlus className="size-5" />} />
@@ -281,7 +288,7 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
           />
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1 text-xs text-app-muted">
-              {session?.task_id && <><FileAudio className="size-3" />{boundTask?.filename ?? ''}</>}
+              {effectiveTaskId && <><FileAudio className="size-3" />{boundTask?.filename ?? ''}</>}
             </span>
             {streaming ? (
               <Button variant="secondary" onClick={stop}><Square className="size-4" />{t('chat.stop')}</Button>

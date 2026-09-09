@@ -44,8 +44,8 @@ export function AIPage() {
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('ai.eyebrow')}
-          title={t('ai.title')}
-          description={t('translation.description')}
+          title={chatMode ? t('chat.title') : t('ai.title')}
+          description={chatMode ? t('chat.description') : t('translation.description')}
         />
       </Panel>
 

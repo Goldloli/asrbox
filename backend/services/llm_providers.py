@@ -259,7 +259,7 @@ def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, ti
     if provider.api_key_secret:
         headers["Authorization"] = f"Bearer {provider.api_key_secret}"
     body = request_body(provider, messages, structured=structured_translation or response_schema is not None,
-                        schema=response_schema)
+                        schema=response_schema, stream=True if on_delta is not None else None)
     url = f"{provider.base_url.rstrip('/')}/chat/completions"
     response = asyncio.run(_bounded_completion(url, headers, body, timeout,
                                                max_response_bytes if max_response_bytes is not None else MAX_RESPONSE_BYTES,

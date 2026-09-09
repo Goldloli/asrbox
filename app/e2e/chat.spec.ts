@@ -81,6 +81,9 @@ async function mockChat(page: Page, state: MockState, options: { providers?: unk
   await page.route(`${serverUrl}/chat/sessions`, (route) => {
     if (route.request().method() === 'POST') {
       state.sessionCreated = true;
+      const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+      state.lastPatch = body;
+      if ('task_id' in body) state.taskId = body.task_id as string | null;
       return route.fulfill({ json: { ...sessionSummary(state), messages: [] } });
     }
     return route.fulfill({ json: { items: state.sessionCreated && !state.deleted ? [sessionSummary(state)] : [] } });
@@ -259,4 +262,23 @@ test('renders assistant markdown as rich text', async ({ page }) => {
   await expect(page.getByRole('strong').filter({ hasText: 'SRT' })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('listitem').filter({ hasText: 'VTT' })).toBeVisible();
   await expect(page.locator('code').filter({ hasText: 'VTT' })).toBeVisible();
+});
+
+test('binds a transcript before the first question and creates the session with it', async ({ page }) => {
+  const state = okState();
+  await mockChat(page, state);
+  await page.goto('/ai?mode=chat');
+
+  const bindSelect = page.getByRole('combobox', { name: 'Bound transcript' });
+  await expect(bindSelect).toBeEnabled();
+  await bindSelect.click();
+  await page.getByRole('option', { name: 'interview.wav' }).click();
+  await expect(bindSelect).toContainText('interview.wav');
+  await expect(page.getByText(/Bound transcript: interview\.wav/)).toBeVisible();
+
+  await page.getByPlaceholder('Ask about ASRbox or the bound subtitles…').fill('总结这段字幕');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByRole('button', { name: 'Send' })).toBeVisible({ timeout: 10_000 });
+  expect(state.lastPatch).toMatchObject({ task_id: 'chat-task' });
+  await expect(bindSelect).toContainText('interview.wav');
 });

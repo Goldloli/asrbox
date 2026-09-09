@@ -38,3 +38,9 @@
 - [x] 7.3 助手回答 Markdown 渲染（react-markdown + remark-gfm，依赖审计通过）。验证：e2e 断言富文本渲染
 - [x] 7.4 系统提示词注入防护（拒绝透露系统指令、资料/字幕视为数据）。验证：system prompt 内容测试 + 真实模型攻击实测
 - [x] 7.5 知识库扩充预置 FAQ 答案（快速上手总览、对话功能自身）+ 检索 questions 字段加权（问法3/标题关键词2/正文1，阈值保持非加权口径）。验证：16 条检索用例全对 + 现有知识测试通过
+
+## 8. 第二轮实机反馈修复
+
+- [x] 8.1 流式修复：调用方带 `on_delta` 时强制上游 `stream=True`（不再依赖 provider 兼容设置的 transport），JSON 上游仍整段回退。验证：test_llm_streaming 新增 2 用例 + transport=json 下实测 74 deltas
+- [x] 8.2 未提问即可绑定任务：pendingTaskId 本地暂存，首轮提问随会话创建提交。验证：e2e 新增先绑后问场景
+- [x] 8.3 对话区固定高度（lg 视口内 flex/grid minmax，消息区内部滚动，页面不被撑长）+ chat 模式页头文案 + 标签。验证：Playwright 截图目检 + 7 条 e2e 全过

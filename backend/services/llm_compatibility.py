@@ -66,9 +66,10 @@ def resolved(provider):
     return options.model_copy(update={"protocol": protocol, "thinking": thinking, "output_format": output})
 
 
-def request_body(provider, messages, *, structured=False, schema=None):
+def request_body(provider, messages, *, structured=False, schema=None, stream=None):
     options = resolved(provider)
-    body = {"model": provider.default_model, "messages": messages, "stream": options.transport == "sse"}
+    body = {"model": provider.default_model, "messages": messages,
+            "stream": (options.transport == "sse") if stream is None else stream}
     if options.thinking == "disabled":
         if options.protocol in {"deepseek", "glm"}:
             body["thinking"] = {"type": "disabled"}
