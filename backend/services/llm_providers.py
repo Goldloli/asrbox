@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
-from backend.database.models import LLMProvider, ProofreadingRun, TranslationRun
+from backend.database.models import ChatSession, LLMProvider, ProofreadingRun, TranslationRun
 from backend.models import (
     LLMProviderCreate,
     LLMCompatibility,
@@ -239,6 +239,9 @@ def delete_provider(db: Session, provider_id: str) -> bool:
     db.query(TranslationRun).filter(TranslationRun.llm_provider_id == provider_id).update(
         {TranslationRun.llm_provider_id: None}, synchronize_session="fetch",
     )
+    db.query(ChatSession).filter(ChatSession.provider_id == provider_id).update(
+        {ChatSession.provider_id: None}, synchronize_session="fetch",
+    )
     db.delete(row)
     db.commit()
     return True
@@ -250,16 +253,17 @@ def get_provider_row(db: Session, provider_id: str) -> LLMProvider | None:
 
 def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, timeout: float = 30,
                     max_response_bytes: int | None = None, structured_translation: bool = False,
-                    response_schema: dict | None = None) -> str:
+                    response_schema: dict | None = None, on_delta=None) -> str:
     validate_usable(provider)
     headers = {"Content-Type": "application/json"}
     if provider.api_key_secret:
         headers["Authorization"] = f"Bearer {provider.api_key_secret}"
     body = request_body(provider, messages, structured=structured_translation or response_schema is not None,
-                        schema=response_schema)
+                        schema=response_schema, stream=True if on_delta is not None else None)
     url = f"{provider.base_url.rstrip('/')}/chat/completions"
     response = asyncio.run(_bounded_completion(url, headers, body, timeout,
-                                               max_response_bytes if max_response_bytes is not None else MAX_RESPONSE_BYTES))
+                                               max_response_bytes if max_response_bytes is not None else MAX_RESPONSE_BYTES,
+                                               on_delta))
     if response.status_code in {401, 403}:
         raise LLMProviderError("LLM_PROVIDER_AUTH_FAILED", "LLM provider rejected credentials")
     if response.status_code == 429:

@@ -31,6 +31,7 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Export TXT, SRT, VTT, ASS, JSON, and Markdown.
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
+- Ask app-usage or bound-subtitle questions in AI → Chat, with streamed answers and locally persisted chat history.
 
 **New and fixed in 0.1.7:** local model selectors and download guidance now label each model's supported CPU/GPU inference devices (CUDA, MPS, MLX); Whisper-family models no longer hallucinate long runs of repeated words on silent or musical passages, and Qwen3-ASR output is no longer silently truncated at a fixed 512-token budget. See the [local models guide](docs/models.md) for safeguard details.
 
@@ -183,6 +184,7 @@ third_party/ffmpeg/  Desktop FFmpeg license and source records
 
 - [Docker deployment](docs/docker.en.md)
 - [AI subtitle proofreading](docs/ai-proofreading.en.md)
+- [AI chat](docs/ai-chat.en.md)
 - [Model guide](docs/models.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Privacy and local data](docs/privacy.md)

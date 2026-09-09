@@ -31,6 +31,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 导出 TXT、SRT、VTT、ASS、JSON 和 Markdown。
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
 - 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
+- 在“AI → 对话”中提问软件用法或绑定字幕内容，流式回答，历史会话本地持久化。
 
 **0.1.7 新增与修复：** 本地模型选择与下载引导现在标注各模型支持的 CPU/GPU 推理设备（CUDA、MPS、MLX）；修复 Whisper 系模型在静音或音乐段幻觉出大量重复词（如连续数百个相同单词）的问题，以及 Qwen3-ASR 长音频输出在固定 512 token 处静默截断的问题。防护细节见 [本地模型文档](docs/models.md)。
 
@@ -183,6 +184,7 @@ third_party/ffmpeg/  桌面内置 FFmpeg 的许可与来源材料
 
 - [Docker 部署](docs/docker.md)
 - [AI 字幕核对](docs/ai-proofreading.md)
+- [AI 对话](docs/ai-chat.md)
 - [模型指南](docs/models.md)
 - [故障排查](docs/troubleshooting.md)
 - [隐私与本地数据](docs/privacy.md)

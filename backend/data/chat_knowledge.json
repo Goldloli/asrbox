@@ -1,0 +1,456 @@
+[
+  {
+    "title": "ASRbox 是什么、怎么用（快速上手）",
+    "text": "ASRbox 是一个本地优先的音视频转写与字幕工作台：把音频、视频转成可编辑的字幕。整体使用路径是：1. 在“模型”页下载一个转写模型（桌面 Apple Silicon 推荐先试 mlx-whisper-turbo）；2. 打开“新建转写”，拖入一个或多个音频、视频文件，选择模型与语言后提交；3. 在“任务”页查看进度和结果；4. 打开结果进行查看、编辑、搜索替换，或用“AI”页的字幕核对、字幕翻译做后处理；5. 满意后在结果页导出为 SRT、VTT、ASS、TXT、JSON 或 Markdown。所有转写默认可在本地完成，不依赖云端服务。",
+    "keywords": [
+      "怎么用",
+      "是什么",
+      "使用",
+      "上手",
+      "入门",
+      "介绍",
+      "教程",
+      "帮助",
+      "功能",
+      "开始",
+      "新手",
+      "指南"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "这个软件怎么用",
+      "ASRbox 是什么",
+      "新手如何上手",
+      "如何使用这个软件",
+      "软件有什么功能"
+    ]
+  },
+  {
+    "title": "第一次转写：完整流程",
+    "text": "第一次转写的步骤：1. 在“模型”页下载模型，桌面 Apple Silicon 可先试 mlx-whisper-turbo，Docker 建议先试 faster-whisper-base 或 faster-whisper-small；2. 在“新建转写”选择音频或视频；3. 选择本地模型或在线平台，设置语言、时间戳和分段选项；4. 提交后在“任务”查看进度、日志和转写结果；5. 编辑字幕或导出。转写前可以拖入单个或多个音频、视频，ASRbox 会预检音轨、格式、时长和分段策略。",
+    "keywords": [
+      "转写",
+      "流程",
+      "新建转写",
+      "上传",
+      "音频",
+      "视频",
+      "任务",
+      "进度",
+      "入门",
+      "使用"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "怎么转写一个视频",
+      "如何开始转写",
+      "如何上传音频",
+      "怎么导入文件"
+    ]
+  },
+  {
+    "title": "转写结果：查看、编辑与版本历史",
+    "text": "转写结果可以查看、搜索、替换、编辑、播放和复制。ASRbox 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本；恢复历史版本不会改写历史，而是形成新的版本记录。",
+    "keywords": [
+      "编辑",
+      "搜索",
+      "替换",
+      "版本",
+      "历史",
+      "恢复",
+      "字幕版本",
+      "撤销",
+      "回退"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "如何恢复字幕的历史版本",
+      "编辑字幕会覆盖原稿吗",
+      "如何撤销修改",
+      "怎么查看历史版本"
+    ]
+  },
+  {
+    "title": "支持哪些本地模型",
+    "text": "ASRbox 注册 15 个本地模型，引擎包括 Transformers Whisper、Faster Whisper、MLX Whisper、FunASR（sensevoice-small）、Qwen3-ASR 和端到端说话人分离模型 MOSS-Transcribe-Diarize。模型页面会标出每个模型支持的推理设备（CPU、NVIDIA GPU CUDA、Apple GPU MPS/MLX）。模型权重按需下载，不包含在仓库、DMG 或 Docker 镜像中。",
+    "keywords": [
+      "模型",
+      "whisper",
+      "faster-whisper",
+      "mlx",
+      "sensevoice",
+      "qwen3-asr",
+      "本地模型",
+      "说话人分离",
+      "diarize"
+    ],
+    "source_doc": "docs/models.md",
+    "questions": [
+      "支持哪些模型",
+      "有哪些本地模型可以用",
+      "ASRbox 支持哪些本地模型"
+    ]
+  },
+  {
+    "title": "如何选择模型",
+    "text": "快速功能验证用 faster-whisper-base；资源适中用 faster-whisper-small 或 faster-whisper-medium；Apple Silicon 优化路径用 mlx-whisper-turbo；Docker/Linux CPU 起步用 faster-whisper-base 或 faster-whisper-small（MLX 在容器中不可用）；中文、粤语、英语、日语、韩语的小模型用 sensevoice-small；多语言 Qwen 路径用 qwen3-asr-0.6b 或 qwen3-asr-1.7b；需要免 HF_TOKEN 的端到端说话人分离用 moss-transcribe-diarize；追求 Whisper 系最大容量用 large-v3 或 large-v3-turbo。准确率取决于语言、录音质量、噪音和运行时，建议用代表性媒体实测后再定默认模型。",
+    "keywords": [
+      "模型选择",
+      "哪个模型",
+      "推荐模型",
+      "中文",
+      "粤语",
+      "多语言",
+      "说话人",
+      "Apple Silicon",
+      "Docker"
+    ],
+    "source_doc": "docs/models.md",
+    "questions": [
+      "应该选哪个模型",
+      "哪个模型转写中文最好",
+      "模型怎么选"
+    ]
+  },
+  {
+    "title": "模型下载的暂停、继续、停止与删除",
+    "text": "模型下载支持暂停（在 ASRbox 控制的检查点阻塞）、继续、停止（已下载文件保留供重试复用）、重试、重新下载（先删除受管目录再下载干净副本）和删除（卸载模型并删除 models/<model-name>/ 目录）。暂停状态在内存中，退出应用不会恢复暂停的下载。模型下载完成以目录中存在 model.json 标记和可用权重文件为准。",
+    "keywords": [
+      "模型下载",
+      "暂停",
+      "继续",
+      "停止",
+      "重试",
+      "删除模型",
+      "下载失败",
+      "断点续传"
+    ],
+    "source_doc": "docs/models.md",
+    "questions": [
+      "模型下载一半能暂停吗",
+      "如何删除已下载的模型",
+      "下载太慢怎么办"
+    ]
+  },
+  {
+    "title": "模型存储位置与磁盘占用",
+    "text": "macOS 桌面模型根目录通常是 ~/Library/Application Support/com.goldloli.asrbox/models/，Docker 使用持久卷内的 /data/models/。模型管理页面显示解析后的目录、每个模型字节数、总量和磁盘剩余空间。模型和 Hugging Face、ModelScope、Torch 缓存可以在“设置 → 存储与诊断”迁移到统一存储根；Docker 版必须先在 compose.yaml 挂载宿主机目录并通过 ASRBOX_MODEL_STORAGE_ROOTS 声明允许的容器挂载点。",
+    "keywords": [
+      "模型位置",
+      "存储",
+      "磁盘",
+      "空间",
+      "迁移",
+      "存储根",
+      "目录",
+      "占用"
+    ],
+    "source_doc": "docs/models.md",
+    "questions": [
+      "模型下载到哪里了",
+      "模型占多少空间",
+      "模型存在哪个目录"
+    ]
+  },
+  {
+    "title": "配置 LLM 提供商",
+    "text": "打开“设置 → AI LLM 提供商”，选择预设或 OpenAI-compatible：Ollama 是本地服务，不需要接口密钥，但必须填写已安装的模型名；MiniMax、Kimi、DeepSeek、Qwen、GLM 通常需要对应厂商密钥；OpenAI-compatible 需要填写兼容服务地址、模型和密钥。点击“测试连接”检查地址、鉴权和模型。Docker 访问宿主机 Ollama 使用 http://host.docker.internal:11434/v1，不能使用容器自身的 localhost。",
+    "keywords": [
+      "LLM",
+      "提供商",
+      "Ollama",
+      "API key",
+      "密钥",
+      "MiniMax",
+      "Kimi",
+      "DeepSeek",
+      "Qwen",
+      "GLM",
+      "OpenAI",
+      "配置",
+      "测试连接"
+    ],
+    "source_doc": "docs/ai-proofreading.md",
+    "questions": [
+      "如何配置 LLM 提供商",
+      "怎么接入 DeepSeek",
+      "怎么用 Ollama",
+      "LLM 在哪里设置"
+    ]
+  },
+  {
+    "title": "LLM 兼容设置与能力测试",
+    "text": "保存提供商后可点“测试翻译与校对”做能力验证：最多 6 次请求、总计 3 分钟，可能产生平台费用，但不会发送用户字幕或媒体；测试不自动修改配置。编辑提供商可展开“翻译与校对兼容设置”：参数协议（OpenAI/DeepSeek/Ollama/Qwen/GLM）、思考模式、输出约束（JSON Schema、JSON 对象或仅提示词）、响应方式（JSON 完整返回或 SSE 流式）。翻译和校对共享设置，每次请求有 90 秒总时限与 1 MiB 响应上限。",
+    "keywords": [
+      "兼容设置",
+      "能力测试",
+      "参数协议",
+      "思考模式",
+      "输出约束",
+      "SSE",
+      "流式",
+      "JSON Schema",
+      "测试翻译与校对"
+    ],
+    "source_doc": "docs/ai-proofreading.md",
+    "questions": [
+      "什么是兼容设置",
+      "如何测试 LLM 能力"
+    ]
+  },
+  {
+    "title": "AI 字幕核对（校对）流程",
+    "text": "打开左侧“AI”，列表只显示已完成且有字幕版本的任务；选择任务和 LLM 提供商后开始字幕核对。结果按原字幕顺序显示，需要修改的段落展开，连续正确段落折叠。查看时间、原文、建议文本和修改原因，勾选要采纳的建议后点击“应用所选建议”，ASRbox 会创建一个新版本。建议默认不选中，未勾选的不会修改字幕。LLM 故障不会改变原字幕，也不会让已经完成的转写失败。",
+    "keywords": [
+      "校对",
+      "核对",
+      "错字",
+      "漏字",
+      "建议",
+      "应用建议",
+      "AI 修改",
+      "字幕核对"
+    ],
+    "source_doc": "docs/ai-proofreading.md",
+    "questions": [
+      "字幕校对怎么用",
+      "如何校对字幕",
+      "AI 校对会不会改坏字幕"
+    ]
+  },
+  {
+    "title": "AI 字幕核对的错误含义",
+    "text": "连接失败表示服务地址不可达、Ollama 未启动或网络故障；鉴权失败表示 API key 错误、过期或权限不足；模型错误表示模型名不存在或未拉取；上下文过长表示字幕和提示超过所选模型限制，应换更大上下文模型或较短任务；限流或服务端错误可等待后重试；返回格式错误表示 LLM 没有返回可解析的结构化建议。只有“没有发现需要修改的内容”代表核对正常完成且无需修改。",
+    "keywords": [
+      "校对失败",
+      "连接失败",
+      "鉴权失败",
+      "上下文过长",
+      "限流",
+      "格式错误",
+      "报错",
+      "错误"
+    ],
+    "source_doc": "docs/ai-proofreading.md",
+    "questions": [
+      "校对报错怎么办",
+      "提示上下文过长是什么意思"
+    ]
+  },
+  {
+    "title": "多语言字幕翻译",
+    "text": "在“AI → 字幕翻译”提供独立翻译，复用 LLM 提供商，保留原文、不要求先校对。选择已完成任务及明确的原字幕版本，选择源语言（“自动”可处理混合语言）和明确的目标语言后开始；每次只翻一种目标语言。完成后可逐段对照、搜索、修改并保存为新版本，可导出仅译文或双语。翻译使用独立的运行和不可变版本，不改变原字幕。取消、失败或中断后需手动“继续未完成批次”，不会自动付费重试。",
+    "keywords": [
+      "翻译",
+      "字幕翻译",
+      "双语",
+      "目标语言",
+      "源语言",
+      "续译",
+      "译文"
+    ],
+    "source_doc": "docs/ai-proofreading.md",
+    "questions": [
+      "翻译功能怎么用",
+      "如何翻译字幕",
+      "怎么导出双语字幕"
+    ]
+  },
+  {
+    "title": "导出格式",
+    "text": "字幕可导出为 TXT、SRT、VTT、ASS、JSON 和 Markdown。译文导出支持仅译文和双语两种，双语默认原文在前、可切换顺序，JSON 分别保存 source_text 和 translated_text。桌面端文件导出默认保存到 ~/Downloads/ASRbox Exports/ 或设置中选择的自定义目录。",
+    "keywords": [
+      "导出",
+      "SRT",
+      "VTT",
+      "ASS",
+      "TXT",
+      "JSON",
+      "Markdown",
+      "字幕文件",
+      "格式"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "支持导出哪些格式",
+      "如何导出 SRT",
+      "怎么导出字幕"
+    ]
+  },
+  {
+    "title": "隐私边界：本地模型与在线服务",
+    "text": "使用本地模型时，媒体处理、字幕编辑和导出都在本地完成，不会把媒体发送给 ASR 服务；但下载模型会访问 Hugging Face 或 ModelScope，桌面检查更新会访问 GitHub。使用在线 ASR 会把媒体或音频发送给所选第三方。LLM 核对只发送字幕段落文字、段落编号和有限相邻上下文，不发送音频、文件名或本地路径；远程 LLM 仍属于第三方处理，使用前应查看其隐私与保留政策。",
+    "keywords": [
+      "隐私",
+      "本地",
+      "上传",
+      "第三方",
+      "数据安全",
+      "泄露",
+      "云端",
+      "联网"
+    ],
+    "source_doc": "docs/privacy.md",
+    "questions": [
+      "我的音频会上传到云端吗",
+      "隐私安全吗",
+      "数据会被发送到哪里"
+    ]
+  },
+  {
+    "title": "数据存储位置、凭据与备份",
+    "text": "macOS 桌面数据默认位于 ~/Library/Application Support/com.goldloli.asrbox/，Docker 数据在容器 /data（由 asrbox-data 卷持久化）。其中包括数据库 asrbox.db（任务、字幕版本、设置、提供商配置）、模型、上传媒体、提取音频、导出和备份。ASR 和 LLM 的 API 密钥在 API 响应中脱敏，但目前以明文保存在 asrbox.db 中，备份压缩包也包含这些凭据，应按敏感数据处理，不要附到公开 issue 或提交到 Git。",
+    "keywords": [
+      "数据位置",
+      "数据库",
+      "密钥",
+      "凭据",
+      "备份",
+      "asrbox.db",
+      "敏感",
+      "存储"
+    ],
+    "source_doc": "docs/privacy.md",
+    "questions": [
+      "我的数据存在哪里",
+      "如何备份数据",
+      "API key 存在哪里"
+    ]
+  },
+  {
+    "title": "本地 API 边界与令牌",
+    "text": "桌面后端只绑定 127.0.0.1，并在每次启动时生成仅存在于内存的随机 API token；退出应用会停止内置后端。该 token 不是用户认证或磁盘加密。Docker 默认只绑定本机回环；绑定到局域网时必须设置固定的 ASRBOX_API_TOKEN，容器启动时会拒绝“非回环地址 + 空令牌”的组合。ASRbox 没有内置 TLS 和多用户系统，局域网以外请使用可信 VPN 或带 HTTPS 和认证的反向代理。",
+    "keywords": [
+      "API token",
+      "令牌",
+      "127.0.0.1",
+      "局域网",
+      "安全",
+      "暴露",
+      "公网",
+      "认证"
+    ],
+    "source_doc": "docs/privacy.md",
+    "questions": [
+      "API token 是什么",
+      "本地端口会被外部访问吗"
+    ]
+  },
+  {
+    "title": "桌面端与 Web/Docker 版的差异",
+    "text": "macOS 桌面端是 Tauri 2 加内置 FastAPI sidecar，退出应用即停止后端；桌面端默认引用原始位置的媒体而不复制（可在设置中改为复制到 uploads/），浏览器和 Docker 上传总是复制到受管存储。桌面端支持应用内检查和下载 GitHub Release 更新（DMG 下载到系统下载目录，安装仍需手动替换）；Web 版只显示构建版本和 Releases 入口。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX，mlx-whisper-turbo 会被标记为不兼容并阻止下载。Windows 和 Linux 原生桌面端暂未提供。",
+    "keywords": [
+      "桌面",
+      "Web",
+      "Docker",
+      "差异",
+      "更新",
+      "MLX",
+      "Tauri",
+      "Windows",
+      "Linux"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "桌面版和网页版有什么区别",
+      "Docker 版有什么不同"
+    ]
+  },
+  {
+    "title": "macOS 提示“ASRbox.app 已损坏”怎么办",
+    "text": "当前桌面安装包未签名、未公证，macOS Gatekeeper 可能提示“ASRbox.app 已损坏，无法打开”，这并非文件真的损坏。把应用拖入“应用程序”后，在终端执行一次 xattr -cr /Applications/ASRbox.app 清除隔离属性即可；也可以在首次打开时右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。",
+    "keywords": [
+      "已损坏",
+      "无法打开",
+      "Gatekeeper",
+      "macOS",
+      "xattr",
+      "签名",
+      "公证",
+      "安装"
+    ],
+    "source_doc": "README.md",
+    "questions": [
+      "macOS 提示已损坏怎么办",
+      "打不开应用怎么办",
+      "提示应用已损坏"
+    ]
+  },
+  {
+    "title": "Docker 部署与数据持久化",
+    "text": "Docker 部署需要 Docker Engine 24+ 和 Compose v2，建议至少 8 GB 内存和 15 GB 可用空间。启动：git clone 仓库后 cp .env.example .env，然后 docker compose up -d --build，浏览器打开 http://127.0.0.1:17494。数据库、媒体、字幕、设置、模型和缓存都在 asrbox-data 卷中，docker compose down 不会删除它，docker compose down -v 会永久删除数据。手机或局域网设备访问时在 .env 设置 ASRBOX_BIND_ADDRESS=0.0.0.0 和强随机的 ASRBOX_API_TOKEN。",
+    "keywords": [
+      "Docker",
+      "部署",
+      "compose",
+      "卷",
+      "持久化",
+      "局域网",
+      "手机",
+      "安装",
+      "升级"
+    ],
+    "source_doc": "docs/docker.md",
+    "questions": [
+      "怎么用 Docker 部署",
+      "Docker 数据会丢吗"
+    ]
+  },
+  {
+    "title": "删除任务、模型与完全卸载",
+    "text": "删除引用原始文件的任务不会删除原始文件，只移除受管的派生音频、分片和数据库记录；删除受管副本的任务会移除该副本。删除模型会移除 models/<model-name>/ 目录。macOS 完全卸载：导出要保留的字幕、退出 ASRbox、删除 /Applications/ASRbox.app、删除 ~/Library/Application Support/com.goldloli.asrbox/（含任务、设置、凭据和模型）、清理导出目录和备份 ZIP。Docker 卸载：先 docker compose down --remove-orphans 保留数据，确认备份后再 docker volume rm asrbox-data。这些删除均不可恢复。",
+    "keywords": [
+      "删除任务",
+      "卸载",
+      "清理",
+      "删除数据",
+      "删除模型",
+      "不可恢复"
+    ],
+    "source_doc": "docs/privacy.md",
+    "questions": [
+      "如何卸载 ASRbox",
+      "怎么删除任务",
+      "卸载后数据还在吗"
+    ]
+  },
+  {
+    "title": "转写防护：幻觉与截断",
+    "text": "Whisper 系引擎（Transformers Whisper、Faster Whisper、MLX Whisper）默认启用抗幻觉解码：不跨窗口携带提示，并在引擎支持时抑制重复 n-gram，避免静音或音乐段幻觉出大量重复词。Qwen3-ASR 按音频时长确定输出 token 预算，长录音不会在固定位置被静默截断。此外后处理会把连续重复六次以上的 token 折叠为两次（不改变时间轴），任务质量报告会对中英文重复标记 REPETITIVE_TRANSCRIPT。",
+    "keywords": [
+      "幻觉",
+      "重复",
+      "截断",
+      "静音",
+      "音乐",
+      "乱码",
+      "质量报告",
+      "repetitive"
+    ],
+    "source_doc": "docs/models.md",
+    "questions": [
+      "转写结果出现乱码怎么办",
+      "转写内容重复是怎么回事",
+      "长音频转写被截断怎么办"
+    ]
+  },
+  {
+    "title": "AI 对话助手怎么用",
+    "text": "“AI”页的“对话”标签提供内置对话助手：不绑定任务时回答软件使用方法；在会话顶部绑定一个已完成转写的任务后，可以针对该任务当前版本的字幕提问，例如总结字幕、询问某句话是否出现、出现在什么时间位置。回答以打字机方式逐步显示，可随时停止；会话和消息保存在本地，可回看、继续或删除。需要在“设置 → AI LLM 提供商”中配置并启用一个 LLM 提供商后使用。",
+    "keywords": [
+      "对话",
+      "聊天",
+      "助手",
+      "问答",
+      "chatbot",
+      "总结字幕",
+      "提问"
+    ],
+    "source_doc": "docs/ai-chat.md",
+    "questions": [
+      "对话助手能干什么",
+      "怎么让 AI 总结字幕",
+      "对话功能怎么用"
+    ]
+  }
+]

@@ -64,6 +64,14 @@ def _create_translation_tables(engine) -> None:
             index.create(bind=engine, checkfirst=True)
 
 
+def _create_chat_tables(engine) -> None:
+    for name in ("chat_sessions", "chat_messages"):
+        table = Base.metadata.tables[name]
+        table.create(bind=engine, checkfirst=True)
+        for index in table.indexes:
+            index.create(bind=engine, checkfirst=True)
+
+
 def run_migrations(engine, session_factory) -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
@@ -108,6 +116,7 @@ def run_migrations(engine, session_factory) -> None:
             engine, inspect(engine), set(inspect(engine).get_table_names()),
             [("llm_providers", "compatibility_json", "TEXT NOT NULL DEFAULT '{}'" )],
         )),
+        ("20260909_001_ai_chatbot", lambda: _create_chat_tables(engine)),
     ]
 
     db = session_factory()

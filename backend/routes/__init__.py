@@ -7,6 +7,7 @@ def register_routers(app: FastAPI) -> None:
     from backend.routes.health import router as health_router
     from backend.routes.auth import router as auth_router
     from backend.routes.batches import router as batches_router
+    from backend.routes.chat import router as chat_router
     from backend.routes.events import router as events_router
     from backend.routes.diagnostics import router as diagnostics_router
     from backend.routes.models import router as models_router
@@ -23,6 +24,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(batches_router)
+    app.include_router(chat_router)
     app.include_router(events_router)
     app.include_router(diagnostics_router)
     app.include_router(models_router)

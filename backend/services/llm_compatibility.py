@@ -66,9 +66,10 @@ def resolved(provider):
     return options.model_copy(update={"protocol": protocol, "thinking": thinking, "output_format": output})
 
 
-def request_body(provider, messages, *, structured=False, schema=None):
+def request_body(provider, messages, *, structured=False, schema=None, stream=None):
     options = resolved(provider)
-    body = {"model": provider.default_model, "messages": messages, "stream": options.transport == "sse"}
+    body = {"model": provider.default_model, "messages": messages,
+            "stream": (options.transport == "sse") if stream is None else stream}
     if options.thinking == "disabled":
         if options.protocol in {"deepseek", "glm"}:
             body["thinking"] = {"type": "disabled"}
@@ -111,11 +112,12 @@ def completion_content(payload):
 
 
 class _SSE:
-    def __init__(self):
+    def __init__(self, on_delta=None):
         self.data = []
         self.parts = []
         self.finished = False
         self.done = False
+        self.on_delta = on_delta
 
     def line(self, line):
         if line.startswith('data:'):
@@ -142,6 +144,8 @@ class _SSE:
                         if not isinstance(content, str) or self.finished and content:
                             invalid()
                         self.parts.append(content)
+                        if content and self.on_delta is not None:
+                            self.on_delta(content)
                     reason = choice.get('finish_reason')
                     check_finish(reason)
                     if reason == 'stop':
@@ -155,14 +159,14 @@ class _SSE:
         return httpx.Response(200, json={'choices': [{'message': {'content': ''.join(self.parts)}, 'finish_reason': 'stop'}]})
 
 
-async def bounded_completion(url, headers, body, timeout, max_response_bytes):
+async def bounded_completion(url, headers, body, timeout, max_response_bytes, on_delta=None):
     try:
         async with asyncio.timeout(timeout):
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
                 async with client.stream('POST', url, headers=headers, json=body) as response:
                     is_sse = response.is_success and 'text/event-stream' in response.headers.get('content-type', '')
                     chunks, size, buffer = [], 0, b''
-                    sse = _SSE()
+                    sse = _SSE(on_delta)
                     async for chunk in response.aiter_bytes():
                         size += len(chunk)
                         if size > max_response_bytes:
@@ -181,7 +185,13 @@ async def bounded_completion(url, headers, body, timeout, max_response_bytes):
                             sse.line(buffer.rstrip(b'\r').decode('utf-8'))
                         sse.line('')
                         return sse.response()
-                    return httpx.Response(response.status_code, content=b''.join(chunks))
+                    result = httpx.Response(response.status_code, content=b''.join(chunks))
+                    if on_delta is not None and result.is_success:
+                        try:
+                            on_delta(completion_content(result.json()))
+                        except (ValueError, RecursionError):
+                            pass
+                    return result
     except (TimeoutError, httpx.TimeoutException) as exc:
         raise LLMProviderError('LLM_PROVIDER_TIMEOUT', 'LLM provider timed out') from exc
     except httpx.HTTPError as exc:
