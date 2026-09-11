@@ -18,6 +18,8 @@ ERROR_CODES: dict[str, str] = {
     "CHUNK_FAILED": "A long-audio chunk failed to transcribe.",
     "DIARIZATION_TOKEN_MISSING": "Speaker diarization requires an HF_TOKEN.",
     "TASK_CANCELLED": "The task was cancelled.",
+    "CUDA_ACCELERATION_UNSUPPORTED": "CUDA acceleration is only supported on Windows desktop.",
+    "CUDA_KIT_DOWNLOAD_ACTIVE": "A CUDA acceleration kit download is in progress.",
 }
 
 

@@ -489,6 +489,43 @@ export type MediaStorageSettingsUpdate = Partial<
   Pick<MediaStorageSettings, 'ingest_mode' | 'uploads_dir' | 'derived_audio_dir' | 'delete_derived_on_complete'>
 >;
 
+export type CudaAccelerationStatus = 'not_downloaded' | 'downloading' | 'ready' | 'enabled' | 'enable_failed' | 'invalidated';
+
+export interface CudaKitInfo {
+  kit_version: string;
+  torch_version: string;
+  total_bytes: number;
+}
+
+export interface CudaProbeInfo {
+  state: 'pending' | 'ok' | 'failed';
+  torch_cuda_available: boolean;
+  cuda_device_name: string | null;
+  torch_file: string | null;
+}
+
+export interface CudaKitDownloadJob {
+  id: string | null;
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  phase: string;
+  current_part: string | null;
+  parts_total: number;
+  downloaded_bytes: number;
+  total_bytes: number;
+  error: string | null;
+}
+
+export interface CudaAccelerationSettings {
+  enabled: boolean;
+  status: CudaAccelerationStatus;
+  reason: string | null;
+  supported: boolean;
+  gpu_detected: boolean | null;
+  kit: CudaKitInfo | null;
+  probe: CudaProbeInfo;
+  job: CudaKitDownloadJob | null;
+}
+
 export interface ASRSettings {
   id: number;
   default_backend: string;
@@ -546,6 +583,7 @@ export interface HealthStatus {
   version?: string;
   port?: number;
   backend_type?: string;
+  gpu_available?: boolean;
 }
 
 export interface TaskDiagnostic {
@@ -1087,6 +1125,33 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  getCudaAcceleration() {
+    return this.request<CudaAccelerationSettings>('/settings/cuda-acceleration');
+  }
+
+  updateCudaAcceleration(data: { enabled: boolean }) {
+    return this.request<CudaAccelerationSettings>('/settings/cuda-acceleration', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  startCudaKitDownload() {
+    return this.request<CudaKitDownloadJob>('/settings/cuda-acceleration/download', { method: 'POST' });
+  }
+
+  getCudaKitDownload() {
+    return this.request<CudaKitDownloadJob>('/settings/cuda-acceleration/download');
+  }
+
+  cancelCudaKitDownload() {
+    return this.request<CudaKitDownloadJob>('/settings/cuda-acceleration/download/cancel', { method: 'POST' });
+  }
+
+  deleteCudaKit() {
+    return this.request<CudaAccelerationSettings>('/settings/cuda-acceleration/kit', { method: 'DELETE' });
   }
 
   getRuntimeStatus() {

@@ -2,7 +2,9 @@
 
 ## Purpose
 定义跨运行时“关于”信息、桌面更新偏好、版本检查、安装包下载与校验，以及 Web 降级行为。
+
 ## Requirements
+
 ### Requirement: About information is available across runtimes
 ASRbox SHALL provide a localized About tab in Settings that shows the application identity, current application or Web build version, runtime and maintained-platform status, public-beta status, author `Goldloli 小卡塔克`, copyright, and links to the author GitHub and Bilibili profiles, project repository, documentation, GitHub Issues, privacy information, open-source license, troubleshooting, and Releases.
 
@@ -63,6 +65,10 @@ When a newer release contains an installer for the maintained desktop target, AS
 - **WHEN** a macOS Apple Silicon user starts a download for a matching newer release
 - **THEN** ASRbox streams the versioned DMG to the system download directory through a `.part` file and reports progress without blocking transcription or model downloads
 
+#### Scenario: User downloads the Windows package
+- **WHEN** a Windows x64 user starts a download for a matching newer release
+- **THEN** ASRbox streams the versioned NSIS installer to the system download directory through a `.part` file and reports progress without blocking transcription or model downloads
+
 #### Scenario: User navigates away
 - **WHEN** an update package download is active and the user leaves the About tab
 - **THEN** the download continues and remains visible in the global task center
@@ -91,11 +97,15 @@ ASRbox MUST resolve release metadata and assets inside the trusted desktop bound
 - **THEN** ASRbox rejects the application download before writing a completed installer
 
 ### Requirement: Installation remains manual and disclosures remain honest
-ASRbox SHALL require an explicit user action to download and open an installer, SHALL provide Open Installer and the cross-platform Open File Location action after verification, SHALL instruct the user to finish active work, quit normally, and manually replace the application, and SHALL NOT claim or perform automatic installation, automatic replacement, automatic exit, automatic restart, Apple Developer ID signing, or notarization.
+ASRbox SHALL require an explicit user action to download and open an installer, SHALL provide Open Installer and the cross-platform Open File Location action after verification, SHALL instruct the user to finish active work, quit normally, and manually replace the application, and SHALL NOT claim or perform automatic installation, automatic replacement, automatic exit, automatic restart, Apple Developer ID signing, notarization, or Windows Authenticode signing.
 
 #### Scenario: Verified DMG is ready
 - **WHEN** a macOS update download completes and passes verification
 - **THEN** the user can open the DMG or its file location and sees manual replacement and Gatekeeper guidance while ASRbox remains running
+
+#### Scenario: Verified NSIS installer is ready
+- **WHEN** a Windows update download completes and passes verification
+- **THEN** the user can open the NSIS installer or its file location and sees manual installation and unsigned SmartScreen guidance while ASRbox remains running
 
 #### Scenario: User has active work
 - **WHEN** a verified installer is ready while transcription or model-download work remains active

@@ -8,15 +8,16 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.1.8`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.1.9`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
 | macOS desktop | Apple Silicon, Tauri 2 with a bundled FastAPI sidecar |
+| Windows desktop | Windows 10/11 x64, Tauri 2 with a bundled FastAPI sidecar, NSIS installer |
 | Docker Web | Linux CPU container, same-origin UI/API, persistent `/data` |
-| Native Windows/Linux desktop | Not available |
+| Native Linux desktop | Not available |
 | Signing, notarization, automatic installation | Not available; desktop can check for and download updates, but installation remains manual |
-| Model weights | Downloaded on demand; not included in the DMG or image |
+| Model weights | Downloaded on demand; not included in the installers or image |
 
 Keep originals of important media and back up before upgrades. Provider secrets are currently stored in local SQLite rather than an OS keychain. Docker binds to host loopback by default and must not be exposed directly to the public Internet.
 
@@ -32,8 +33,9 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
 - Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
 - Ask app-usage or bound-subtitle questions in AI → Chat, with streamed answers and locally persisted chat history.
+- Set a default model (local or an online provider) and a default language, including auto-detect, under Settings → Transcription defaults; new transcriptions start with them preselected.
 
-**New in 0.1.8:** the AI page gains a Chat assistant — it answers app-usage questions from a built-in offline knowledge base distilled from the user docs (keyword retrieval, no vector model needed), or answers questions about the current subtitle version of a bound task (summaries, whether a line appears and where). Replies stream token by token and can be stopped anytime; sessions persist locally. Prompt-injection guarding and privacy boundaries match subtitle proofreading. See the [AI chat guide](docs/ai-chat.md).
+**New in 0.1.9:** a Windows x64 desktop edition — the same Tauri 2 + bundled FastAPI sidecar architecture as macOS, shipped as an NSIS installer. The backend test suite is fully green on Windows, and in-app update checks with verified downloads cover the Windows installer as well. NVIDIA GPU users can enable an optional CUDA acceleration kit under Settings → GPU acceleration (a one-time ~2.6GB download) for up to roughly 10x faster local transcription; otherwise everything stays on CPU. Transcription defaults gain a default-model setting: pick a preferred local model or online provider and a default language (including auto-detect), and the transcribe page preselects them on open.
 
 ### LLM proofreading
 
@@ -80,13 +82,15 @@ Restart, open `http://HOST_LAN_IP:17494`, and enter the same token under Setting
 
 See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connectivity, removal, and troubleshooting.
 
-## macOS desktop
+## Desktop
 
-Download the Apple Silicon DMG from the [`v0.1.8` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.8) and verify `SHA256SUMS.txt`.
+Download the installer for your platform from the [`v0.1.9` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.9) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
 
-Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the DMG to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
+Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the installer to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 
-A completed download is not an automatic installation. Finish active transcription and model-download work, quit ASRbox normally, then open the DMG and replace the old application manually. Web builds show their build version and a GitHub Releases link only; they never download a desktop installer to the server.
+A completed download is not an automatic installation. Finish active transcription and model-download work, quit ASRbox normally, then open the installer and replace the old application manually. Web builds show their build version and a GitHub Releases link only; they never download a desktop installer to the server.
+
+### macOS
 
 The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **“ASRbox.app” is damaged and can't be opened**:
 
@@ -99,6 +103,12 @@ xattr -cr /Applications/ASRbox.app
 ```
 
 Alternatively, right-click the app and choose Open on first launch, or allow it under System Settings → Privacy & Security.
+
+### Windows
+
+The Windows installer is not code-signed, so SmartScreen may show "Windows protected your PC": choose "More info" → "Run anyway". Installation is per-user and does not require administrator rights.
+
+**CUDA acceleration (optional, NVIDIA GPUs only):** turn on the switch under Settings → GPU acceleration and the app downloads a ~2.6GB acceleration kit (torch 2.11.0+cu128) once from the GitHub Release matching your version, verifies every part and file against SHA-256, installs it, and restarts the backend; local transcription then runs on the GPU, and turning the switch off returns to CPU. The installed kit takes about 4GB of disk. If activation fails (for example an outdated driver), the app stays on CPU and shows the reason; after an app upgrade a mismatched kit is marked "invalidated" and can be re-downloaded from the same place. The macOS build has no such switch and keeps its existing Apple Silicon acceleration path.
 
 Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-memory API token. Removing the app does not remove tasks, models, or backups.
 
@@ -128,7 +138,8 @@ Connection, authentication, server, context-length, and malformed-response failu
 Desktop data defaults to:
 
 ```text
-~/Library/Application Support/com.goldloli.asrbox/
+macOS:   ~/Library/Application Support/com.goldloli.asrbox/
+Windows: %APPDATA%\com.goldloli.asrbox\
 ```
 
 Docker keeps all managed state under `/data` in the `asrbox-data` volume. Treat backups as sensitive: they may contain media, transcripts, exports, logs, models, and provider credentials.
@@ -139,13 +150,13 @@ Read [privacy and local data](docs/privacy.md) and the [security policy](SECURIT
 
 ## Development
 
-Desktop development uses Bun `1.3.8`, Python `3.13`, stable Rust, and macOS Apple Silicon. Docker has a separate Linux CPU dependency lock.
+Desktop development uses Bun `1.3.8` and stable Rust on macOS Apple Silicon or Windows x64. The Python version is pinned per platform: `3.13` on macOS (`requirements-dev.lock`) and `3.14` on Windows (`requirements-windows.lock` — Python 3.11/3.13 on Windows suffer from an asyncio proactor disconnect-poisoning issue, see D2b in `openspec/changes/windows-desktop-support/design.md`). Docker has a separate Linux CPU dependency lock.
 
 ```bash
 bun install
 python -m venv .venv
-.venv/bin/python -m pip install pip==25.3
-.venv/bin/pip install -r requirements-dev.lock
+# macOS / Linux: .venv/bin/python -m pip install pip==25.3 && .venv/bin/pip install -r requirements-dev.lock
+# Windows:       .venv\Scripts\python.exe -m pip install pip==25.3 and -r requirements-windows.lock
 npm run dev:server
 npm run dev:web
 ```
@@ -166,11 +177,12 @@ npm run check:open-source
 Build the desktop package with:
 
 ```bash
+# install packaging dependencies first (use .venv/bin or .venv\Scripts per platform)
 .venv/bin/pip install -r requirements-build.lock
 npm run build:desktop
 ```
 
-The DMG is written under `tauri/src-tauri/target/release/bundle/dmg/`. Real-model tests require legally supplied media and downloaded weights and are not part of default CI.
+The DMG is written under `tauri/src-tauri/target/release/bundle/dmg/` on macOS and the NSIS installer under `tauri/src-tauri/target/release/bundle/nsis/` on Windows. Real-model tests require legally supplied media and downloaded weights and are not part of default CI.
 
 ## Project layout
 
@@ -178,7 +190,7 @@ The DMG is written under `tauri/src-tauri/target/release/bundle/dmg/`. Real-mode
 app/                 Shared React routes, components, state, and UI
 web/                 Vite Web entry point
 backend/             FastAPI, tasks, ASR, LLM, versions, storage, exports
-tauri/               macOS shell and sidecar lifecycle
+tauri/               macOS / Windows shell and sidecar lifecycle
 Dockerfile           Linux CPU single-container build
 compose.yaml         Persistent deployment and network defaults
 scripts/             Build, test, audit, and release gates

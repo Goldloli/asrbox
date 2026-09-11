@@ -14,7 +14,7 @@ test('web About shows build identity and browser-only update fallback', async ({
 
   await expect(page.getByRole('tab', { name: 'About' })).toHaveAttribute('data-state', 'active');
   await expect(page.getByText('Public beta', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('About').getByText('v0.1.8', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('About').getByText('v0.1.9', { exact: true })).toBeVisible();
   await expect(page.getByLabel('About').getByText('Web', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /View Releases/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Check now/ })).toHaveCount(0);

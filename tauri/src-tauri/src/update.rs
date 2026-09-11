@@ -814,15 +814,46 @@ fn is_expected_asset(name: &str) -> bool {
             && name.starts_with("ASRbox_")
             && name.ends_with("_aarch64.dmg");
     }
-    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        return Path::new(name).file_name() == Some(OsStr::new(name))
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+            && name.starts_with("ASRbox_")
+            && name.ends_with("_x64-setup.exe");
+    }
+    #[cfg(not(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "windows", target_arch = "x86_64")
+    )))]
     {
         let _ = name;
         false
     }
 }
 
+fn expected_asset_name(version: &Version) -> String {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        return format!("ASRbox_{version}_aarch64.dmg");
+    }
+    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+    {
+        return format!("ASRbox_{version}_x64-setup.exe");
+    }
+    #[cfg(not(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "windows", target_arch = "x86_64")
+    )))]
+    {
+        let _ = version;
+        String::new()
+    }
+}
+
 fn is_expected_asset_for_version(name: &str, version: &Version) -> bool {
-    is_expected_asset(name) && name == format!("ASRbox_{version}_aarch64.dmg")
+    is_expected_asset(name) && name == expected_asset_name(version)
 }
 
 fn target_label() -> &'static str {
@@ -842,6 +873,8 @@ fn target_label() -> &'static str {
 fn installer_kind() -> Option<&'static str> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         Some("dmg")
+    } else if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+        Some("nsis")
     } else {
         None
     }
@@ -967,6 +1000,21 @@ mod tests {
             assert!(!is_expected_asset("ASRbox_../../escaped_0.1.3_aarch64.dmg"));
             assert!(!is_expected_asset(
                 "ASRbox_0.1.3_aarch64.dmg/another_aarch64.dmg"
+            ));
+        }
+        if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            assert!(is_expected_asset("ASRbox_0.1.3_x64-setup.exe"));
+            assert!(is_expected_asset_for_version(
+                "ASRbox_0.1.3_x64-setup.exe",
+                &Version::parse("0.1.3").unwrap()
+            ));
+            assert!(!is_expected_asset_for_version(
+                "ASRbox_0.1.4_x64-setup.exe",
+                &Version::parse("0.1.3").unwrap()
+            ));
+            assert!(!is_expected_asset("ASRbox_../../escaped_0.1.3_x64-setup.exe"));
+            assert!(!is_expected_asset(
+                "ASRbox_0.1.3_x64-setup.exe/another_x64-setup.exe"
             ));
         }
     }

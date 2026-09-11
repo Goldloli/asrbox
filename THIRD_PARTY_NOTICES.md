@@ -6,9 +6,9 @@ ASRbox depends on open source projects and optional model ecosystems. This file 
 
 ### FFmpeg and FFprobe
 
-- Location: `third_party/ffmpeg/darwin-arm64/`
+- Location: `third_party/ffmpeg/darwin-arm64/` (macOS Apple Silicon), `third_party/ffmpeg/win32-x64/` (Windows x64)
 - Purpose: media inspection, audio extraction, and desktop out-of-box MP4 support.
-- Source: Martin Riedl's FFmpeg Build Server.
+- Source: Martin Riedl's FFmpeg Build Server (macOS); gyan.dev FFmpeg builds (Windows).
 - Version/build: `8.1.2`, with `--enable-gpl` and `--enable-version3`.
 - License: GPLv3; full text at `third_party/ffmpeg/LICENSE.GPLv3`.
 - Binary checksums: `third_party/ffmpeg/checksums.sha256`.
@@ -16,7 +16,7 @@ ASRbox depends on open source projects and optional model ecosystems. This file 
 
 ## Runtime and Application Frameworks
 
-The source-built Docker image installs ffmpeg/ffprobe from Debian packages rather than copying the macOS binaries above. Debian package license files remain in the image. Anyone redistributing a derived container image must review the exact package versions and satisfy their source, notice, and license obligations; the repository does not currently publish a prebuilt container image.
+The source-built Docker image installs ffmpeg/ffprobe from Debian packages rather than copying the desktop binaries above. Debian package license files remain in the image. Anyone redistributing a derived container image must review the exact package versions and satisfy their source, notice, and license obligations; the repository does not currently publish a prebuilt container image.
 
 | Dependency | Purpose | License check |
 | --- | --- | --- |

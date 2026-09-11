@@ -19,6 +19,22 @@ from backend import config
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) is not a liveness probe on Windows (WinError 87);
+        # query the process handle instead.
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED means it exists
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True
@@ -43,6 +59,27 @@ def _start_parent_watchdog(parent_pid: int | None, sentinel: Path | None) -> Non
     threading.Thread(target=watch, daemon=True).start()
 
 
+def _maybe_inject_cuda_kit() -> None:
+    # Frozen builds are handled earlier by the pyi_rth_cuda_kit runtime hook
+    # (it must run before the funasr preload imports torch); this covers the
+    # unfrozen/dev entrypoint only.
+    if getattr(sys, "frozen", False):
+        return
+    kit_dir = os.environ.get("ASRBOX_CUDA_KIT_DIR", "").strip()
+    if not kit_dir:
+        return
+    path = Path(kit_dir)
+    torch_pkg = path / "torch"
+    if not (torch_pkg / "__init__.py").is_file():
+        print(f"ASRBOX_CUDA_KIT_DIR ignored (no torch package found): {path}", file=sys.stderr)
+        return
+    sys.path.insert(0, str(path))
+    torch_lib = torch_pkg / "lib"
+    if sys.platform == "win32" and torch_lib.is_dir():
+        os.add_dll_directory(str(torch_lib))
+    print(f"CUDA acceleration kit active: {path}", file=sys.stderr)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the ASRbox backend server")
     parser.add_argument("--host", default="127.0.0.1")
@@ -59,6 +96,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     multiprocessing.freeze_support()
+    _maybe_inject_cuda_kit()
     args = parse_args(argv)
     if args.version:
         print(__version__)

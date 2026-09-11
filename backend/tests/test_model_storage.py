@@ -4,8 +4,22 @@ import json
 from pathlib import Path
 import time
 
+import pytest
+
 from backend import config
 from backend.services import model_storage
+
+
+def _require_symlink_privilege(tmp_path: Path) -> None:
+    probe_target = tmp_path / ".symlink-probe-target"
+    probe_link = tmp_path / ".symlink-probe-link"
+    probe_target.mkdir(exist_ok=True)
+    try:
+        probe_link.symlink_to(probe_target, target_is_directory=True)
+    except OSError:
+        pytest.skip("symbolic link creation requires Developer Mode or admin rights on Windows")
+    finally:
+        probe_link.unlink(missing_ok=True)
 
 
 def _reset_environment(monkeypatch, data_dir: Path) -> None:
@@ -52,6 +66,7 @@ def test_inspection_does_not_create_unavailable_configured_root(tmp_path: Path, 
 
 def test_candidate_rejects_symbolic_link_components(tmp_path: Path, monkeypatch) -> None:
     _reset_environment(monkeypatch, tmp_path / "data")
+    _require_symlink_privilege(tmp_path)
     real = tmp_path / "real"
     real.mkdir()
     linked = tmp_path / "linked"
@@ -65,6 +80,7 @@ def test_candidate_rejects_symbolic_link_components(tmp_path: Path, monkeypatch)
 
 def test_candidate_rejects_symbolic_links_inside_managed_layout(tmp_path: Path, monkeypatch) -> None:
     _reset_environment(monkeypatch, tmp_path / "data")
+    _require_symlink_privilege(tmp_path)
     target = tmp_path / "target"
     outside = tmp_path / "outside"
     (target / "models").mkdir(parents=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -12,6 +13,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.models import TranscriptSegment, TranscriptionResult
+from backend.services.ffmpeg_tools import ToolStatus
+
+
+def _assert_process_gone(pid: int) -> None:
+    if os.name == "posix":
+        with pytest.raises(ProcessLookupError):
+            os.kill(pid, 0)
+        return
+    # Windows does not support os.kill(pid, 0); probe the handle instead.
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return
+    try:
+        assert kernel32.WaitForSingleObject(handle, 0) == 0  # WAIT_OBJECT_0 means exited
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def make_client(tmp_path: Path, *, inline_local: bool = True) -> TestClient:
@@ -43,6 +63,29 @@ def test_health_reports_ready_and_filesystem(tmp_path: Path) -> None:
         "uploads",
         "exports",
     }
+
+
+def test_health_gpu_available_follows_probe_cache(tmp_path: Path, monkeypatch) -> None:
+    import functools
+
+    from backend.services import platform as platform_service
+
+    probe_true = functools.lru_cache(maxsize=1)(lambda: {"torch_cuda_available": True})
+    probe_true()
+    monkeypatch.setattr(platform_service, "runtime_probe_snapshot", probe_true)
+    client = make_client(tmp_path)
+    assert client.get("/health").json()["gpu_available"] is True
+
+
+def test_health_gpu_available_conservative_without_probe_cache(tmp_path: Path, monkeypatch) -> None:
+    import functools
+
+    from backend.services import platform as platform_service
+
+    unpopulated = functools.lru_cache(maxsize=1)(lambda: {"torch_cuda_available": True})
+    monkeypatch.setattr(platform_service, "runtime_probe_snapshot", unpopulated)
+    client = make_client(tmp_path)
+    assert client.get("/health").json()["gpu_available"] is False
 
 
 def test_source_backend_keeps_root_metadata_and_dedicated_api_info(tmp_path: Path, monkeypatch) -> None:
@@ -848,13 +891,20 @@ def test_media_preprocess_generates_wav_metadata_and_rejects_unsupported_input(t
     def fake_probe(path: Path) -> dict:
         return {"duration_ms": 12340, "format": "mov,mp4", "audio_codec": "aac"}
 
-    def fake_run(command, capture_output, check, encoding, errors, timeout):
+    def fake_run(command, capture_output, check, encoding, errors, timeout, **_kwargs):
         commands.append(command)
         assert timeout > 0
         Path(command[-1]).write_bytes(b"wav")
 
     monkeypatch.setattr("backend.services.media.probe_media", fake_probe)
     monkeypatch.setattr("backend.services.media.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "backend.services.media.resolve_tools",
+        lambda **_kwargs: {
+            "ffprobe": ToolStatus(True, "ffprobe", "system", "ffprobe version test"),
+            "ffmpeg": ToolStatus(True, "ffmpeg", "system", "ffmpeg version test"),
+        },
+    )
     monkeypatch.setattr(
         "backend.services.tasks.transcribe_with_local_model",
         lambda model_name, audio_path, options: TranscriptionResult(
@@ -930,7 +980,9 @@ def test_local_model_task_returns_before_transcription_finishes_without_inventin
     elapsed = time.monotonic() - started_at
 
     assert response.status_code == 200
-    assert elapsed < 0.2
+    # The fake transcription blocks up to 1s, so a synchronous implementation
+    # would take at least that long; Windows thread startup needs more headroom.
+    assert elapsed < (0.2 if os.name == "posix" else 0.8)
     task_id = response.json()["id"]
     assert started.wait(timeout=1)
 
@@ -1338,6 +1390,9 @@ def test_local_queue_limits_concurrency_and_cancelled_queued_task_does_not_run(t
     second = client.post("/transcriptions", files={"file": ("two.wav", b"2", "audio/wav")}, data={"backend": "local", "model_name": "whisper-base"}).json()
 
     wait_for_task(client, first["id"], lambda item: item["status"] == "transcribing", "first running")
+    deadline = time.time() + 3
+    while not started and time.time() < deadline:
+        time.sleep(0.05)
     assert started == [first["id"]]
 
     cancelled = client.post(f"/tasks/{second['id']}/cancel")
@@ -1485,8 +1540,7 @@ else:
     completed = wait_for_task(client, second["id"], lambda item: item["status"] == "completed", "second completed")
     assert completed["text"] == "chunk 1 chunk 2"
     assert second_started.exists()
-    with pytest.raises(ProcessLookupError):
-        os.kill(first_pid, 0)
+    _assert_process_gone(first_pid)
     first_chunks = client.get(f"/tasks/{first['id']}/chunks").json()
     assert {chunk["status"] for chunk in first_chunks} <= {"completed", "cancelled"}
 
@@ -1525,7 +1579,11 @@ def test_retranscribe_resets_task_and_runs_again(tmp_path: Path, monkeypatch) ->
     assert [item["version_type"] for item in after_versions] == ["retranscribe", "transcribe"]
 
 
-def test_transcription_readiness_reports_local_and_provider_state(tmp_path: Path) -> None:
+def test_transcription_readiness_reports_local_and_provider_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "backend.routes.transcriptions.detect_runtime",
+        lambda: {"ffmpeg_available": True, "ffprobe_available": True, "warnings": []},
+    )
     client = make_client(tmp_path)
 
     missing = client.get("/transcriptions/readiness")
@@ -1922,10 +1980,12 @@ def test_desktop_path_preflight_does_not_disclose_paths_outside_desktop_mode(tmp
 
 def test_model_storage_cleanup_and_cancel_download(tmp_path: Path, monkeypatch) -> None:
     release = threading.Event()
+    started = threading.Event()
 
     def fake_download(config, model_dir: Path) -> str:
         model_dir.mkdir(parents=True, exist_ok=True)
         (model_dir / "partial.incomplete").write_text("partial")
+        started.set()
         release.wait(timeout=1)
         (model_dir / "model.bin").write_bytes(b"weights")
         return str(model_dir)
@@ -1938,11 +1998,17 @@ def test_model_storage_cleanup_and_cancel_download(tmp_path: Path, monkeypatch) 
     active = client.get("/models/active-downloads").json()
     assert any(item["model_name"] == "whisper-small" for item in active)
 
+    # Cancel must land while the download is genuinely in progress; otherwise the
+    # worker's cancellation checkpoint aborts before any partial file exists.
+    assert started.wait(timeout=5)
     cancel = client.post("/models/whisper-small/cancel-download")
     assert cancel.status_code == 200
     release.set()
-    time.sleep(0.1)
-    assert not (tmp_path / "models" / "whisper-small" / "model.json").exists()
+    model_dir = tmp_path / "models" / "whisper-small"
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not (model_dir / "model.bin").exists():
+        time.sleep(0.05)
+    assert not (model_dir / "model.json").exists()
 
     storage = client.get("/models/storage")
     assert storage.status_code == 200
@@ -2484,3 +2550,13 @@ def test_server_disables_xet_for_controllable_downloads(tmp_path: Path, monkeypa
 
     assert freeze_support_calls == [True]
     assert os.environ["HF_HUB_DISABLE_XET"] == "1"
+
+
+def test_pid_alive_detects_live_and_exited_processes() -> None:
+    from backend.server import _pid_alive
+
+    assert _pid_alive(os.getpid()) is True
+    assert _pid_alive(-1) is False
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait(timeout=30)
+    assert _pid_alive(proc.pid) is False

@@ -11,9 +11,27 @@ from backend import __version__, config
 from backend.models import DirectoryCheck, FilesystemHealthResponse, HealthResponse
 from backend.services.tasks import list_tasks
 from backend.services import model_storage
+from backend.services import platform as platform_service
 from backend.database.session import SessionLocal
 
 router = APIRouter()
+
+
+def _cached_gpu_available() -> bool:
+    """Report CUDA availability from the runtime probe cache only.
+
+    /health is polled during startup, so it must never trigger the (slow)
+    probe subprocess: an empty cache conservatively reports False rather than
+    promising GPU acceleration that was not verified.
+    """
+    snapshot = platform_service.runtime_probe_snapshot
+    cache_info = getattr(snapshot, "cache_info", None)
+    if cache_info is None or cache_info().currsize == 0:
+        return False
+    try:
+        return bool(snapshot().get("torch_cuda_available"))
+    except Exception:
+        return False
 
 
 @router.get("/api-info")
@@ -36,7 +54,7 @@ async def health():
         version=__version__,
         port=config.DEFAULT_PORT,
         backend_type="web-first",
-        gpu_available=False,
+        gpu_available=_cached_gpu_available(),
         active_tasks=active_tasks,
         data_dir=str(config.get_data_dir()),
         models_dir=str(config.get_models_dir()),

@@ -11,6 +11,13 @@ Current macOS arm64 binaries:
 - Version checked during vendoring: `8.1.2-https://www.martin-riedl.de`
 - Last reviewed: 2026-07-08
 
+Current Windows x64 binaries:
+
+- Source: gyan.dev FFmpeg builds (`ffmpeg-8.1.2-full_build`)
+- Download URL: `https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z`
+- Version checked during vendoring: `8.1.2-full_build-www.gyan.dev`
+- Last reviewed: 2026-09-10
+
 Expected layout:
 
 ```text
@@ -18,6 +25,9 @@ third_party/ffmpeg/
 |-- darwin-arm64/
 |   |-- ffmpeg
 |   `-- ffprobe
+|-- win32-x64/
+|   |-- ffmpeg.exe
+|   `-- ffprobe.exe
 |-- LICENSE.GPLv3
 |-- SOURCE.md
 |-- checksums.sha256
@@ -32,8 +42,8 @@ When replacing binaries:
 4. Update the version, source, URL, and review date in this file.
 5. Update `checksums.sha256` and `SOURCE.md`.
 6. Run `npm run verify:third-party`.
-7. Run `npm run build:desktop` and confirm the binaries and compliance files are bundled under `ASRbox.app/Contents/Resources/binaries/ffmpeg/`.
+7. Run `npm run build:desktop` and confirm the binaries and compliance files are bundled under the app's resources `binaries/ffmpeg/` directory.
 
-This build enables GPLv3 components. Keep the license and corresponding source
+Both builds enable GPLv3 components. Keep the license and corresponding source
 materials updated when replacing binaries. See `SOURCE.md` and
 `THIRD_PARTY_NOTICES.md`.

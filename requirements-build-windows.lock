@@ -1,0 +1,6 @@
+# Windows packaging additions; install together with requirements-windows.lock.
+# Kept in sync with requirements-build.lock (which targets the macOS runtime lock).
+-r requirements-windows.lock
+
+pyinstaller==6.21.0
+pyinstaller-hooks-contrib==2026.6

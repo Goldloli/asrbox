@@ -109,6 +109,12 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("GET", "/runtime/status"),
         ("GET", "/settings/asr"),
         ("PUT", "/settings/asr"),
+        ("GET", "/settings/cuda-acceleration"),
+        ("PUT", "/settings/cuda-acceleration"),
+        ("GET", "/settings/cuda-acceleration/download"),
+        ("POST", "/settings/cuda-acceleration/download"),
+        ("POST", "/settings/cuda-acceleration/download/cancel"),
+        ("DELETE", "/settings/cuda-acceleration/kit"),
         ("GET", "/settings/media-storage"),
         ("PUT", "/settings/media-storage"),
         ("POST", "/shutdown"),
@@ -327,6 +333,45 @@ def test_stable_event_types_match_api_freeze() -> None:
         "runtime.warning",
         "storage.warning",
     }
+
+
+def test_cuda_acceleration_contract_is_typed(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+    schema = client.app.openapi()
+    routes = schema["paths"]
+
+    status_ref = routes["/settings/cuda-acceleration"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert status_ref.endswith("CudaAccelerationStatusResponse")
+    update_ref = routes["/settings/cuda-acceleration"]["put"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert update_ref.endswith("CudaAccelerationStatusResponse")
+    delete_ref = routes["/settings/cuda-acceleration/kit"]["delete"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert delete_ref.endswith("CudaAccelerationStatusResponse")
+    for path, operation, code in (
+        ("/settings/cuda-acceleration/download", "post", "202"),
+        ("/settings/cuda-acceleration/download", "get", "200"),
+        ("/settings/cuda-acceleration/download/cancel", "post", "200"),
+    ):
+        ref = routes[path][operation]["responses"][code]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("CudaKitJobResponse")
+
+    schemas = schema["components"]["schemas"]
+    status_fields = schemas["CudaAccelerationStatusResponse"]["properties"]
+    assert {"enabled", "status", "reason", "supported", "gpu_detected", "kit", "probe", "job"} <= status_fields.keys()
+    assert set(status_fields["status"]["enum"]) == {"not_downloaded", "downloading", "ready", "enabled", "enable_failed", "invalidated"}
+    probe_fields = schemas["CudaKitProbeStatus"]["properties"]
+    assert {"state", "torch_cuda_available", "cuda_device_name", "torch_file"} <= probe_fields.keys()
+    assert set(probe_fields["state"]["enum"]) == {"pending", "ok", "failed"}
+    job_fields = schemas["CudaKitJobResponse"]["properties"]
+    assert {"id", "status", "phase", "current_part", "parts_total", "downloaded_bytes", "total_bytes", "error"} <= job_fields.keys()
+    assert set(job_fields["status"]["enum"]) == {"idle", "running", "completed", "failed", "cancelled"}
+    kit_fields = schemas["CudaKitInfo"]["properties"]
+    assert {"kit_version", "torch_version", "total_bytes"} <= kit_fields.keys()
+
+    response = client.get("/settings/cuda-acceleration")
+    assert response.status_code == 200
+    body = response.json()
+    assert {"enabled", "status", "reason", "supported", "kit", "probe", "job"} <= body.keys()
+    assert {"state", "torch_cuda_available", "cuda_device_name", "torch_file"} <= body["probe"].keys()
 
 
 def test_media_ingest_storage_contract_is_typed(tmp_path: Path) -> None:

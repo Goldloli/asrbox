@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Loader2, Play, PlugZap, RefreshCw, Settings, ShieldAlert, Square, Trash2 } from 'lucide-react';
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
-import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useTasksQuery } from '../lib/queries';
+import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useSettingsQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
 import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select, Tooltip, TooltipContent, TooltipTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
@@ -33,6 +33,7 @@ export function TranscribePage() {
   const toast = useToast();
   const desktopServer = useDesktopServerControl();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const defaultsDirtyRef = useRef({ backend: false, model: false, provider: false, language: false });
   const [files, setFiles] = useState<File[]>([]);
   const [desktopFiles, setDesktopFiles] = useState<DesktopMediaFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -45,6 +46,7 @@ export function TranscribePage() {
   const [dragActive, setDragActive] = useState(false);
 
   const readinessQuery = useReadinessQuery();
+  const settingsQuery = useSettingsQuery();
   const tasksQuery = useTasksQuery();
   const modelsQuery = useModelsQuery();
   const providersQuery = useProvidersQuery();
@@ -79,6 +81,16 @@ export function TranscribePage() {
       },
     });
   }, []);
+
+  useEffect(() => {
+    const settings = settingsQuery.data;
+    if (!settings) return;
+    const dirty = defaultsDirtyRef.current;
+    if (!dirty.backend) setBackend(settings.default_backend === 'provider' ? 'provider' : 'local');
+    if (!dirty.model && settings.default_backend !== 'provider' && settings.default_model_name) setModelName(settings.default_model_name);
+    if (!dirty.provider && settings.default_backend === 'provider' && settings.default_provider_id) setProviderId(settings.default_provider_id);
+    if (!dirty.language) setLanguage(normalizeLanguageValue(settings.default_language));
+  }, [settingsQuery.data]);
 
   useEffect(() => {
     const firstDownloaded = models.find((model) => model.downloaded && model.compatible !== false)?.model_name ?? models.find((model) => model.compatible !== false)?.model_name;
@@ -491,7 +503,10 @@ export function TranscribePage() {
           <Field label={t('transcribe.backend')}>
             <Select
               value={backend}
-              onValueChange={setBackend}
+              onValueChange={(value) => {
+                defaultsDirtyRef.current.backend = true;
+                setBackend(value);
+              }}
               options={[
                 { value: 'local', label: t('transcribe.localModel') },
                 { value: 'provider', label: t('transcribe.providerBackend') },
@@ -502,7 +517,10 @@ export function TranscribePage() {
             <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
               <Select
                 value={modelName}
-                onValueChange={setModelName}
+                onValueChange={(value) => {
+                  defaultsDirtyRef.current.model = true;
+                  setModelName(value);
+                }}
                 options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
                   value: model.model_name,
                   label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
@@ -514,7 +532,10 @@ export function TranscribePage() {
             <Field label={t('transcribe.provider')}>
               <Select
                 value={providerId || 'none'}
-                onValueChange={(value) => setProviderId(value === 'none' ? '' : value)}
+                onValueChange={(value) => {
+                  defaultsDirtyRef.current.provider = true;
+                  setProviderId(value === 'none' ? '' : value);
+                }}
                 options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
                   value: provider.id,
                   label: provider.name,
@@ -526,7 +547,10 @@ export function TranscribePage() {
           <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
             <Select
               value={language}
-              onValueChange={(value) => setLanguage(normalizeLanguageValue(value))}
+              onValueChange={(value) => {
+                defaultsDirtyRef.current.language = true;
+                setLanguage(normalizeLanguageValue(value));
+              }}
               options={languageOptions(locale)}
             />
           </Field>

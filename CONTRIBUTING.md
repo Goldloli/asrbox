@@ -39,7 +39,7 @@ docker compose up -d
 npm run test:docker
 ```
 
-Development needs ffmpeg and ffprobe. Use a system installation or the verified binaries in `third_party/ffmpeg/darwin-arm64/`.
+Development needs ffmpeg and ffprobe. Use a system installation or the verified binaries in `third_party/ffmpeg/`: macOS binaries are committed under `darwin-arm64/`; the Windows x64 executables exceed GitHub's file size limit and are fetched once with `scripts/fetch-ffmpeg-windows.sh` (pinned archive, SHA-256 verified).
 
 ## Branches and Commits
 

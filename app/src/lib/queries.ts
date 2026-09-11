@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './api';
 
 export const queryKeys = {
@@ -27,11 +27,12 @@ export const queryKeys = {
   translationVersion: (taskId: string, runId: string, versionId: number) => ['tasks', taskId, 'translation-runs', runId, 'versions', versionId] as const,
   settings: ['settings'] as const,
   mediaStorageSettings: ['settings', 'media-storage'] as const,
+  cudaAcceleration: ['settings', 'cuda-acceleration'] as const,
   runtime: ['runtime-status'] as const,
 };
 
-export function useHealthQuery() {
-  return useQuery({ queryKey: queryKeys.health, queryFn: () => apiClient.getHealth(), retry: 1, refetchInterval: 8000 });
+export function useHealthQuery(enabled = true) {
+  return useQuery({ queryKey: queryKeys.health, queryFn: () => apiClient.getHealth(), retry: 1, enabled, refetchInterval: 8000 });
 }
 
 export function useReadinessQuery() {
@@ -103,6 +104,56 @@ export function useSettingsQuery() {
 
 export function useMediaStorageSettingsQuery() {
   return useQuery({ queryKey: queryKeys.mediaStorageSettings, queryFn: () => apiClient.getMediaStorageSettings(), retry: 1 });
+}
+
+export function useCudaAccelerationQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.cudaAcceleration,
+    queryFn: () => apiClient.getCudaAcceleration(),
+    retry: 1,
+    enabled,
+    refetchInterval: (query) => (query.state.data?.job?.status === 'running' ? 750 : 15000),
+  });
+}
+
+export function useCudaAccelerationToggleMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => apiClient.updateCudaAcceleration({ enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+    },
+  });
+}
+
+export function useCudaKitDownloadMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.startCudaKitDownload(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+    },
+  });
+}
+
+export function useCudaKitDownloadCancelMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.cancelCudaKitDownload(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+    },
+  });
+}
+
+export function useCudaKitDeleteMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.deleteCudaKit(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+    },
+  });
 }
 
 export function useRuntimeQuery() {

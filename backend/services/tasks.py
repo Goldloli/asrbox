@@ -38,6 +38,7 @@ from backend.services import versions as version_service
 from backend.services.diarization import apply_diarization
 from backend.services.errors import ASRboxError
 from backend.services.media import prepare_media_for_asr, preflight_media, split_audio_chunks
+from backend.services.process_utils import no_window_kwargs
 from backend.services.task_transitions import task_transition_lock as _task_transition_lock
 from backend.services.transcribe import transcribe_with_local_model
 from backend.services.uploads import copy_local_path, save_upload
@@ -773,7 +774,7 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
             return ""
 
     try:
-        process = subprocess.Popen(_local_worker_command(request_path, result_path), stdout=subprocess.DEVNULL, stderr=stderr_file, text=True)
+        process = subprocess.Popen(_local_worker_command(request_path, result_path), stdout=subprocess.DEVNULL, stderr=stderr_file, text=True, **no_window_kwargs())
         while True:
             if task_runtime.is_cancelled(row.id):
                 _terminate_worker(process)

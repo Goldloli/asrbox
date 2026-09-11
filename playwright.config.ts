@@ -1,4 +1,15 @@
+import os from 'node:os';
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+
+const isWindows = process.platform === 'win32';
+const root = path.resolve(__dirname);
+const venvPython = isWindows
+  ? path.join(root, '.venv', 'Scripts', 'python.exe')
+  : path.join(root, '.venv', 'bin', 'python');
+const ffmpegDir = path.join(root, 'third_party', 'ffmpeg', isWindows ? 'win32-x64' : 'darwin-arm64');
+const ffmpegPath = path.join(ffmpegDir, isWindows ? 'ffmpeg.exe' : 'ffmpeg');
+const ffprobePath = path.join(ffmpegDir, isWindows ? 'ffprobe.exe' : 'ffprobe');
 
 export default defineConfig({
   testDir: './app/e2e',
@@ -14,7 +25,12 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'ASRBOX_DATA_DIR=/tmp/asrbox-playwright-data ASRBOX_FFMPEG_PATH=$PWD/third_party/ffmpeg/darwin-arm64/ffmpeg ASRBOX_FFPROBE_PATH=$PWD/third_party/ffmpeg/darwin-arm64/ffprobe .venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 17496',
+      command: `"${venvPython}" -m uvicorn backend.main:app --host 127.0.0.1 --port 17496`,
+      env: {
+        ASRBOX_DATA_DIR: path.join(os.tmpdir(), 'asrbox-playwright-data'),
+        ASRBOX_FFMPEG_PATH: ffmpegPath,
+        ASRBOX_FFPROBE_PATH: ffprobePath,
+      },
       url: 'http://127.0.0.1:17496/health',
       reuseExistingServer: false,
       timeout: 120_000,

@@ -77,6 +77,7 @@ function TaskCenterAppUpdate({
   channel: 'stable' | 'prerelease';
 }) {
   const { t } = useI18n();
+  const installerKind = useAppUpdateStore((state) => state.versionInfo.installerKind);
   const active = ['preparing', 'downloading', 'verifying', 'cancelling'].includes(download.status);
   const retry = () => {
     if (!download.version) return;
@@ -105,7 +106,7 @@ function TaskCenterAppUpdate({
         {download.status === 'completed' && (
           <>
             <Button size="sm" onClick={() => void desktopCapabilities.openDownloadedUpdate().catch(() => undefined)}>
-              {t('about.openInstaller')}
+              {installerKind === 'nsis' ? t('about.openInstallerNsis') : t('about.openInstaller')}
             </Button>
             <Button size="sm" variant="secondary" onClick={() => void desktopCapabilities.openUpdateFileLocation().catch(() => undefined)}>
               <FolderOpen className="size-4" />

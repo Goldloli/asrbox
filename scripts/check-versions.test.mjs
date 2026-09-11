@@ -51,7 +51,7 @@ async function fixture(version, backendVersion = version) {
   );
   await writeFile(
     path.join(root, `docs/releases/v${version}.md`),
-    `ASRbox \`v${version}\`\nhttps://github.com/Goldloli/asrbox/releases/download/v${version}/ASRbox_${version}_aarch64.dmg\n`,
+    `ASRbox \`v${version}\`\nhttps://github.com/Goldloli/asrbox/releases/download/v${version}/ASRbox_${version}_aarch64.dmg\nhttps://github.com/Goldloli/asrbox/releases/download/v${version}/ASRbox_${version}_x64-setup.exe\n`,
   );
   await writeFile(
     path.join(root, "web/vite.config.ts"),
@@ -116,4 +116,21 @@ test("release tag must be safe semver and match the application", () => {
   assert.equal(validateReleaseTag("v0.1.0-beta.1", "0.1.0-beta.1"), "v0.1.0-beta.1");
   assert.throws(() => validateReleaseTag("v0.1.0\nBAD=1", "0.1.0"), /Invalid release tag/);
   assert.throws(() => validateReleaseTag("v0.1.0", "0.1.0-beta.1"), /does not match/);
+});
+
+test("CUDA kit lock torch base version must match the Windows runtime lock", async () => {
+  const root = await fixture("0.1.0-beta.1");
+  await writeFile(path.join(root, "requirements-windows.lock"), "torch==2.11.0\n");
+  await writeFile(path.join(root, "requirements-windows-cuda.lock"), "torch==2.11.0+cu128\n");
+  assert.equal(await checkVersions(root), "0.1.0-beta.1");
+
+  const drifted = await fixture("0.1.0-beta.1");
+  await writeFile(path.join(drifted, "requirements-windows.lock"), "torch==2.12.0\n");
+  await writeFile(path.join(drifted, "requirements-windows-cuda.lock"), "torch==2.11.0+cu128\n");
+  await assert.rejects(checkVersions(drifted), /CUDA kit lock torch mismatch/);
+
+  const cpuBuild = await fixture("0.1.0-beta.1");
+  await writeFile(path.join(cpuBuild, "requirements-windows.lock"), "torch==2.11.0\n");
+  await writeFile(path.join(cpuBuild, "requirements-windows-cuda.lock"), "torch==2.11.0\n");
+  await assert.rejects(checkVersions(cpuBuild), /CUDA kit lock torch mismatch/);
 });

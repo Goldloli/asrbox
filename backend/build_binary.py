@@ -78,6 +78,8 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "--exclude-module",
         "torchcodec",
         "--runtime-hook",
+        str(root / "pyi_rth_cuda_kit.py"),
+        "--runtime-hook",
         str(root / "pyi_rth_numpy_torch.py"),
         "--runtime-hook",
         str(root / "pyi_rth_transformers_offline.py"),

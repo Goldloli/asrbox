@@ -8,15 +8,16 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.1.8`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.1.9`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
 | macOS 桌面端 | Apple Silicon，Tauri 2 + 内置 FastAPI sidecar |
+| Windows 桌面端 | Windows 10/11 x64，Tauri 2 + 内置 FastAPI sidecar，NSIS 安装包 |
 | Docker Web | Linux CPU 容器，网页与 API 同源，数据持久化到 `/data` |
-| Windows / Linux 原生桌面端 | 暂未提供 |
+| Linux 原生桌面端 | 暂未提供 |
 | 签名、公证、自动安装更新 | 暂未提供；桌面端支持应用内检查并下载更新，安装仍由用户完成 |
-| 模型权重 | 按需下载，不包含在 DMG 或 Docker 镜像中 |
+| 模型权重 | 按需下载，不包含在桌面安装包或 Docker 镜像中 |
 
 重要素材请保留原件，升级前先备份。Provider 密钥目前保存在本地 SQLite 数据库中，未接入系统钥匙串。Docker 默认只允许本机访问，不应直接暴露到公网。
 
@@ -32,8 +33,9 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
 - 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
 - 在“AI → 对话”中提问软件用法或绑定字幕内容，流式回答，历史会话本地持久化。
+- 在“设置 → 转写默认值”把常用本地模型或线上接口设为默认模型，并选定默认转写语言（含自动识别），新建转写时自动套用。
 
-**0.1.8 新增：** “AI”页新增“对话”助手——用已配置的 LLM 回答软件使用问题（内置由用户文档整理的离线知识库，关键词检索，不需要向量模型），或绑定一个已完成转写的任务后针对其当前版本字幕提问（总结、查找某句话及其时间位置）。回答打字机式流式呈现、可随时停止，会话与消息本地持久化；提示词注入防护与隐私边界与字幕核对一致。详见 [AI 对话指南](docs/ai-chat.md)。
+**0.1.9 新增：** Windows x64 桌面端——与 macOS 版同一套 Tauri 2 + 内置 FastAPI sidecar 架构，NSIS 安装包发布；后端测试套件在 Windows 全绿，应用内更新检查与校验下载同样适用于 Windows 安装包。NVIDIA 显卡用户可在"设置 → 显卡加速"开启可选的 CUDA 加速套件（按需下载约 2.6GB），本地转写最高提速约 10 倍；不开则保持 CPU。转写默认值新增默认模型设置：把常用本地模型或线上接口设为默认后，新建转写页会自动选中它，默认转写语言（含自动识别）同样自动套用。
 
 ### LLM 核验校对
 
@@ -80,13 +82,15 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 完整升级、备份、Ollama 连接、卸载和排障步骤见 [Docker 部署指南](docs/docker.md)。
 
-## macOS 桌面端
+## 桌面端
 
-从 [`v0.1.8` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.8) 下载 Apple Silicon DMG，并校验 `SHA256SUMS.txt`。
+从 [`v0.1.9` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.1.9) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
 
-桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把 DMG 下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
+桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把安装包下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 
-下载完成不等于自动安装。请先完成转写和模型下载等任务，正常退出 ASRbox，再打开 DMG 手动替换旧应用。Web 版只显示构建版本和 GitHub Releases 入口，不会把桌面安装包下载到服务器。
+下载完成不等于自动安装。请先完成转写和模型下载等任务，正常退出 ASRbox，再打开安装包手动替换旧应用。Web 版只显示构建版本和 GitHub Releases 入口，不会把桌面安装包下载到服务器。
+
+### macOS
 
 当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **“ASRbox.app”已损坏，无法打开**：
 
@@ -99,6 +103,12 @@ xattr -cr /Applications/ASRbox.app
 ```
 
 也可以在首次打开时右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。
+
+### Windows
+
+Windows 安装包未进行代码签名，运行时 SmartScreen 可能提示“Windows 已保护你的电脑”：点击“更多信息”→“仍要运行”即可。安装为当前用户安装，不需要管理员权限。
+
+**CUDA 加速（可选，仅 NVIDIA 显卡）：** 在“设置 → 显卡加速”页打开开关，应用会从当前版本对应的 GitHub Release 一次性下载约 2.6GB 的加速套件（torch 2.11.0+cu128），逐卷与逐文件 SHA-256 校验通过后自动安装并重启后端；之后本地模型转写使用 GPU，关闭开关即回退 CPU。套件安装后约占 4GB 磁盘，启用失败（如驱动过旧）会保持 CPU 并在设置页显示原因；应用升级后若套件与新版后端不匹配会标记“已失效”，按提示重新下载即可。macOS 版无此开关，继续使用既有的 Apple Silicon 加速路径。
 
 桌面端在 `127.0.0.1:17494` 启动内置后端，每次启动生成仅在内存中的 API token；退出应用会停止 sidecar。删除应用不会删除任务、模型或备份。
 
@@ -128,7 +138,8 @@ ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MO
 桌面数据默认位于：
 
 ```text
-~/Library/Application Support/com.goldloli.asrbox/
+macOS:   ~/Library/Application Support/com.goldloli.asrbox/
+Windows: %APPDATA%\com.goldloli.asrbox\
 ```
 
 Docker 数据统一位于容器 `/data`，由 `asrbox-data` volume 持久化。这里可能包含原始媒体、提取音频、字幕版本、导出、模型、日志和 Provider 密钥，备份时应按敏感数据处理。
@@ -139,13 +150,13 @@ Docker 数据统一位于容器 `/data`，由 `asrbox-data` volume 持久化。�
 
 ## 本地开发
 
-桌面开发目标使用 Bun `1.3.8`、Python `3.13`、Rust stable 和 macOS Apple Silicon；Docker 运行时使用独立的 Linux CPU 依赖锁。
+桌面开发目标使用 Bun `1.3.8`、Rust stable，支持 macOS Apple Silicon 与 Windows x64；Python 版本按平台固定：macOS 用 `3.13`（`requirements-dev.lock`），Windows 用 `3.14`（`requirements-windows.lock`，Windows 上 3.11/3.13 存在 asyncio proactor 断连污染问题，详见 `openspec/changes/windows-desktop-support/design.md` D2b）；Docker 运行时使用独立的 Linux CPU 依赖锁。
 
 ```bash
 bun install
 python -m venv .venv
-.venv/bin/python -m pip install pip==25.3
-.venv/bin/pip install -r requirements-dev.lock
+# macOS / Linux: .venv/bin/python -m pip install pip==25.3 && .venv/bin/pip install -r requirements-dev.lock
+# Windows:       .venv\Scripts\python.exe -m pip install pip==25.3 和 -r requirements-windows.lock
 npm run dev:server
 npm run dev:web
 ```
@@ -166,11 +177,12 @@ npm run check:open-source
 桌面安装包：
 
 ```bash
+# 先安装打包依赖（路径同上，区分 .venv/bin 与 .venv\Scripts）
 .venv/bin/pip install -r requirements-build.lock
 npm run build:desktop
 ```
 
-输出位于 `tauri/src-tauri/target/release/bundle/dmg/`。真实模型测试需要自行准备合法媒体和已下载模型，不属于默认 CI。
+macOS 输出位于 `tauri/src-tauri/target/release/bundle/dmg/`，Windows 输出位于 `tauri/src-tauri/target/release/bundle/nsis/`。真实模型测试需要自行准备合法媒体和已下载模型，不属于默认 CI。
 
 ## 项目结构
 
@@ -178,7 +190,7 @@ npm run build:desktop
 app/                 React 路由、组件、状态和共享 UI
 web/                 Vite Web 入口
 backend/             FastAPI、任务、ASR、LLM、版本、存储和导出
-tauri/               macOS 桌面壳与 sidecar 生命周期
+tauri/               macOS / Windows 桌面壳与 sidecar 生命周期
 Dockerfile           Linux CPU 单容器构建
 compose.yaml         持久化和网络部署入口
 scripts/             构建、测试、审计和发布门禁

@@ -20,6 +20,7 @@ import {
 } from '../../lib/desktopCapabilities';
 import { formatBytes, formatDate, formatPercent } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
+import { useCudaAccelerationQuery, useHealthQuery } from '../../lib/queries';
 import {
   cancelAppUpdateDownload,
   checkForAppUpdate,
@@ -48,6 +49,11 @@ export function AboutSettings() {
   const checkError = useAppUpdateStore((state) => state.checkError);
   const download = useAppUpdateStore((state) => state.download);
   const isDesktop = desktopCapabilities.canManageAppUpdates;
+  const isWindowsDesktop = isDesktop && versionInfo.target === 'Windows';
+  const cudaQuery = useCudaAccelerationQuery(isWindowsDesktop);
+  const healthQuery = useHealthQuery(isWindowsDesktop);
+  const cudaAcceleration = cudaQuery.data;
+  const cudaActive = cudaAcceleration?.status === 'enabled' && healthQuery.data?.gpu_available === true;
   const release = checkResult?.release;
   const hasUpdate = Boolean(checkResult?.updateAvailable && release);
   const downloadActive = activeDownloadStatuses.has(download.status);
@@ -84,6 +90,15 @@ export function AboutSettings() {
                 <Badge>{isDesktop ? t('about.desktopRuntime') : t('about.webRuntime')}</Badge>
                 {versionInfo.target.toLocaleLowerCase() !== (isDesktop ? 'desktop' : 'web') && (
                   <Badge>{versionInfo.target}</Badge>
+                )}
+                {isWindowsDesktop && cudaAcceleration && (
+                  <Badge tone={cudaActive ? 'success' : 'neutral'}>
+                    {cudaActive
+                      ? t('about.cudaEnabled', { device: cudaAcceleration.probe.cuda_device_name ?? 'GPU' })
+                      : cudaAcceleration.supported
+                        ? t('about.cudaNotEnabled')
+                        : t('about.cudaUnavailable')}
+                  </Badge>
                 )}
               </div>
             </div>
@@ -188,7 +203,7 @@ export function AboutSettings() {
                   <ShieldAlert className="mt-0.5 size-5 shrink-0 text-app-accent" />
                   <div>
                     <h3 className="text-sm font-semibold text-app">{t('about.unsignedTitle')}</h3>
-                    <p className="mt-1 text-sm leading-6 text-app-muted">{t('about.unsignedDescription')}</p>
+                    <p className="mt-1 text-sm leading-6 text-app-muted">{versionInfo.installerKind === 'nsis' ? t('about.unsignedDescriptionWindows') : t('about.unsignedDescription')}</p>
                     <Button className="mt-3" size="sm" variant="secondary" onClick={() => openLink('troubleshooting')}>
                       {t('about.installHelp')}
                       <ExternalLink className="size-3.5" />
@@ -357,6 +372,7 @@ function DownloadCard({
 }) {
   const { t } = useI18n();
   const download = useAppUpdateStore((state) => state.download);
+  const installerKind = useAppUpdateStore((state) => state.versionInfo.installerKind);
   const active = activeDownloadStatuses.has(download.status);
   const description = [
     formatBytes(download.downloadedBytes),
@@ -401,7 +417,7 @@ function DownloadCard({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={onOpen}>{t('about.openInstaller')}</Button>
+            <Button size="sm" onClick={onOpen}>{installerKind === 'nsis' ? t('about.openInstallerNsis') : t('about.openInstaller')}</Button>
             <Button size="sm" variant="secondary" onClick={onOpenLocation}>
               <FolderOpen className="size-4" />
               {t('about.openFileLocation')}

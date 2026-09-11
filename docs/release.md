@@ -1,8 +1,8 @@
 # Release Process
 
-ASRbox currently publishes macOS Apple Silicon desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Windows/Linux desktop packages, Intel macOS, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.8`. The desktop app can check GitHub Releases and download a verified DMG, but the user must quit and replace the application manually.
+ASRbox currently publishes macOS Apple Silicon and Windows x64 desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Linux desktop packages, Intel macOS, Windows arm64, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.9`. The desktop app can check GitHub Releases and download a verified installer (DMG on macOS, NSIS executable on Windows), but the user must quit and replace the application manually.
 
-Current release: [`v0.1.8`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.8). The Apple Silicon DMG is available from the Release assets and is not bundled with model weights.
+Current release: [`v0.1.9`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.9). The Apple Silicon DMG and the Windows x64 NSIS installer are available from the Release assets and are not bundled with model weights.
 
 ## Version Sources
 
@@ -14,7 +14,7 @@ These values must match:
 - `Dockerfile`, `compose.yaml`, and `.env.example` defaults.
 - App/Web/Tauri workspace entries in `bun.lock` and the ASRbox package entry in `Cargo.lock`.
 - Current-version and Release references in both README files and this guide.
-- `docs/releases/v<version>.md`, including the matching tag and DMG filename.
+- `docs/releases/v<version>.md`, including the matching tag, DMG filename, and NSIS installer filename.
 
 `npm run check:versions` enforces the list above. Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
 
@@ -52,7 +52,7 @@ Use an absolute, tag-pinned raw GitHub URL for screenshots or GIFs so the media 
 ![ASRbox demo](https://raw.githubusercontent.com/Goldloli/asrbox/<tag>/assets/asrbox-demo.gif)
 ```
 
-Keep the notes useful to a downloader: supported platform, direct DMG/checksum links, installation warning, highlights, verification evidence, known limitations, data location, and the full comparison link.
+Keep the notes useful to a downloader: supported platforms, direct DMG/NSIS/checksum links, installation warnings, highlights, verification evidence, known limitations, data location, and the full comparison link.
 
 ## Create the Release
 
@@ -69,15 +69,16 @@ Merging `main` alone does not create a release. Do not tag until the intended co
 
 ## Workflow Output
 
-The Release workflow builds and publishes:
+The Release workflow builds the macOS DMG and the Windows NSIS installer in parallel jobs, then a publish job merges both asset sets, regenerates the combined `SHA256SUMS.txt`, verifies the full asset set, and publishes:
 
 ```text
 ASRbox_0.1.0-beta.1_aarch64.dmg
+ASRbox_0.1.0-beta.1_x64-setup.exe
 ASRbox-ffmpeg-source-8.1.2.tar.gz
 SHA256SUMS.txt
 ```
 
-The DMG contains the Tauri app, frozen FastAPI sidecar, and ffmpeg/ffprobe. It does not contain ASR model weights.
+The installers contain the Tauri app, frozen FastAPI sidecar, and ffmpeg/ffprobe. They do not contain ASR model weights.
 
 The workflow also builds and smoke-tests `asrbox:local` from the tag. That image is verification evidence only and is not pushed to GHCR or attached to the GitHub Release. Publishing a container image requires a separate approved change, immutable tags/digests, architecture policy, and third-party package-license review.
 
@@ -86,6 +87,7 @@ Local build output is normally:
 ```text
 tauri/src-tauri/target/release/bundle/macos/ASRbox.app
 tauri/src-tauri/target/release/bundle/dmg/ASRbox_0.1.0-beta.1_aarch64.dmg
+tauri/src-tauri/target/release/bundle/nsis/ASRbox_0.1.0-beta.1_x64-setup.exe
 ```
 
 Local Docker packaging is the tagged image in the Docker engine:
@@ -100,9 +102,9 @@ npm run test:docker
 
 Before publishing or immediately after downloading the Release assets:
 
-1. Verify `SHA256SUMS.txt` against the DMG and FFmpeg source archive.
-2. Run `hdiutil verify` on the DMG.
-3. Copy the app to a clean location and confirm the expected unsigned-app warning.
+1. Verify `SHA256SUMS.txt` against the DMG, the NSIS installer, and the FFmpeg source archive.
+2. Run `hdiutil verify` on the DMG (macOS).
+3. Copy the app to a clean location and confirm the expected unsigned-app warning (Gatekeeper on macOS, SmartScreen on Windows).
 4. Launch with no manually running backend and wait for backend health.
 5. Confirm runtime diagnostics find bundled ffmpeg and ffprobe.
 6. Preflight a real MP4.
@@ -110,16 +112,16 @@ Before publishing or immediately after downloading the Release assets:
 8. Export TXT, SRT, VTT, ASS, JSON, and Markdown.
 9. Quit and confirm the backend releases port `17494`.
 10. From Settings → About, verify stable/prerelease selection, manual checking, the update-notification controls, and the expected new-version/no-update/error states.
-11. For a release newer than the test build, download the DMG in-app, verify progress/cancel/retry, confirm the final file matches `SHA256SUMS.txt`, and confirm “Open DMG” and “Open file location” target the verified file.
+11. For a release newer than the test build, download the installer in-app, verify progress/cancel/retry, confirm the final file matches `SHA256SUMS.txt`, and confirm “Open installer” and “Open file location” target the verified file.
 12. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
 
 ## Release Page Notes
 
 Release notes must state:
 
-- macOS Apple Silicon only.
+- Desktop platforms: macOS Apple Silicon and Windows x64.
 - Prerelease status.
-- Unsigned and unnotarized package.
+- Unsigned package (unnotarized on macOS, no Authenticode signature on Windows).
 - Checksum verification instructions.
 - In-app checking and download are optional conveniences; replacement remains manual and the Web build only links to Releases.
 - Models download separately and can require substantial disk and memory.

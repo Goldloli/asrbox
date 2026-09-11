@@ -35,3 +35,6 @@ tauri/src-tauri/target/
 # Kimi Code CLI session data
 .kimi-code/
 .playwright-mcp/
+
+# Windows ffmpeg binaries exceed GitHub's 100MB limit; fetched on demand by scripts/fetch-ffmpeg-windows.sh
+/third_party/ffmpeg/win32-x64/*.exe

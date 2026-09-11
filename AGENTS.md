@@ -105,6 +105,7 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - 新增随应用分发的数据文件（如 `backend/data/` 下的知识库）时，必须同步：`.gitignore` 反排除（仓库根 `data/` 规则会误伤）、`backend/build_binary.py` 的 `--add-data`、`_MEIPASS` 冻结路径解析，并覆盖 frozen 路径测试与打包静态断言。
 - `weiui` Select 的 option value 不允许空字符串（Radix 会在渲染时抛错导致下拉无法打开）；"不绑定"等空态选项必须使用哨兵值（如 `__none__`）。
 - 新增 Tauri 网络或文件系统能力时，不得让 WebView 向特权 command 传入并决定任意 URL、仓库或目标路径；应由 Rust 侧解析并校验可信来源、资源名称和文件目标，同时覆盖允许与拒绝路径测试，并保持 Web runtime 显式降级。
+- Windows 桌面端全程不得弹出控制台窗口：发布壳保持 `windows_subsystem = "windows"`（GUI 子系统）；后端新增子进程（runtime probe、转写 worker、ffmpeg/ffprobe、GPU 探测等）一律经 `backend/services/process_utils.py` 以 `CREATE_NO_WINDOW` 创建，不得直接裸调 `subprocess`/`Popen`。
 - 除非使用经过批准且许可合规的 fixture，否则用户媒体、字幕、模型、数据库、备份和诊断不得进入仓库或发布包。
 
 对于可选或容易失败的功能，应优先采用增量、隔离的行为。除非已经批准的 spec 明确修改了相关 contract，否则新的后处理能力不得让成功转写依赖外部服务。
@@ -126,7 +127,9 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 
 依赖与生成文件规则：
 
-- Python 依赖变更从适当的 `requirements-*.in` 文件开始，并包含重新生成的 lock file；不要只手动编辑 `requirements.txt`。
+- Python 依赖变更从适当的 `requirements-*.in` 文件开始，并包含重新生成的 lock file；不要只手动编辑 `requirements.txt`。macOS 运行时使用 `requirements-runtime.lock`（Apple Silicon + Python 3.13 快照），Windows 使用独立的 `requirements-windows.lock` 快照（runtime+dev 合一，从通过全量测试的 Windows + Python 3.14 环境冻结；3.11/3.13 的 Windows proactor 在取消流式请求后会污染后续连接，3.14 行为与 POSIX 一致），两者保持各自平台可复现。
+- 脚本与 npm 命令解析项目 Python 一律使用 `scripts/venv-python.mjs`（Windows 解析 `.venv/Scripts/python.exe`，POSIX 解析 `.venv/bin/python`）；不得硬编码任一平台的 venv 路径。
+- `requirements-windows-cuda.lock` 是 Windows CUDA 加速套件的独立锁：只为 `scripts/build-cuda-kit.py` 的套件构建服务（`pip --target` 安装 cu128 torch 树后裁剪为仅 torch），不进入应用运行环境；其 torch 基线版本必须与 `requirements-windows.lock` 一致（`check-versions.mjs` 强制），其余共享包 pin 保持一致，torch bump 时从干净 Windows + Python 3.14 venv 重新 freeze 并重建套件（Release 的 `cuda-kit` job 自动完成）。
 - 前端依赖变更应更新 `bun.lock` 并运行依赖审计。
 - vendored binary 变更应更新 checksum、来源记录、license 和 notice。
 - 绝不提交 `.venv/`、`node_modules/`、cache、model weight、用户数据、构建产物、Tauri `target/`、PyInstaller 产物、DMG、凭据或签名数据。
@@ -146,7 +149,7 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 
 合并代码变更前，应运行 `npm run check:open-source`，除非该变更仅涉及文档，或当前环境无法支持该门禁。合并前 CI 必须通过。手动验证应覆盖发生变化的工作流和相邻风险；完整的手动产品回归属于 beta 或 release 验证，不是每个小变更都必须执行。
 
-绝不能仅为了让变更通过，而削弱、跳过、删除或重写现有测试。如果某项检查无法运行，应准确说明哪些内容未验证以及原因。
+绝不能仅为了让变更通过，而削弱、跳过、删除或重写现有测试。如果某项检查无法运行，应准确说明哪些内容未验证以及原因。平台差异（路径、socket 错误码、符号链接权限、进程退出探测、计时预算等）用平台分支 fixture 或能力探测表达，断言语义在两平台保持一致——Windows 后端套件与 macOS 跑同一套断言。
 
 ## 完成标准
 

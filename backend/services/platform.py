@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.services.ffmpeg_tools import resolve_tools
+from backend.services.process_utils import no_window_kwargs
 
 RUNTIME_PROBE_CHILD_ENV = "ASRBOX_RUNTIME_PROBE_CHILD"
 RUNTIME_PROBE_TIMEOUT_SECONDS = 180
@@ -110,12 +111,16 @@ def detect_runtime_in_process() -> dict[str, Any]:
     torch_available = module_available("torch")
     torch_cuda_available = False
     torch_mps_available = False
+    torch_file = None
+    torch_cuda_version = None
     cuda_device_name = None
     cuda_capability = None
     if torch_available:
         try:
             import torch
 
+            torch_file = getattr(torch, "__file__", None)
+            torch_cuda_version = getattr(torch.version, "cuda", None)
             torch_cuda_available = bool(torch.cuda.is_available())
             if torch_cuda_available:
                 cuda_device_name = torch.cuda.get_device_name(0)
@@ -180,6 +185,8 @@ def detect_runtime_in_process() -> dict[str, Any]:
         "torch_available": torch_available,
         "torch_cuda_available": torch_cuda_available,
         "torch_mps_available": torch_mps_available,
+        "torch_file": torch_file,
+        "torch_cuda_version": torch_cuda_version,
         "cuda_device_name": cuda_device_name,
         "cuda_capability": cuda_capability,
         "ctranslate2_available": module_available("ctranslate2"),
@@ -226,6 +233,7 @@ def runtime_probe_snapshot() -> dict[str, Any]:
             timeout=RUNTIME_PROBE_TIMEOUT_SECONDS,
             cwd=Path(__file__).resolve().parents[2],
             env=probe_env,
+            **no_window_kwargs(),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return _failed_runtime_probe(f"{type(exc).__name__}: {exc}")
@@ -298,6 +306,8 @@ def _failed_runtime_probe(error: str) -> dict[str, Any]:
         "torch_available": False,
         "torch_cuda_available": False,
         "torch_mps_available": False,
+        "torch_file": None,
+        "torch_cuda_version": None,
         "cuda_device_name": None,
         "cuda_capability": None,
         "ctranslate2_available": False,

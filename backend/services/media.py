@@ -9,6 +9,7 @@ from pathlib import Path
 
 from backend.services.errors import ASRboxError
 from backend.services.ffmpeg_tools import resolve_tools
+from backend.services.process_utils import no_window_kwargs
 
 SUPPORTED_MEDIA_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 DEFAULT_PROBE_TIMEOUT_SECONDS = 30
@@ -66,6 +67,7 @@ def probe_media(path: Path) -> dict:
             encoding="utf-8",
             errors="replace",
             timeout=_configured_timeout(DEFAULT_PROBE_TIMEOUT_SECONDS),
+            **no_window_kwargs(),
         )
     except FileNotFoundError as exc:
         raise ASRboxError("FFPROBE_FAILED", "ffprobe is required to inspect media files", stage="preprocessing", command=" ".join(command)) from exc
@@ -152,6 +154,7 @@ def prepare_media_for_asr(path: Path, *, output_dir: Path | None = None, output_
             encoding="utf-8",
             errors="replace",
             timeout=_media_timeout(metadata.get("duration_ms")),
+            **no_window_kwargs(),
         )
     except FileNotFoundError as exc:
         raise ASRboxError("FFMPEG_FAILED", "ffmpeg is required to extract audio from media files", stage="preprocessing", command=" ".join(command)) from exc
@@ -189,6 +192,7 @@ def analyze_audio_quality(path: Path) -> dict:
             encoding="utf-8",
             errors="replace",
             timeout=_media_timeout(),
+            **no_window_kwargs(),
         )
     except FileNotFoundError:
         return {"warnings": ["ffmpeg is not available for volume analysis"]}
@@ -285,6 +289,7 @@ def split_audio_chunks(
                     encoding="utf-8",
                     errors="replace",
                     timeout=_media_timeout(end_ms - start_ms),
+                    **no_window_kwargs(),
                 )
             except FileNotFoundError as exc:
                 raise ASRboxError("FFMPEG_FAILED", "ffmpeg is required to split long media files", stage="chunking", command=" ".join(command)) from exc

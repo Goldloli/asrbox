@@ -4,7 +4,7 @@ ASRbox uses separate GitHub Actions workflows for pull-request/main checks and r
 
 ## CI Workflow
 
-`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main`. macOS validates the desktop/source stack; Ubuntu validates the Docker build and deployment path.
+`.github/workflows/ci.yml` runs for pushes and pull requests targeting `main`. macOS validates the desktop/source stack; Windows validates the backend suite; Ubuntu validates the Docker build and deployment path.
 
 It performs:
 
@@ -30,6 +30,8 @@ The Ubuntu Docker job:
 5. Runs Playwright against the container at desktop and mobile widths and confirms same-origin requests and session-only token storage.
 
 CI uses the vendored Apple Silicon ffmpeg and ffprobe paths for backend tests. It does not download large ASR models or run private real-media fixtures.
+
+The Windows job (`backend-windows`) runs the backend test suite against the vendored Windows ffmpeg/ffprobe on `windows-latest` (fetched at job start by `scripts/fetch-ffmpeg-windows.sh` — the executables exceed GitHub's 100MB file limit and are not committed), keeping the Windows desktop target regression-covered without duplicating the frontend and e2e gates. Windows jobs use `PYTHON_VERSION_WINDOWS` (3.14 — 3.11/3.13 on Windows exhibit asyncio proactor disconnect poisoning that hangs requests after a cancelled stream; macOS stays on `PYTHON_VERSION` 3.13) and install the dedicated `requirements-windows.lock` snapshot (the runtime lock is a macOS Apple Silicon snapshot whose `editdistance` transitive dependency has no Windows wheel for Python 3.13+); the Release `windows-x64` job adds `requirements-build-windows.lock` for PyInstaller.
 
 ## Local Repository Gate
 
@@ -77,11 +79,12 @@ In addition to the CI-class checks, Release:
 
 - Installs build-lock dependencies.
 - Freezes and packages the backend sidecar.
-- Builds the macOS Apple Silicon DMG.
-- Smoke-tests the frozen backend.
-- Creates the FFmpeg source archive required by the bundled GPL build.
-- Generates and validates `SHA256SUMS.txt`.
-- Publishes the DMG, FFmpeg source archive, and checksums to GitHub Releases.
+- Builds the macOS Apple Silicon DMG and, in a parallel `windows-x64` job, the Windows NSIS installer.
+- Builds the optional Windows CUDA acceleration kit in a parallel `cuda-kit` job: installs the pinned cu128 torch tree from `requirements-windows-cuda.lock` via `scripts/build-cuda-kit.py`, replays the install path with `--verify-parts` (concat the byte-range parts, check the zip hash, extract, per-file SHA-256), and uploads the parts plus `cuda-kit-manifest.json`. The kit lock must keep the same torch base version as `requirements-windows.lock`; `check-versions.mjs` rejects drift.
+- Smoke-tests the frozen backend on both platforms.
+- Creates the FFmpeg source archive required by the bundled GPL builds.
+- Merges both platform asset sets and the CUDA kit checksums, regenerates a combined `SHA256SUMS.txt`, and validates the full asset set in a final publish job.
+- Publishes the DMG, NSIS installer, CUDA kit parts and manifest, FFmpeg source archive, and checksums to GitHub Releases.
 
 Release also rebuilds and smoke-tests the Docker deployment, but the current workflow does not publish an image to a registry. Docker users build the tagged source locally.
 

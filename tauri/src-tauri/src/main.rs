@@ -1,3 +1,7 @@
+// Keep release builds GUI-only on Windows (no stray console window); debug
+// builds retain the console for logs.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -135,6 +139,7 @@ async fn start_server(
         &parent_pid,
     ];
     let mut server_envs = ffmpeg_env(&app);
+    server_envs.extend(cuda_kit_env(&app));
     server_envs.push(("ASRBOX_API_TOKEN".to_string(), api_token.clone()));
     server_envs.push(("ASRBOX_DESKTOP_MODE".to_string(), "1".to_string()));
 
@@ -144,9 +149,13 @@ async fn start_server(
             .parent()
             .and_then(|path| path.parent())
             .map(PathBuf::from);
-        let python = project_root
-            .as_ref()
-            .map(|root| root.join(".venv").join("bin").join("python"));
+        let python = project_root.as_ref().map(|root| {
+            if cfg!(windows) {
+                root.join(".venv").join("Scripts").join("python.exe")
+            } else {
+                root.join(".venv").join("bin").join("python")
+            }
+        });
 
         if let (Some(root), Some(python)) = (project_root, python) {
             if python.exists() {
@@ -671,6 +680,41 @@ fn ffmpeg_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
     Vec::new()
 }
 
+fn cuda_kit_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
+    // CUDA acceleration is Windows-only; other platforms must never see
+    // ASRBOX_CUDA_KIT_DIR so their torch resolution stays untouched.
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    match app.path().app_data_dir() {
+        Ok(data_dir) => cuda_kit_env_for(&data_dir),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn cuda_kit_env_for(data_dir: &Path) -> Vec<(String, String)> {
+    // The backend owns config.json under its data dir (= app_data_dir in
+    // desktop mode); the kit path is derived here exclusively from that root —
+    // the WebView never supplies a path.
+    let kit_root = data_dir.join("runtime").join("cuda-kit");
+    let enabled = std::fs::read_to_string(kit_root.join("config.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|config| config.get("enabled")?.as_bool())
+        .unwrap_or(false);
+    if !enabled {
+        return Vec::new();
+    }
+    let kit_dir = kit_root.join("kit");
+    if !kit_dir.join("torch").join("__init__.py").is_file() {
+        return Vec::new();
+    }
+    vec![(
+        "ASRBOX_CUDA_KIT_DIR".to_string(),
+        kit_dir.to_string_lossy().to_string(),
+    )]
+}
+
 fn bundled_path_env(dir: &std::path::Path) -> String {
     let mut paths = vec![dir.to_path_buf()];
     if let Some(existing) = env::var_os("PATH") {
@@ -981,6 +1025,46 @@ mod tests {
         let missing = base.join("does-not-exist");
         let error = resolve_open_target(&missing).unwrap_err();
         assert!(error.contains("does not exist"), "{error}");
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn cuda_kit_env_injects_for_enabled_complete_kit() {
+        let base = temp_dir("cuda-kit-allow");
+        let kit_root = base.join("runtime").join("cuda-kit");
+        let kit_dir = kit_root.join("kit");
+        std::fs::create_dir_all(kit_dir.join("torch")).unwrap();
+        std::fs::write(kit_dir.join("torch").join("__init__.py"), b"").unwrap();
+        std::fs::write(kit_root.join("config.json"), r#"{"enabled": true}"#).unwrap();
+        assert_eq!(
+            cuda_kit_env_for(&base),
+            vec![(
+                "ASRBOX_CUDA_KIT_DIR".to_string(),
+                kit_dir.to_string_lossy().to_string()
+            )]
+        );
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn cuda_kit_env_denies_disabled_or_incomplete_kit() {
+        let base = temp_dir("cuda-kit-deny");
+        // no config file at all
+        assert!(cuda_kit_env_for(&base).is_empty());
+        let kit_root = base.join("runtime").join("cuda-kit");
+        std::fs::create_dir_all(kit_root.join("kit")).unwrap();
+        // explicitly disabled
+        std::fs::write(kit_root.join("config.json"), r#"{"enabled": false}"#).unwrap();
+        assert!(cuda_kit_env_for(&base).is_empty());
+        // malformed config
+        std::fs::write(kit_root.join("config.json"), b"not json").unwrap();
+        assert!(cuda_kit_env_for(&base).is_empty());
+        // enabled but the kit tree is missing entirely
+        std::fs::write(kit_root.join("config.json"), r#"{"enabled": true}"#).unwrap();
+        assert!(cuda_kit_env_for(&base).is_empty());
+        // enabled, torch directory present but __init__.py missing
+        std::fs::create_dir_all(kit_root.join("kit").join("torch")).unwrap();
+        assert!(cuda_kit_env_for(&base).is_empty());
         std::fs::remove_dir_all(&base).ok();
     }
 }

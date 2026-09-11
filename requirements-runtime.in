@@ -14,7 +14,7 @@ moss-transcribe-diarize @ git+https://github.com/OpenMOSS/MOSS-Transcribe-Diariz
 accelerate
 faster-whisper
 funasr
-mlx-whisper
+mlx-whisper; sys_platform == "darwin"
 pyannote.audio
 opencc-python-reimplemented
 sse-starlette

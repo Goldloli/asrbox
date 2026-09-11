@@ -79,9 +79,12 @@ export async function checkVersions(root) {
     );
     const expectedTag = `v${expected}`;
     const expectedDmg = `ASRbox_${expected}_aarch64.dmg`;
+    const expectedNsis = `ASRbox_${expected}_x64-setup.exe`;
     versions.set(
       "release notes",
-      releaseNotes?.includes(expectedTag) && releaseNotes.includes(expectedDmg)
+      releaseNotes?.includes(expectedTag)
+        && releaseNotes.includes(expectedDmg)
+        && releaseNotes.includes(expectedNsis)
         ? expected
         : undefined,
     );
@@ -99,7 +102,23 @@ export async function checkVersions(root) {
     const details = [...versions].map(([file, version]) => `${file}: ${version ?? "missing"}`).join("\n");
     throw new Error(`Version mismatch:\n${details}`);
   }
+  await checkCudaKitLockParity(root);
   return expected;
+}
+
+async function checkCudaKitLockParity(root) {
+  const cpuLock = await readOptional(path.join(root, "requirements-windows.lock"));
+  const cudaLock = await readOptional(path.join(root, "requirements-windows-cuda.lock"));
+  if (!cpuLock || !cudaLock) {
+    return;
+  }
+  const cpu = cpuLock.match(/^torch==([^\s+]+)\s*$/m)?.[1];
+  const cuda = cudaLock.match(/^torch==([^\s+]+)\+cu(\d+)\s*$/m);
+  if (!cpu || !cuda || cuda[1] !== cpu) {
+    throw new Error(
+      `CUDA kit lock torch mismatch: requirements-windows.lock torch==${cpu ?? "missing"} must share the base version of requirements-windows-cuda.lock ${cuda ? `torch==${cuda[1]}+cu${cuda[2]}` : "(expected torch==<base>+cuXXX)"}`,
+    );
+  }
 }
 
 export function validateReleaseTag(tag, version) {

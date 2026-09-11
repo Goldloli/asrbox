@@ -17,6 +17,7 @@ permissions:
 env:
   BUN_VERSION: "1.3.8"
   PYTHON_VERSION: "3.13"
+  PYTHON_VERSION_WINDOWS: "3.14"
 
 jobs:
   docker:
@@ -74,8 +75,6 @@ jobs:
           node scripts/check-versions.mjs --tag "$INPUT_TAG"
           RELEASE_NOTES_PATH="docs/releases/${INPUT_TAG}.md"
           test -f "$RELEASE_NOTES_PATH" || { echo "Missing release notes: $RELEASE_NOTES_PATH"; exit 1; }
-          printf 'RELEASE_TAG=%s\n' "$INPUT_TAG" >> "$GITHUB_ENV"
-          printf 'RELEASE_NOTES_PATH=%s\n' "$RELEASE_NOTES_PATH" >> "$GITHUB_ENV"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -153,7 +152,186 @@ jobs:
           mkdir -p release-assets
           cp tauri/src-tauri/target/release/bundle/dmg/ASRbox_*.dmg release-assets/
           ./scripts/prepare-ffmpeg-source.sh release-assets
-          (cd release-assets && shasum -a 256 ./*.dmg ASRbox-ffmpeg-source-8.1.2.tar.gz > SHA256SUMS.txt)
+          (cd release-assets && shasum -a 256 ./*.dmg ASRbox-ffmpeg-source-8.1.2.tar.gz > SHA256SUMS.macos.txt)
+          ls -lh release-assets
+
+      - name: Upload macOS release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-macos
+          path: release-assets/*
+          if-no-files-found: error
+
+  windows-x64:
+    name: Build Windows x64 NSIS installer
+    needs: docker
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate release tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          node scripts/check-versions.mjs --tag "$INPUT_TAG"
+          RELEASE_NOTES_PATH="docs/releases/${INPUT_TAG}.md"
+          test -f "$RELEASE_NOTES_PATH" || { echo "Missing release notes: $RELEASE_NOTES_PATH"; exit 1; }
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_WINDOWS }}
+
+      - name: Setup Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install backend dependencies
+        shell: bash
+        run: |
+          python -m venv .venv
+          .venv/Scripts/python.exe -m pip install pip==25.3
+          .venv/Scripts/python.exe -m pip install -r requirements-windows.lock -r requirements-build-windows.lock
+
+      - name: Fetch Windows ffmpeg binaries
+        shell: bash
+        run: ./scripts/fetch-ffmpeg-windows.sh
+
+      - name: Verify vendored ffmpeg
+        run: npm run verify:third-party
+
+      - name: Backend tests
+        env:
+          ASRBOX_FFMPEG_PATH: ${{ github.workspace }}/third_party/ffmpeg/win32-x64/ffmpeg.exe
+          ASRBOX_FFPROBE_PATH: ${{ github.workspace }}/third_party/ffmpeg/win32-x64/ffprobe.exe
+        run: npm run test:backend
+
+      - name: Prepare Tauri sidecar placeholder
+        run: bun run setup:dev
+
+      - name: Cargo checks
+        working-directory: tauri/src-tauri
+        shell: bash
+        run: |
+          cargo check --locked
+          cargo test --locked
+
+      - name: Build desktop NSIS installer
+        run: npm run build:desktop
+
+      - name: Frozen backend smoke test
+        run: npm run test:backend:binary-smoke
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp tauri/src-tauri/target/release/bundle/nsis/ASRbox_*-setup.exe release-assets/
+          (cd release-assets && sha256sum ./*-setup.exe > SHA256SUMS.windows.txt)
+          ls -lh release-assets
+
+      - name: Upload Windows release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-windows
+          path: release-assets/*
+          if-no-files-found: error
+
+  cuda-kit:
+    name: Build CUDA acceleration kit
+    needs: docker
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: printf 'KIT_VERSION=%s\n' "${INPUT_TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_WINDOWS }}
+
+      - name: Build CUDA kit parts
+        shell: bash
+        run: python scripts/build-cuda-kit.py --kit-version "$KIT_VERSION"
+
+      - name: Verify kit parts round-trip
+        shell: bash
+        run: python scripts/build-cuda-kit.py --verify-parts
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp dist/cuda-kit/asrbox-cuda-kit-windows-x64.zip.part* dist/cuda-kit/cuda-kit-manifest.json release-assets/
+          (cd release-assets && sha256sum asrbox-cuda-kit-windows-x64.zip.part* cuda-kit-manifest.json > SHA256SUMS.cuda-kit.txt)
+          ls -lh release-assets
+
+      - name: Upload CUDA kit release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-cuda-kit
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [macos-arm64, windows-x64, cuda-kit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve and validate release tag
+        env:
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          node scripts/check-versions.mjs --tag "$INPUT_TAG"
+          RELEASE_NOTES_PATH="docs/releases/${INPUT_TAG}.md"
+          test -f "$RELEASE_NOTES_PATH" || { echo "Missing release notes: $RELEASE_NOTES_PATH"; exit 1; }
+          printf 'RELEASE_TAG=%s\n' "$INPUT_TAG" >> "$GITHUB_ENV"
+          printf 'RELEASE_NOTES_PATH=%s\n' "$RELEASE_NOTES_PATH" >> "$GITHUB_ENV"
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Merge checksums and verify release assets
+        run: |
+          cd release-assets
+          cat SHA256SUMS.macos.txt SHA256SUMS.windows.txt SHA256SUMS.cuda-kit.txt > SHA256SUMS.txt
+          rm SHA256SUMS.macos.txt SHA256SUMS.windows.txt SHA256SUMS.cuda-kit.txt
+          cd ..
           npm run verify:release-assets -- release-assets
           ls -lh release-assets
 
@@ -166,5 +344,8 @@ jobs:
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           files: |
             release-assets/*.dmg
+            release-assets/*_x64-setup.exe
             release-assets/ASRbox-ffmpeg-source-8.1.2.tar.gz
+            release-assets/asrbox-cuda-kit-windows-x64.zip.part*
+            release-assets/cuda-kit-manifest.json
             release-assets/SHA256SUMS.txt

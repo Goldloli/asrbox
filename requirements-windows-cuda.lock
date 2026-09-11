@@ -1,0 +1,26 @@
+# Windows x64 / Python 3.14 CUDA acceleration kit lock.
+# Role: pins the exact package set installed by `scripts/build-cuda-kit.py`
+# (pip --target) to produce the optional CUDA acceleration kit distributed as a
+# Release asset. It is NOT an application environment lock: the desktop backend
+# keeps running from requirements-windows.lock (CPU torch); the kit only swaps
+# the torch package tree at runtime via ASRBOX_CUDA_KIT_DIR (see
+# backend/pyi_rth_cuda_kit.py). Regenerate from a clean Windows + Python 3.14
+# venv: `pip install --extra-index-url https://download.pytorch.org/whl/cu128
+# torch==2.11.0+cu128 && pip freeze`.
+# Diff vs requirements-windows.lock (2026-09-10): every shared package pin is
+# identical (filelock/fsspec/Jinja2/MarkupSafe/mpmath/networkx/sympy/
+# typing_extensions); the only intended divergence is torch==2.11.0+cu128 vs
+# torch==2.11.0. setuptools appears here as a torch-declared dependency and is
+# trimmed from the kit at packaging time together with all other non-torch
+# packages (only the torch/ tree plus its dist-info ships).
+--extra-index-url https://download.pytorch.org/whl/cu128
+filelock==3.32.6
+fsspec==2026.7.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+mpmath==1.3.0
+networkx==3.6.1
+setuptools==81.0.0
+sympy==1.14.0
+torch==2.11.0+cu128
+typing_extensions==4.16.0

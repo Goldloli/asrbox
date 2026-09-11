@@ -60,13 +60,23 @@ The public-beta DMG is not signed or notarized.
 
 Do not bypass macOS warnings for an artifact from an unknown source or with a mismatched checksum.
 
+## Windows SmartScreen Blocks the Installer
+
+The public-beta NSIS installer is not code-signed.
+
+1. Verify `ASRbox_<version>_x64-setup.exe` against `SHA256SUMS.txt` from the same GitHub Release.
+2. In the SmartScreen dialog, choose "More info" → "Run anyway".
+3. Installation is per-user and does not require administrator rights.
+
+Do not bypass SmartScreen for an artifact from an unknown source or with a mismatched checksum.
+
 ## Application Update Check or Download Fails
 
 Open Settings → About and retry the check manually. Automatic checks require network access to the GitHub Releases API and are limited to once every 24 hours; manual checks bypass that schedule. If GitHub is unavailable or rate-limits the request, use “View Releases” and try again later. Update failures are isolated from transcription, models, and stored data.
 
-An in-app download requires both the matching Apple Silicon DMG and `SHA256SUMS.txt` in the same official Release. The download is first written as a `.part` file in the system Downloads directory, then renamed only after SHA-256 verification. Cancelling, a missing checksum, a mismatched checksum, an unexpected asset URL, or a renamed release asset prevents the file from being opened; use the browser Releases fallback and verify the asset manually instead of bypassing the error.
+An in-app download requires both the platform-matching installer (Apple Silicon DMG or Windows x64 NSIS executable) and `SHA256SUMS.txt` in the same official Release. The download is first written as a `.part` file in the system Downloads directory, then renamed only after SHA-256 verification. Cancelling, a missing checksum, a mismatched checksum, an unexpected asset URL, or a renamed release asset prevents the file from being opened; use the browser Releases fallback and verify the asset manually instead of bypassing the error.
 
-After a verified download, finish active work and quit ASRbox normally before opening the DMG and replacing the previous application. ASRbox does not install the update automatically. The current package remains unsigned and unnotarized, so the Gatekeeper guidance above still applies.
+After a verified download, finish active work and quit ASRbox normally before opening the installer and replacing the previous application. ASRbox does not install the update automatically. The current packages remain unsigned, so the Gatekeeper/SmartScreen guidance above still applies.
 
 ## Desktop Startup Is Slow
 

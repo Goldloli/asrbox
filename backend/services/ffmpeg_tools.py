@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from backend.services.process_utils import no_window_kwargs
+
 ToolSource = Literal["manual", "bundled", "system", "missing"]
 
 
@@ -21,7 +23,7 @@ class ToolStatus:
 
 def _version(path: str) -> tuple[str | None, str | None]:
     try:
-        completed = subprocess.run([path, "-version"], capture_output=True, check=True, encoding="utf-8", errors="replace", timeout=8)
+        completed = subprocess.run([path, "-version"], capture_output=True, check=True, encoding="utf-8", errors="replace", timeout=8, **no_window_kwargs())
     except Exception as exc:
         return None, f"{type(exc).__name__}: {exc}"
     line = (completed.stdout or completed.stderr or "").splitlines()

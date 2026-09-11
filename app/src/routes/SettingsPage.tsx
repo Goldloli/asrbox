@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, FolderOpen, RefreshCw, RotateCcw, Save, Upload } from 'lucide-react';
 import { useSearch } from '@tanstack/react-router';
-import { apiClient, type RuntimeStatus } from '../lib/api';
-import { queryKeys, useActiveTasksQuery, useHealthQuery, useModelStorageQuery, useModelsQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
+import { apiClient, type ASRSettings, type RuntimeStatus } from '../lib/api';
+import { queryKeys, useActiveTasksQuery, useHealthQuery, useModelStorageQuery, useModelsQuery, useProvidersQuery, useRuntimeQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
@@ -18,17 +18,27 @@ import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
 import { ModelStorageSettings } from '../components/settings/ModelStorageSettings';
 import { MediaStorageSettings } from '../components/settings/MediaStorageSettings';
+import { CudaAccelerationSettings } from '../components/settings/CudaAccelerationSettings';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { AboutSettings } from '../components/settings/AboutSettings';
 import { useAppUpdateStore } from '../stores/appUpdateStore';
 import { downloadResponse, responseFilename } from '../lib/downloads';
 
-type SettingsTab = 'general' | 'transcription' | 'providers' | 'llm' | 'storage' | 'about';
+type SettingsTab = 'general' | 'transcription' | 'acceleration' | 'providers' | 'llm' | 'storage' | 'about';
+
+const AUTO_DEFAULT_MODEL = '__auto__';
+
+function encodeDefaultModel(settings: ASRSettings): string {
+  if (settings.default_backend === 'provider') {
+    return settings.default_provider_id ? `provider:${settings.default_provider_id}` : AUTO_DEFAULT_MODEL;
+  }
+  return settings.default_model_name ? `local:${settings.default_model_name}` : AUTO_DEFAULT_MODEL;
+}
 
 const shortcutActions: ShortcutAction[] = ['newTranscription', 'globalSearch', 'settings', 'commandPalette'];
 
 function normalizeSettingsTab(value: unknown): SettingsTab {
-  return value === 'transcription' || value === 'providers' || value === 'llm' || value === 'storage' || value === 'about' ? value : 'general';
+  return value === 'transcription' || value === 'acceleration' || value === 'providers' || value === 'llm' || value === 'storage' || value === 'about' ? value : 'general';
 }
 
 export function SettingsPage() {
@@ -64,11 +74,13 @@ export function SettingsPage() {
   const runtimeQuery = useRuntimeQuery();
   const storageQuery = useModelStorageQuery();
   const modelsQuery = useModelsQuery();
+  const providersQuery = useProvidersQuery();
   const activeTasksQuery = useActiveTasksQuery();
   const search = useSearch({ strict: false }) as { tab?: string };
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => normalizeSettingsTab(search.tab));
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
   const [backend, setBackend] = useState('local');
+  const [defaultModel, setDefaultModel] = useState(AUTO_DEFAULT_MODEL);
   const [timestamps, setTimestamps] = useState(true);
   const [wordTimestamps, setWordTimestamps] = useState(false);
   const [diarization, setDiarization] = useState(false);
@@ -99,6 +111,7 @@ export function SettingsPage() {
     if (!settingsQuery.data) return;
     setLanguage(normalizeLanguageValue(settingsQuery.data.default_language));
     setBackend(settingsQuery.data.default_backend);
+    setDefaultModel(encodeDefaultModel(settingsQuery.data));
     setTimestamps(settingsQuery.data.timestamps);
     setWordTimestamps(settingsQuery.data.word_timestamps);
     setDiarization(settingsQuery.data.diarization);
@@ -117,8 +130,8 @@ export function SettingsPage() {
   }, [apiToken, serverUrl]);
 
   const save = useMutation({
-    mutationFn: () =>
-      apiClient.updateSettings({
+    mutationFn: () => {
+      const payload: Parameters<typeof apiClient.updateSettings>[0] = {
         default_language: backendLanguage(language),
         default_backend: backend,
         timestamps,
@@ -127,7 +140,21 @@ export function SettingsPage() {
         vad,
         max_concurrent_local_tasks: localConcurrency,
         max_concurrent_provider_tasks: providerConcurrency,
-      }),
+      };
+      if (defaultModel.startsWith('local:')) {
+        payload.default_backend = 'local';
+        payload.default_model_name = defaultModel.slice('local:'.length);
+        payload.default_provider_id = null;
+      } else if (defaultModel.startsWith('provider:')) {
+        payload.default_backend = 'provider';
+        payload.default_provider_id = defaultModel.slice('provider:'.length);
+        payload.default_model_name = null;
+      } else {
+        payload.default_model_name = null;
+        payload.default_provider_id = null;
+      }
+      return apiClient.updateSettings(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings });
       toast.success(t('toast.settingsSaved'));
@@ -239,6 +266,25 @@ export function SettingsPage() {
     }
   };
 
+  const defaultModelOptions = (() => {
+    const options = [
+      { value: AUTO_DEFAULT_MODEL, label: t('settings.defaultModelAuto') },
+      ...(modelsQuery.data?.models ?? [])
+        .filter((model) => model.compatible !== false)
+        .map((model) => ({
+          value: `local:${model.model_name}`,
+          label: `${model.display_name}${model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}`,
+        })),
+      ...(providersQuery.data?.items ?? [])
+        .filter((provider) => provider.enabled)
+        .map((provider) => ({ value: `provider:${provider.id}`, label: `${provider.name} · ${t('settings.provider')}` })),
+    ];
+    if (defaultModel !== AUTO_DEFAULT_MODEL && !options.some((option) => option.value === defaultModel)) {
+      options.splice(1, 0, { value: defaultModel, label: `${defaultModel.split(':').slice(1).join(':')} · ${t('settings.defaultModelMissing')}` });
+    }
+    return options;
+  })();
+
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(normalizeSettingsTab(value))} className="grid gap-4">
       <Panel className="overflow-hidden">
@@ -247,6 +293,7 @@ export function SettingsPage() {
           <TabsList className="flex w-full flex-wrap gap-1 md:w-fit">
             <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
             <TabsTrigger value="transcription">{t('settings.tabTranscription')}</TabsTrigger>
+            <TabsTrigger value="acceleration">{t('settings.tabAcceleration')}</TabsTrigger>
             <TabsTrigger value="providers">{t('settings.tabProviders')}</TabsTrigger>
             <TabsTrigger value="llm">{t('settings.tabLLMProviders')}</TabsTrigger>
             <TabsTrigger value="storage">{t('settings.tabStorage')}</TabsTrigger>
@@ -445,15 +492,19 @@ export function SettingsPage() {
           />
           <div className="grid gap-5 p-5">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label={t('settings.defaultBackend')}>
+              <Field label={t('settings.defaultBackend')} hint={defaultModel !== AUTO_DEFAULT_MODEL ? t('settings.defaultBackendLinkedHint') : undefined}>
                 <Select
                   value={backend}
                   onValueChange={setBackend}
+                  disabled={defaultModel !== AUTO_DEFAULT_MODEL}
                   options={[
                     { value: 'local', label: t('settings.local') },
                     { value: 'provider', label: t('settings.provider') },
                   ]}
                 />
+              </Field>
+              <Field label={t('settings.defaultModel')} hint={t('settings.defaultModelHint')}>
+                <Select value={defaultModel} onValueChange={setDefaultModel} options={defaultModelOptions} />
               </Field>
               <Field label={t('settings.defaultLanguage')}>
                 <Select value={language} onValueChange={(value) => setLanguage(normalizeLanguageValue(value))} options={languageOptions(locale)} />
@@ -477,6 +528,10 @@ export function SettingsPage() {
             {settingsQuery.error && <ErrorState title={t('settings.unavailable')} error={settingsQuery.error} />}
           </div>
         </Panel>
+      </TabsContent>
+
+      <TabsContent value="acceleration">
+        <CudaAccelerationSettings />
       </TabsContent>
 
       <TabsContent value="providers">

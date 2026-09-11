@@ -14,6 +14,7 @@ permissions:
 env:
   BUN_VERSION: "1.3.8"
   PYTHON_VERSION: "3.13"
+  PYTHON_VERSION_WINDOWS: "3.14"
 
 jobs:
   checks:
@@ -94,6 +95,40 @@ jobs:
 
       - name: Maintained browser regression tests
         run: npm run test:e2e:maintained
+
+  backend-windows:
+    name: Backend tests on Windows
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_WINDOWS }}
+
+      - name: Install backend dependencies
+        shell: bash
+        run: |
+          python -m venv .venv
+          .venv/Scripts/python.exe -m pip install pip==25.3
+          .venv/Scripts/python.exe -m pip install -r requirements-windows.lock
+
+      - name: Fetch Windows ffmpeg binaries
+        shell: bash
+        run: ./scripts/fetch-ffmpeg-windows.sh
+
+      - name: Validate vendored ffmpeg
+        run: npm run verify:third-party
+
+      - name: Backend tests
+        env:
+          ASRBOX_FFMPEG_PATH: ${{ github.workspace }}/third_party/ffmpeg/win32-x64/ffmpeg.exe
+          ASRBOX_FFPROBE_PATH: ${{ github.workspace }}/third_party/ffmpeg/win32-x64/ffprobe.exe
+        run: npm run test:backend
 
   docker:
     name: Docker build and deployment smoke

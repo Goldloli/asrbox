@@ -379,6 +379,48 @@ class MediaStorageSettingsUpdate(BaseModel):
     delete_derived_on_complete: bool | None = None
 
 
+CudaAccelerationStatus = Literal["not_downloaded", "downloading", "ready", "enabled", "enable_failed", "invalidated"]
+
+
+class CudaKitInfo(BaseModel):
+    kit_version: str
+    torch_version: str
+    total_bytes: int
+
+
+class CudaKitProbeStatus(BaseModel):
+    state: Literal["pending", "ok", "failed"] = "pending"
+    torch_cuda_available: bool = False
+    cuda_device_name: str | None = None
+    torch_file: str | None = None
+
+
+class CudaKitJobResponse(BaseModel):
+    id: str | None = None
+    status: Literal["idle", "running", "completed", "failed", "cancelled"] = "idle"
+    phase: str = "idle"
+    current_part: str | None = None
+    parts_total: int = 0
+    downloaded_bytes: int = 0
+    total_bytes: int = 0
+    error: str | None = None
+
+
+class CudaAccelerationStatusResponse(BaseModel):
+    enabled: bool
+    status: CudaAccelerationStatus
+    reason: str | None = None
+    supported: bool
+    gpu_detected: bool | None = None
+    kit: CudaKitInfo | None = None
+    probe: CudaKitProbeStatus
+    job: CudaKitJobResponse | None = None
+
+
+class CudaAccelerationUpdate(BaseModel):
+    enabled: bool
+
+
 class TaskRelinkRequest(BaseModel):
     path: str = Field(min_length=1)
 

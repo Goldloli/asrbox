@@ -2,6 +2,23 @@
 
 All notable ASRbox changes are documented here. The format follows Keep a Changelog, and versions follow Semantic Versioning while the project is pre-1.0.
 
+## [0.1.9] - 2026-09-10
+
+### Added
+
+- Windows x64 desktop edition with the same Tauri 2 + bundled FastAPI sidecar architecture as macOS, shipped as an NSIS per-user installer (`ASRbox_<version>_x64-setup.exe`).
+- Vendored Windows ffmpeg/ffprobe 8.1.2 (gyan.dev GPL build) with full provenance, checksums, and GPL source-offer coverage matching the macOS binaries.
+- Desktop updater now recognizes and verifies the Windows NSIS asset from the official GitHub Release; install guidance in Settings → About is platform-aware (Gatekeeper on macOS, SmartScreen on Windows).
+- CI gains a Windows backend regression job; the Release workflow builds the Windows installer in a dedicated job and publishes both desktop installers with a combined `SHA256SUMS.txt` from a single publish job.
+- Windows desktop gains optional CUDA acceleration: Settings → GPU acceleration downloads a byte-verified PyTorch cu128 kit (multi-part Release assets) on demand and enables GPU transcription on NVIDIA hardware; without the kit or the toggle, behavior stays CPU-only. macOS and web deployments are unaffected.
+- Settings → Transcription defaults gains a default-model selector covering local models and enabled online providers, and the transcribe page now preselects the saved default model/provider and default language (including auto-detect) on open; unavailable defaults fall back to the first usable option.
+
+### Fixed
+
+- Windows desktop no longer flashes console windows: the release shell executable is now built GUI-subsystem (`windows_subsystem = "windows"`), and backend child processes (runtime probe, transcription worker, ffmpeg/ffprobe, GPU detection) spawn with `CREATE_NO_WINDOW`.
+- Backend test suite is fully green on Windows (423 passed): platform-aware ffmpeg tool fixtures, symlink-privilege probing, Windows socket error codes, process-exit detection, and timing budgets; no assertion semantics were weakened and macOS behavior is unchanged.
+- Build and test scripts no longer hardcode `.venv/bin/python`; a shared resolver picks `.venv/Scripts/python.exe` on Windows, so `npm run test:backend`, `npm run build:desktop`, and the readiness gates work identically on both platforms.
+
 ## [0.1.8] - 2026-09-09
 
 ### Added

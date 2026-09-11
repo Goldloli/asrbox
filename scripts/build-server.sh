@@ -7,6 +7,12 @@ BUILD_ARGS=()
 
 cd "$ROOT"
 
+if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
+  VENV_PY="$ROOT/.venv/Scripts/python.exe"
+else
+  VENV_PY="$ROOT/.venv/bin/python"
+fi
+
 case "$PLATFORM" in
   aarch64-apple-darwin)
     FFMPEG_VENDOR="third_party/ffmpeg/darwin-arm64"
@@ -26,12 +32,12 @@ case "$PLATFORM" in
     ;;
 esac
 
-if ! .venv/bin/python -c "import PyInstaller" 2>/dev/null; then
-  echo "PyInstaller is missing. Install build dependencies with: .venv/bin/pip install -r requirements-build.lock" >&2
+if ! "$VENV_PY" -c "import PyInstaller" 2>/dev/null; then
+  echo "PyInstaller is missing. Install build dependencies with: pip install -r requirements-build.lock" >&2
   exit 1
 fi
 
-.venv/bin/python backend/build_binary.py "${BUILD_ARGS[@]}"
+"$VENV_PY" backend/build_binary.py "${BUILD_ARGS[@]}"
 
 if [ "$PLATFORM" = "aarch64-apple-darwin" ]; then
   MLX_METALLIB="dist/asrbox-server/_internal/mlx/lib/mlx.metallib"
@@ -52,6 +58,12 @@ rm -rf tauri/src-tauri/binaries/ffmpeg
 mkdir -p tauri/src-tauri/binaries/ffmpeg
 touch tauri/src-tauri/binaries/ffmpeg/.gitkeep
 if [ -n "$FFMPEG_VENDOR" ]; then
+  if [ ! -x "$FFMPEG_VENDOR/$FFMPEG_NAME" ] || [ ! -x "$FFMPEG_VENDOR/$FFPROBE_NAME" ]; then
+    case "$PLATFORM" in
+      # Windows binaries exceed GitHub's 100MB limit and are fetched on demand.
+      x86_64-pc-windows-*) bash "$ROOT/scripts/fetch-ffmpeg-windows.sh" ;;
+    esac
+  fi
   if [ ! -x "$FFMPEG_VENDOR/$FFMPEG_NAME" ] || [ ! -x "$FFMPEG_VENDOR/$FFPROBE_NAME" ]; then
     echo "ffmpeg vendor binaries are missing or not executable in $FFMPEG_VENDOR" >&2
     exit 1

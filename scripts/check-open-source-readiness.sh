@@ -4,9 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
+  VENV_PY="$ROOT/.venv/Scripts/python.exe"
+else
+  VENV_PY="$ROOT/.venv/bin/python"
+fi
+
 bun install --frozen-lockfile
-.venv/bin/python -m pip check
-.venv/bin/python -m compileall -q backend
+"$VENV_PY" -m pip check
+"$VENV_PY" -m compileall -q backend
 npm run check:versions
 npm run test:release-tools
 npm run verify:third-party
