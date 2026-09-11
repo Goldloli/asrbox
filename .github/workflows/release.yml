@@ -156,7 +156,7 @@ jobs:
           ls -lh release-assets
 
       - name: Upload macOS release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-macos
           path: release-assets/*
@@ -249,7 +249,7 @@ jobs:
           ls -lh release-assets
 
       - name: Upload Windows release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-windows
           path: release-assets/*
@@ -293,7 +293,7 @@ jobs:
           ls -lh release-assets
 
       - name: Upload CUDA kit release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-cuda-kit
           path: release-assets/*
