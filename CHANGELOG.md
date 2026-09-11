@@ -4,6 +4,7 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-11
 ### Added
 
 - LLM provider setup can now pull the available model IDs straight from the configured endpoint: the add/edit dialog has a "Fetch models" action that works before saving (reusing the stored key when editing), Ollama falls back to its native model listing, and the result is a pick-list that fills the default model field while manual entry stays available. Backed by a new `POST /llm-providers/models` probe endpoint with the same bounded-transport and credential-protection rules as the connection test.
@@ -248,7 +249,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Goldloli/asrbox/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/Goldloli/asrbox/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Goldloli/asrbox/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/Goldloli/asrbox/compare/v0.1.6...v0.1.7

@@ -2,7 +2,7 @@
 
 ASRbox currently publishes macOS Apple Silicon and Windows x64 desktop releases and supports source-built Linux CPU Docker deployment. It does not publish a container image. Native Linux desktop packages, Intel macOS, Windows arm64, code signing, notarization, automatic installation, and built-in public-hosting security are not part of `0.1.9`. The desktop app can check GitHub Releases and download a verified installer (DMG on macOS, NSIS executable on Windows), but the user must quit and replace the application manually.
 
-Current release: [`v0.1.9`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.9). The Apple Silicon DMG and the Windows x64 NSIS installer are available from the Release assets and are not bundled with model weights.
+Current release: [`v0.1.9`](https://github.com/Goldloli/asrbox/releases/tag/v0.2.0). The Apple Silicon DMG and the Windows x64 NSIS installer are available from the Release assets and are not bundled with model weights.
 
 ## Version Sources
 
