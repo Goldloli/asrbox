@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 const serverUrl = 'http://127.0.0.1:17496';
+const appVersion = (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((url) => {
@@ -14,7 +16,7 @@ test('web About shows build identity and browser-only update fallback', async ({
 
   await expect(page.getByRole('tab', { name: 'About' })).toHaveAttribute('data-state', 'active');
   await expect(page.getByText('Public beta', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('About').getByText('v0.1.9', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('About').getByText(`v${appVersion}`, { exact: true })).toBeVisible();
   await expect(page.getByLabel('About').getByText('Web', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /View Releases/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Check now/ })).toHaveCount(0);

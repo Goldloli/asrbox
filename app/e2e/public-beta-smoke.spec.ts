@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+
+const appVersion = (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 test('public beta shell reaches the local backend and core routes', async ({ page, request }) => {
   const pageErrors: Error[] = [];
@@ -9,7 +12,7 @@ test('public beta shell reaches the local backend and core routes', async ({ pag
 
   const health = await request.get('http://127.0.0.1:17496/health');
   expect(health.ok()).toBeTruthy();
-  expect(await health.json()).toMatchObject({ status: 'healthy', version: '0.1.9' });
+  expect(await health.json()).toMatchObject({ status: 'healthy', version: appVersion });
 
   await page.goto('/');
   await expect(page.getByText('Backend online', { exact: true })).toBeVisible({ timeout: 30_000 });
