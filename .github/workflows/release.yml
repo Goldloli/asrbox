@@ -82,7 +82,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -189,7 +189,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION_WINDOWS }}
 
@@ -272,7 +272,7 @@ jobs:
         run: printf 'KIT_VERSION=%s\n' "${INPUT_TAG#v}" >> "$GITHUB_ENV"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION_WINDOWS }}
 
