@@ -59,7 +59,9 @@ for part in "${KIT_PARTS[@]}"; do
 done
 grep -Fq "$KIT_MANIFEST" "$ASSET_DIR/SHA256SUMS.txt"
 (cd "$ASSET_DIR" && "${SHA256[@]}" -c SHA256SUMS.txt)
-tar -tzf "$ASSET_DIR/$SOURCE_ARCHIVE" | grep -Fq "ffmpeg-8.1.2.tar.xz"
-tar -tzf "$ASSET_DIR/$SOURCE_ARCHIVE" | grep -Fq "LICENSE.GPLv3"
+# 先取完整清单再匹配：tar | grep -q 在 pipefail 下会因 grep 提前退出给 tar 发 SIGPIPE（141）。
+archive_listing="$(tar -tzf "$ASSET_DIR/$SOURCE_ARCHIVE")"
+grep -Fq "ffmpeg-8.1.2.tar.xz" <<<"$archive_listing"
+grep -Fq "LICENSE.GPLv3" <<<"$archive_listing"
 
 echo "Verified release assets for ASRbox $VERSION."
