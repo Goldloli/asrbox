@@ -91,7 +91,7 @@ export async function bumpVersion(root, next, { regenLocks = true } = {}) {
   }
 
   if (regenLocks) {
-    regenerateLockfiles(root);
+    await regenerateLockfiles(root, next);
   }
 
   const verified = await checkVersions(root);
@@ -119,15 +119,31 @@ async function bumpChangelog(root, current, next) {
   await writeFile(filePath, text);
 }
 
-function regenerateLockfiles(root) {
+async function regenerateLockfiles(root, next) {
   const bun = spawnSync("bun", ["install", "--lockfile-only"], { cwd: root, stdio: "inherit" });
   if (bun.status !== 0) {
     console.warn("warning: bun install --lockfile-only failed; regenerate bun.lock manually");
+  } else {
+    // bun install does not refresh workspace version stamps on a version-only
+    // change, so pin them explicitly to keep check-versions green.
+    await pinBunWorkspaceVersions(root, next);
   }
   const cargo = spawnSync("cargo", ["check", "--quiet", "--manifest-path", "tauri/src-tauri/Cargo.toml"], { cwd: root, stdio: "inherit" });
   if (cargo.status !== 0) {
     console.warn("warning: cargo check failed; regenerate tauri/src-tauri/Cargo.lock manually");
   }
+}
+
+export async function pinBunWorkspaceVersions(root, next) {
+  const lockPath = path.join(root, "bun.lock");
+  let text = await readFile(lockPath, "utf8");
+  for (const key of ["app", "tauri", "web"]) {
+    text = text.replace(
+      new RegExp(`("${key}":\\s*\\{\\s*"name":\\s*"@asrbox/${key}",\\s*"version":\\s*")[^"]+`),
+      `$1${next}`,
+    );
+  }
+  await writeFile(lockPath, text);
 }
 
 async function main() {
