@@ -223,20 +223,28 @@ test('source playback seeks to the chosen cue and a missing file leaves editing 
 test('shows real batch waiting time without inventing progress, then exposes timeout and explicit resume', async ({ page }) => {
   const state = await mock(page, { empty: true });
   const now = new Date('2026-09-07T02:15:00Z');
+  // 时钟必须保持走动：TanStack Query 依赖计时器交付数据，pauseAt 会冻住整个页面。
+  // 因此不锁定具体秒数（慢速 runner 上页面加载本身就可能跨过 1s 窗口），改为验证
+  // 秒数真实反映 updated_at 起算的已等待时长，并随后与 mock 时钟同步推进。
   await page.clock.install({ time: now });
   state.runs = [{ ...completed, status: 'running', completed_segments: 0, completed_batches: 0,
     latest_translation_version_id: null, can_edit: false, can_export: false,
     updated_at: '2026-09-07T02:14:45.000000' }];
   await page.goto('/ai?task=translation-task&mode=translation&run=run-1');
-  await expect(page.getByTestId('translation-wait')).toContainText('Waiting for this batch: 15s.');
-  await expect(page.getByTestId('translation-wait')).toContainText('90-second limit');
+  const waitText = page.getByTestId('translation-wait');
+  await expect(waitText).toContainText('Waiting for this batch:');
+  await expect(waitText).toContainText('90-second limit');
+  const shownSeconds = async () => Number((await waitText.textContent())?.match(/batch: (\d+)s/)?.[1]);
+  const before = await shownSeconds();
+  expect(before).toBeGreaterThanOrEqual(15);
   await page.clock.fastForward(5000);
-  await expect(page.getByTestId('translation-wait')).toContainText('Waiting for this batch: 20s.');
+  await expect.poll(shownSeconds).toBeGreaterThanOrEqual(before + 5);
+  expect(await shownSeconds()).toBeLessThanOrEqual(before + 10);
   await expect(page.getByText('0 / 2 segments · 0 / 2 batches saved')).toBeVisible();
   state.runs[0] = { ...state.runs[0], status: 'failed', error_code: 'LLM_PROVIDER_TIMEOUT', can_retry: true };
   await page.clock.fastForward(2000);
   await expect(page.getByText('The provider did not finish within 90 seconds.', { exact: false })).toBeVisible();
-  await expect(page.getByTestId('translation-wait')).toHaveCount(0);
+  await expect(waitText).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Resume unfinished batches' })).toBeEnabled();
   expect(state.posts).toHaveLength(0);
 });

@@ -147,8 +147,10 @@ def _set_job(persist: bool = True, **updates: Any) -> None:
     with _job_lock:
         _job.update(updates)
         payload = dict(_job)
-    if persist:
-        _write_state(payload)
+        if persist:
+            # 先在锁内落盘再对 current_job() 的读者可见，保证读到 completed 时
+            # 状态文件必然已写入（重启恢复只认文件）。
+            _write_state(payload)
 
 
 def _bump_downloaded(delta_bytes: int) -> None:

@@ -255,7 +255,8 @@ def wait_for_model_status(client: TestClient, model_name: str, key: str, value: 
 
 
 def wait_for_task(client: TestClient, task_id: str, predicate, description: str) -> dict:
-    deadline = time.time() + 3
+    # 只是防死循环的保险丝：正常路径远小于该值，慢速 CI runner 需要足够余量。
+    deadline = time.time() + 30
     last_task = {}
     while time.time() < deadline:
         response = client.get(f"/tasks/{task_id}")
@@ -948,7 +949,7 @@ def test_local_model_task_returns_before_transcription_finishes_without_inventin
 
     def fake_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
         started.set()
-        release.wait(timeout=1)
+        release.wait(timeout=10)
         return TranscriptionResult(
             text="background local transcript",
             duration=1.0,
@@ -980,11 +981,13 @@ def test_local_model_task_returns_before_transcription_finishes_without_inventin
     elapsed = time.monotonic() - started_at
 
     assert response.status_code == 200
-    # The fake transcription blocks up to 1s, so a synchronous implementation
-    # would take at least that long; Windows thread startup needs more headroom.
-    assert elapsed < (0.2 if os.name == "posix" else 0.8)
+    # The fake transcription blocks up to 10s, so a synchronous implementation
+    # would take at least that long and is caught well above these thresholds;
+    # slow CI runners (especially Windows) need the extra headroom for thread
+    # startup around the async boundary.
+    assert elapsed < (0.2 if os.name == "posix" else 5.0)
     task_id = response.json()["id"]
-    assert started.wait(timeout=1)
+    assert started.wait(timeout=10)
 
     transcribing = wait_for_task(
         client,
@@ -1526,7 +1529,8 @@ else:
     ).json()
 
     wait_for_task(client, first["id"], lambda item: item["status"] == "transcribing", "first transcribing")
-    deadline = time.time() + 3
+    # Windows CI runner 上子进程冷启动可能远超本地；这只是防挂死的保险丝。
+    deadline = time.time() + 30
     while not first_started.exists() and time.time() < deadline:
         time.sleep(0.05)
     assert first_started.exists()

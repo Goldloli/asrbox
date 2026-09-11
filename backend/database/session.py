@@ -21,7 +21,9 @@ def init_db() -> None:
         engine.dispose()
     engine = create_engine(
         f"sqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
+        # SQLite 默认 busy_timeout=0，API 线程与转写 worker 并发写时会直接
+        # 报 database is locked；这里给足等待时间，让写者串行完成。
+        connect_args={"check_same_thread": False, "timeout": 30},
     )
     _current_db_path = db_path
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
