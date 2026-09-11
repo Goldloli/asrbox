@@ -8,8 +8,8 @@ Subtitle proofreading checks an already successful transcript. It does not repla
 
 Open Settings → AI LLM providers and select a preset or OpenAI-compatible service:
 
-- Ollama is local and needs no API key, but it does need an installed model name.
-- MiniMax, Kimi, DeepSeek, Qwen, and GLM normally require provider credentials.
+- Ollama is local and needs no API key; after entering the URL, click "Fetch models" to pick from locally installed models.
+- MiniMax, Kimi, DeepSeek, Qwen, and GLM normally require provider credentials; after entering the URL and key, click "Fetch models" to pick from the available list, or type a model ID manually.
 - OpenAI-compatible needs the service URL, model, and any credential required by that service.
 
 Use Test connection to validate the URL, authentication, and model. Docker reaches host Ollama at `http://host.docker.internal:11434/v1`; container `localhost` refers to ASRbox itself.

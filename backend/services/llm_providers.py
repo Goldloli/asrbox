@@ -13,6 +13,8 @@ from backend.database.models import ChatSession, LLMProvider, ProofreadingRun, T
 from backend.models import (
     LLMProviderCreate,
     LLMCompatibility,
+    LLMProviderModelsRequest,
+    LLMProviderModelsResponse,
     LLMProviderPresetResponse,
     LLMProviderResponse,
     LLMProviderTestResponse,
@@ -20,7 +22,7 @@ from backend.models import (
 )
 
 from backend.services.llm_compatibility import (
-    LLMProviderError, MAX_RESPONSE_BYTES, bounded_completion as _bounded_completion,
+    LLMProviderError, MAX_RESPONSE_BYTES, bounded_completion as _bounded_completion, bounded_get,
     completion_content, request_body, settings,
 )
 
@@ -346,3 +348,88 @@ def test_provider(db: Session, provider_id: str) -> LLMProviderTestResponse | No
             error_code=getattr(exc, "code", "LLM_PROVIDER_INVALID"),
         )
     return LLMProviderTestResponse(ok=True, message="LLM provider connection succeeded")
+
+
+MAX_MODEL_LIST_ITEMS = 500
+MODEL_LIST_TIMEOUT = 10
+
+
+def _classify_list_response(response) -> None:
+    if response.status_code in {401, 403}:
+        raise LLMProviderError("LLM_PROVIDER_AUTH_FAILED", "LLM provider rejected credentials")
+    if response.status_code == 429:
+        raise LLMProviderError("LLM_PROVIDER_RATE_LIMITED", "LLM provider rate limit reached")
+    if not 200 <= response.status_code < 300:
+        raise LLMProviderError("LLM_PROVIDER_HTTP_ERROR", f"LLM provider returned HTTP {response.status_code}")
+
+
+def _parse_json(response):
+    try:
+        return response.json()
+    except (ValueError, RecursionError) as exc:
+        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned invalid JSON") from exc
+
+
+def _extract_model_ids(entries, key: str) -> list[str]:
+    if not isinstance(entries, list):
+        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned an invalid model list")
+    items: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        model_id = entry.get(key)
+        if not isinstance(model_id, str) or not model_id.strip() or model_id in seen:
+            continue
+        seen.add(model_id)
+        items.append(model_id)
+        if len(items) >= MAX_MODEL_LIST_ITEMS:
+            break
+    return items
+
+
+def _fetch_openai_model_ids(base_url: str, headers: dict[str, str]) -> list[str]:
+    response = asyncio.run(bounded_get(f"{base_url}/models", headers, MODEL_LIST_TIMEOUT, MAX_RESPONSE_BYTES))
+    _classify_list_response(response)
+    payload = _parse_json(response)
+    if not isinstance(payload, dict):
+        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned an invalid model list")
+    return _extract_model_ids(payload.get("data"), "id")
+
+
+def _fetch_ollama_model_names(base_url: str, headers: dict[str, str]) -> list[str]:
+    native_base = base_url[:-3] if base_url.lower().endswith("/v1") else base_url
+    response = asyncio.run(bounded_get(f"{native_base}/api/tags", headers, MODEL_LIST_TIMEOUT, MAX_RESPONSE_BYTES))
+    _classify_list_response(response)
+    payload = _parse_json(response)
+    if not isinstance(payload, dict):
+        raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned an invalid model list")
+    return _extract_model_ids(payload.get("models"), "name")
+
+
+def fetch_models(db: Session, payload: LLMProviderModelsRequest) -> LLMProviderModelsResponse:
+    """Probe the provider's model list with inline form values; nothing is persisted or echoed."""
+    try:
+        _validate_preset(payload.preset)
+        base_url = validate_base_url(payload.base_url)
+        api_key = (payload.api_key or "").strip() or None
+        if not api_key and payload.provider_id:
+            row = get_provider_row(db, payload.provider_id)
+            if row is None:
+                raise LLMProviderError("LLM_PROVIDER_NOT_FOUND", "LLM provider not found")
+            api_key = row.api_key_secret
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        try:
+            items = _fetch_openai_model_ids(base_url, headers)
+        except LLMProviderError:
+            if payload.preset != "ollama":
+                raise
+            items = _fetch_ollama_model_names(base_url, headers)
+    except (LLMProviderError, ValueError) as exc:
+        return LLMProviderModelsResponse(
+            ok=False,
+            items=[],
+            message=str(exc),
+            error_code=getattr(exc, "code", "LLM_PROVIDER_INVALID"),
+        )
+    return LLMProviderModelsResponse(ok=True, items=items, message=f"{len(items)} models available")

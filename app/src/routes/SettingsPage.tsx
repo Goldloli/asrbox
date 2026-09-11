@@ -14,11 +14,11 @@ import { useI18n } from '../lib/i18n';
 import { backendLanguage, languageOptions, normalizeLanguageValue, type TranscriptionLanguage } from '../lib/transcriptionOptions';
 import { ProvidersPage } from './ProvidersPage';
 import { LLMProvidersPanel } from '../components/settings/LLMProvidersPanel';
-import { formatShortcut, type ShortcutAction } from '../lib/shortcuts';
 import { DiagnosticsHealthCenter, PathRow, ToggleRow } from '../components/settings/SettingsHealth';
 import { ModelStorageSettings } from '../components/settings/ModelStorageSettings';
 import { MediaStorageSettings } from '../components/settings/MediaStorageSettings';
 import { CudaAccelerationSettings } from '../components/settings/CudaAccelerationSettings';
+import { AccelerationGenericCard, AppleGpuAccelerationSettings } from '../components/settings/AppleGpuAccelerationSettings';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { AboutSettings } from '../components/settings/AboutSettings';
 import { useAppUpdateStore } from '../stores/appUpdateStore';
@@ -35,8 +35,6 @@ function encodeDefaultModel(settings: ASRSettings): string {
   return settings.default_model_name ? `local:${settings.default_model_name}` : AUTO_DEFAULT_MODEL;
 }
 
-const shortcutActions: ShortcutAction[] = ['newTranscription', 'globalSearch', 'settings', 'commandPalette'];
-
 function normalizeSettingsTab(value: unknown): SettingsTab {
   return value === 'transcription' || value === 'acceleration' || value === 'providers' || value === 'llm' || value === 'storage' || value === 'about' ? value : 'general';
 }
@@ -52,7 +50,6 @@ export function SettingsPage() {
   const fontScale = useUiStore((state) => state.fontScale);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
   const exportDirectory = useUiStore((state) => state.exportDirectory);
-  const shortcuts = useUiStore((state) => state.shortcuts);
   const updateChannel = useUiStore((state) => state.updateChannel);
   const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
   const updateNotifications = useUiStore((state) => state.updateNotifications);
@@ -63,7 +60,6 @@ export function SettingsPage() {
   const setFontScale = useUiStore((state) => state.setFontScale);
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
   const setExportDirectory = useUiStore((state) => state.setExportDirectory);
-  const setShortcut = useUiStore((state) => state.setShortcut);
   const setUpdateChannel = useUiStore((state) => state.setUpdateChannel);
   const setAutoCheckUpdates = useUiStore((state) => state.setAutoCheckUpdates);
   const setUpdateNotifications = useUiStore((state) => state.setUpdateNotifications);
@@ -222,7 +218,6 @@ export function SettingsPage() {
         fontScale,
         reducedMotion,
         exportDirectory,
-        shortcuts,
         updateChannel,
         autoCheckUpdates,
         updateNotifications,
@@ -252,11 +247,6 @@ export function SettingsPage() {
       if (ui.updateChannel === 'stable' || ui.updateChannel === 'prerelease') setUpdateChannel(ui.updateChannel);
       if (typeof ui.autoCheckUpdates === 'boolean') setAutoCheckUpdates(ui.autoCheckUpdates);
       if (typeof ui.updateNotifications === 'boolean') setUpdateNotifications(ui.updateNotifications);
-      if (ui.shortcuts && typeof ui.shortcuts === 'object') {
-        Object.entries(ui.shortcuts as Partial<Record<ShortcutAction, unknown>>).forEach(([action, shortcut]) => {
-          if (typeof shortcut === 'string' && shortcutActions.includes(action as ShortcutAction)) setShortcut(action as ShortcutAction, shortcut);
-        });
-      }
       if (typeof payload.server?.serverUrl === 'string') {
         setServerConnection(payload.server.serverUrl, null);
       }
@@ -428,27 +418,6 @@ export function SettingsPage() {
             </div>
             <div className="grid gap-3 rounded-xl border app-control p-4">
               <div>
-                <h3 className="text-sm font-semibold text-app">{t('settings.shortcuts')}</h3>
-                <p className="mt-1 text-sm text-app-muted">{t('settings.shortcutsDescription')}</p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {[
-                  { action: 'newTranscription' as const, label: t('settings.shortcutNewTranscription') },
-                  { action: 'globalSearch' as const, label: t('settings.shortcutGlobalSearch') },
-                  { action: 'settings' as const, label: t('settings.shortcutSettings') },
-                  { action: 'commandPalette' as const, label: t('settings.shortcutCommandPalette') },
-                ].map((item) => (
-                  <Field key={item.action} label={item.label}>
-                    <Input
-                      value={formatShortcut(shortcuts[item.action])}
-                      onChange={(event) => setShortcut(item.action, event.target.value)}
-                    />
-                  </Field>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-3 rounded-xl border app-control p-4">
-              <div>
                 <h3 className="text-sm font-semibold text-app">{t('settings.importExport')}</h3>
                 <p className="mt-1 text-sm text-app-muted">{t('settings.importExportDescription')}</p>
               </div>
@@ -531,7 +500,15 @@ export function SettingsPage() {
       </TabsContent>
 
       <TabsContent value="acceleration">
-        <CudaAccelerationSettings />
+        {desktopCapabilities.runtime !== 'tauri' ? (
+          <AccelerationGenericCard />
+        ) : runtimeQuery.data?.platform.startsWith('Windows') ? (
+          <CudaAccelerationSettings />
+        ) : runtimeQuery.data?.platform.startsWith('macOS') ? (
+          <AppleGpuAccelerationSettings />
+        ) : runtimeQuery.isError ? (
+          <AccelerationGenericCard />
+        ) : null}
       </TabsContent>
 
       <TabsContent value="providers">

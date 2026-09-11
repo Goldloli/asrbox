@@ -88,6 +88,7 @@ class ASRModelStatus(BaseModel):
     download_error: str | None = None
     compatible: bool | None = None
     compatibility_error: str | None = None
+    compatibility_error_code: str | None = None
     cache_detected: bool = False
     cache_size_mb: float | None = None
     cache_path: str | None = None
@@ -318,6 +319,20 @@ class LLMProviderTestResponse(BaseModel):
     error_code: str | None = None
 
 
+class LLMProviderModelsRequest(BaseModel):
+    preset: str = Field(..., min_length=1, max_length=40)
+    base_url: str
+    api_key: str | None = None
+    provider_id: str | None = None
+
+
+class LLMProviderModelsResponse(BaseModel):
+    ok: bool
+    items: list[str] = Field(default_factory=list)
+    message: str
+    error_code: str | None = None
+
+
 class ASRSettingsResponse(BaseModel):
     id: int = 1
     default_backend: str
@@ -406,10 +421,20 @@ class CudaKitJobResponse(BaseModel):
     error: str | None = None
 
 
+CudaAccelerationReasonCode = Literal[
+    "unsupported_platform",
+    "kit_version_mismatch",
+    "probe_failed",
+    "kit_not_injected",
+    "cuda_device_missing",
+]
+
+
 class CudaAccelerationStatusResponse(BaseModel):
     enabled: bool
     status: CudaAccelerationStatus
     reason: str | None = None
+    reason_code: CudaAccelerationReasonCode | None = None
     supported: bool
     gpu_detected: bool | None = None
     kit: CudaKitInfo | None = None
@@ -647,6 +672,7 @@ class ModelCompatibilityResponse(BaseModel):
     compatible: bool
     missing: list[str] = Field(default_factory=list)
     message: str
+    code: str | None = None
 
 
 class TranscriptionPreflightResponse(BaseModel):

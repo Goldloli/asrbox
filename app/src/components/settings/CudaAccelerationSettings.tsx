@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Cpu, Download, HardDrive, Info, RefreshCw, Trash2, X, Zap } from 'lucide-react';
+import { Download, RefreshCw, Trash2, X, Zap } from 'lucide-react';
 import { apiClient, type CudaAccelerationStatus } from '../../lib/api';
 import { desktopCapabilities } from '../../lib/desktopCapabilities';
 import { formatBytes } from '../../lib/format';
@@ -8,6 +8,7 @@ import { useI18n } from '../../lib/i18n';
 import {
   queryKeys,
   useCudaAccelerationQuery,
+  useCudaAccelerationRedetectMutation,
   useCudaAccelerationToggleMutation,
   useCudaKitDeleteMutation,
   useCudaKitDownloadCancelMutation,
@@ -27,6 +28,7 @@ export function CudaAccelerationSettings() {
   const query = useCudaAccelerationQuery();
   const runtimeQuery = useRuntimeQuery();
   const toggleMutation = useCudaAccelerationToggleMutation();
+  const redetectMutation = useCudaAccelerationRedetectMutation();
   const downloadMutation = useCudaKitDownloadMutation();
   const cancelMutation = useCudaKitDownloadCancelMutation();
   const deleteMutation = useCudaKitDeleteMutation();
@@ -42,6 +44,7 @@ export function CudaAccelerationSettings() {
   const job = data?.job ?? null;
   const jobRunning = job?.status === 'running';
   const busy = toggleMutation.isPending || restarting;
+  const detecting = data?.supported === true && data.gpu_detected == null;
 
   const statusMeta: Record<CudaAccelerationStatus, { tone: 'neutral' | 'success' | 'warning' | 'danger' | 'accent'; label: string }> = {
     not_downloaded: { tone: 'neutral', label: t('settings.cudaStatus.not_downloaded') },
@@ -99,6 +102,12 @@ export function CudaAccelerationSettings() {
     });
   };
 
+  const redetect = useCallback(() => {
+    redetectMutation.mutate(undefined, {
+      onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+    });
+  }, [redetectMutation, t, toast]);
+
   const startDownload = useCallback(() => {
     downloadMutation.mutate(undefined, {
       onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
@@ -145,18 +154,20 @@ export function CudaAccelerationSettings() {
     : data.gpu_detected
       ? t('settings.cudaDetected')
       : t('settings.cudaNotDetected');
+  const reasonLabel = data?.reason_code ? t(`settings.cudaReason.${data.reason_code}`) : null;
+  const showRawReason = Boolean(data?.reason) && data?.reason !== reasonLabel;
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <section className="grid content-start gap-4">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('settings.system')}
           title={t('settings.cudaTitle')}
           description={description}
           action={
-            <Button size="sm" variant="secondary" onClick={() => query.refetch()}>
-              <RefreshCw className="size-4" />
-              {t('common.refresh')}
+            <Button size="sm" variant="secondary" disabled={redetectMutation.isPending || detecting} onClick={redetect}>
+              <RefreshCw className={`size-4 ${detecting ? 'animate-spin' : ''}`} />
+              {detecting ? t('settings.cudaDetecting') : t('settings.cudaRedetect')}
             </Button>
           }
         />
@@ -170,6 +181,9 @@ export function CudaAccelerationSettings() {
               <span className="truncate text-xs text-app-muted">
                 {t('settings.cudaKitVersion')} {data.kit.kit_version} · torch {data.kit.torch_version} · {formatBytes(data.kit.total_bytes)}
               </span>
+            ) : null}
+            {data?.probe.state === 'ok' && data.probe.cuda_device_name ? (
+              <span className="truncate text-xs text-app-muted">{data.probe.cuda_device_name}</span>
             ) : null}
           </div>
 
@@ -222,7 +236,7 @@ export function CudaAccelerationSettings() {
 
           {!jobRunning && data?.status === 'invalidated' ? (
             <div className="grid gap-2 rounded-xl border app-control p-4">
-              <p className="break-words text-sm text-app-muted">{data.reason ?? t('settings.cudaInvalidated')}</p>
+              <p className="break-words text-sm text-app-muted">{reasonLabel ?? data.reason ?? t('settings.cudaInvalidated')}</p>
               <div>
                 <Button size="sm" onClick={redownload} disabled={!supported || deleteMutation.isPending || downloadMutation.isPending}>
                   <Download className="size-4" />
@@ -241,91 +255,53 @@ export function CudaAccelerationSettings() {
             </div>
           ) : null}
 
-          {enabled && data ? (
-            <div className="grid gap-1.5 rounded-xl border app-control px-4 py-3">
-              {data.probe.state === 'pending' ? (
-                <p className="text-xs text-app-muted">{t('settings.cudaProbePending')}</p>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-app-muted">{t('settings.cudaDevice')}</span>
-                    <span className="truncate text-app">{data.probe.cuda_device_name ?? '-'}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-app-muted">CUDA</span>
-                    <span className="text-app">{data.probe.torch_cuda_available ? t('settings.cudaAvailable') : t('settings.cudaUnavailable')}</span>
-                  </div>
-                </>
-              )}
+          {data?.status === 'enable_failed' ? (
+            <div className="grid gap-1">
+              <p className="break-words text-sm text-[var(--app-danger)]">{reasonLabel ?? data.reason ?? t('toast.actionFailed')}</p>
+              {showRawReason ? <p className="break-all text-xs text-app-muted">{data.reason}</p> : null}
             </div>
-          ) : null}
-
-          {data?.status === 'enable_failed' && data.reason ? (
-            <p className="break-words text-sm text-[var(--app-danger)]">{data.reason}</p>
           ) : null}
         </div>
       </Panel>
 
-      <div className="grid content-start gap-4">
-        <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('settings.system')} title={t('settings.cudaGpuInfo')} description={t('settings.cudaGpuInfoDescription')} />
-          <div className="grid gap-3 p-5">
-            <div className="flex items-center gap-2">
-              <Cpu className="size-4 text-app-muted" />
-              <Badge tone={data?.gpu_detected === false ? 'warning' : data?.gpu_detected ? 'success' : 'neutral'}>{gpuDetectedLabel}</Badge>
-            </div>
-            <PathRow label={t('settings.cudaGpuDetection')} value={gpuDetectedLabel} />
-            <PathRow label={t('settings.cudaDevice')} value={probeState === 'ok' ? data?.probe.cuda_device_name : null} />
-            <PathRow
-              label="CUDA"
-              value={probeState === 'ok' ? (data?.probe.torch_cuda_available ? t('settings.cudaAvailable') : t('settings.cudaUnavailable')) : t('settings.cudaProbePending')}
-            />
+      <Panel className="overflow-hidden">
+        <PanelHeader eyebrow={t('settings.system')} title={t('settings.cudaDetailsTitle')} />
+        <div className="grid gap-3 p-5">
+          <PathRow label={t('settings.cudaGpuDetection')} value={gpuDetectedLabel} />
+          <PathRow label={t('settings.cudaDevice')} value={probeState === 'ok' ? data?.probe.cuda_device_name : null} />
+          <PathRow
+            label="CUDA"
+            value={probeState === 'ok' ? (data?.probe.torch_cuda_available ? t('settings.cudaAvailable') : t('settings.cudaUnavailable')) : t('settings.cudaProbePending')}
+          />
+          {data?.kit ? (
+            <>
+              <PathRow label={t('settings.cudaKitVersion')} value={`${data.kit.kit_version} · torch ${data.kit.torch_version}`} />
+              <PathRow label={t('settings.cudaKitSize')} value={formatBytes(data.kit.total_bytes)} />
+              <PathRow label={t('settings.cudaKitPath')} value={kitPath} />
+              <div>
+                <ConfirmAction
+                  title={t('confirm.cudaDeleteTitle')}
+                  description={t('confirm.cudaDeleteDescription')}
+                  confirmLabel={t('settings.cudaDeleteKit')}
+                  tone="secondary"
+                  onConfirm={removeKit}
+                >
+                  <Button size="sm" variant="secondary" disabled={jobRunning || deleteMutation.isPending || !supported}>
+                    <Trash2 className="size-4" />
+                    {t('settings.cudaDeleteKit')}
+                  </Button>
+                </ConfirmAction>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-app-muted">{t('settings.cudaKitNotInstalled')}</p>
+          )}
+          <div className="grid gap-1.5 border-t app-border pt-3">
+            <p className="text-xs leading-5 text-app-muted">{t('settings.cudaAboutBody')}</p>
+            <p className="text-xs leading-5 text-app-muted">{t('settings.cudaAboutDisk')}</p>
           </div>
-        </Panel>
-
-        <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('settings.system')} title={t('settings.cudaKitInfo')} description={t('settings.cudaKitInfoDescription')} />
-          <div className="grid gap-3 p-5">
-            {data?.kit ? (
-              <>
-                <PathRow label={t('settings.cudaKitVersion')} value={`${data.kit.kit_version} · torch ${data.kit.torch_version}`} />
-                <PathRow label={t('settings.cudaKitSize')} value={formatBytes(data.kit.total_bytes)} />
-                <PathRow label={t('settings.cudaKitPath')} value={kitPath} />
-                <div>
-                  <ConfirmAction
-                    title={t('confirm.cudaDeleteTitle')}
-                    description={t('confirm.cudaDeleteDescription')}
-                    confirmLabel={t('settings.cudaDeleteKit')}
-                    tone="secondary"
-                    onConfirm={removeKit}
-                  >
-                    <Button size="sm" variant="secondary" disabled={jobRunning || deleteMutation.isPending || !supported}>
-                      <Trash2 className="size-4" />
-                      {t('settings.cudaDeleteKit')}
-                    </Button>
-                  </ConfirmAction>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-app-muted">{t('settings.cudaKitNotInstalled')}</p>
-            )}
-          </div>
-        </Panel>
-
-        <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('settings.system')} title={t('settings.cudaAboutTitle')} />
-          <div className="grid gap-3 p-5">
-            <div className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-app-muted" />
-              <p className="text-sm text-app-muted">{t('settings.cudaAboutBody')}</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <HardDrive className="mt-0.5 size-4 shrink-0 text-app-muted" />
-              <p className="text-sm text-app-muted">{t('settings.cudaAboutDisk')}</p>
-            </div>
-          </div>
-        </Panel>
-      </div>
+        </div>
+      </Panel>
     </section>
   );
 }

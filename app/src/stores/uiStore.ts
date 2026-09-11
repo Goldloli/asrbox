@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { defaultShortcuts, normalizeShortcut, type ShortcutAction, type ShortcutMap } from '../lib/shortcuts';
 
 export type Locale = 'zh' | 'en';
 export type ThemeMode = 'system' | 'dark' | 'light';
@@ -28,7 +27,6 @@ interface UiStore {
   reducedMotion: ReducedMotionMode;
   exportDirectory: string | null;
   lastLLMProviderId: string | null;
-  shortcuts: ShortcutMap;
   updateChannel: UpdateChannel;
   autoCheckUpdates: boolean;
   updateNotifications: boolean;
@@ -40,7 +38,6 @@ interface UiStore {
   setReducedMotion: (reducedMotion: ReducedMotionMode) => void;
   setExportDirectory: (exportDirectory: string | null) => void;
   setLastLLMProviderId: (providerId: string | null) => void;
-  setShortcut: (action: ShortcutAction, shortcut: string) => void;
   setUpdateChannel: (channel: UpdateChannel) => void;
   setAutoCheckUpdates: (enabled: boolean) => void;
   setUpdateNotifications: (enabled: boolean) => void;
@@ -57,7 +54,6 @@ export const useUiStore = create<UiStore>()(
       reducedMotion: 'system',
       exportDirectory: null,
       lastLLMProviderId: null,
-      shortcuts: defaultShortcuts,
       updateChannel: defaultUpdateChannel,
       autoCheckUpdates: true,
       updateNotifications: true,
@@ -69,9 +65,6 @@ export const useUiStore = create<UiStore>()(
       setReducedMotion: (reducedMotion) => set({ reducedMotion }),
       setExportDirectory: (exportDirectory) => set({ exportDirectory }),
       setLastLLMProviderId: (lastLLMProviderId) => set({ lastLLMProviderId }),
-      setShortcut: (action, shortcut) => set((state) => ({
-        shortcuts: { ...defaultShortcuts, ...state.shortcuts, [action]: normalizeShortcut(shortcut) },
-      })),
       setUpdateChannel: (updateChannel) => set({ updateChannel }),
       setAutoCheckUpdates: (autoCheckUpdates) => set({ autoCheckUpdates }),
       setUpdateNotifications: (updateNotifications) => set({ updateNotifications }),

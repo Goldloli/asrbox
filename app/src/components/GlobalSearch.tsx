@@ -1,11 +1,10 @@
 import { Link } from '@tanstack/react-router';
 import { FileAudio, HardDriveDownload, Search, Server } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 import { useModelsQuery, useProvidersQuery, useTasksQuery } from '../lib/queries';
 import { formatDate } from '../lib/format';
 import { Button, Dialog, DialogContent, DialogTrigger, EmptyState, Input } from './weiui';
-import { openGlobalSearchEvent } from './GlobalShortcuts';
 import { ResultItemContent, resultItemClassName } from './ResultItem';
 
 type SearchResult = {
@@ -32,12 +31,6 @@ export function GlobalSearch() {
   const modelsQuery = useModelsQuery();
   const providersQuery = useProvidersQuery();
   const normalizedQuery = query.trim().toLowerCase();
-
-  useEffect(() => {
-    const handleOpen = () => setOpen(true);
-    window.addEventListener(openGlobalSearchEvent, handleOpen);
-    return () => window.removeEventListener(openGlobalSearchEvent, handleOpen);
-  }, []);
 
   const results = useMemo<SearchResult[]>(() => {
     const taskResults = (tasksQuery.data?.items ?? []).map((task) => ({

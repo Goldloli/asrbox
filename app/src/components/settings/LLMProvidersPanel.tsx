@@ -1,6 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BrainCircuit, CheckCircle2, HardDrive, Loader2, Pencil, Plus, TestTube2, Trash2, Wifi, XCircle } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, HardDrive, ListPlus, Loader2, Pencil, Plus, TestTube2, Trash2, Wifi, XCircle } from 'lucide-react';
 import { apiClient, type LLMProvider, type LLMProviderPreset, type LLMCompatibility, type LLMProviderTestResult } from '../../lib/api';
 import { queryKeys, useLLMProviderPresetsQuery, useLLMProvidersQuery } from '../../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../weiui';
@@ -167,6 +167,7 @@ function LLMProviderForm({ provider, presets, onSaved }: {
   const { t } = useI18n();
   const toast = useToast();
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!provider) return;
@@ -214,6 +215,7 @@ function LLMProviderForm({ provider, presets, onSaved }: {
   const selectPreset = (presetId: string) => {
     const preset = presets.find((item) => item.id === presetId);
     if (!preset) return;
+    setFetchedModels(null);
     setForm((current) => ({
       ...current,
       preset: preset.id,
@@ -221,6 +223,28 @@ function LLMProviderForm({ provider, presets, onSaved }: {
       base_url: preset.base_url,
     }));
   };
+
+  const fetchModels = useMutation({
+    mutationFn: () =>
+      apiClient.fetchLLMProviderModels({
+        preset: form.preset,
+        base_url: form.base_url.trim(),
+        api_key: form.api_key || undefined,
+        provider_id: provider?.id,
+      }),
+    onSuccess: (result) => {
+      if (result.ok) {
+        setFetchedModels(result.items);
+      } else {
+        setFetchedModels(null);
+        toast.error(t('llmProviders.fetchModelsFailed'), result.message);
+      }
+    },
+    onError: (error) => {
+      setFetchedModels(null);
+      toast.error(t('llmProviders.fetchModelsFailed'), toastErrorMessage(error));
+    },
+  });
   const localEndpoint = isLoopback(form.base_url);
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -234,13 +258,52 @@ function LLMProviderForm({ provider, presets, onSaved }: {
       </Field>
       <Field label={t('providers.name')}><Input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
       <Field label={t('providers.baseUrl')}>
-        <Input required type="url" value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
+        <Input
+          required
+          type="url"
+          value={form.base_url}
+          onChange={(event) => {
+            setFetchedModels(null);
+            setForm({ ...form, base_url: event.target.value });
+          }}
+        />
       </Field>
       <p className="flex items-start gap-2 rounded-lg border app-border px-3 py-2 text-xs leading-5 text-app-muted">
         {localEndpoint ? <HardDrive className="mt-0.5 size-4 shrink-0" /> : <Wifi className="mt-0.5 size-4 shrink-0" />}
         {localEndpoint ? t('llmProviders.localDisclosure') : t('llmProviders.remoteDisclosure')}
       </p>
-      <Field label={t('providers.defaultModel')}><Input required value={form.default_model} onChange={(event) => setForm({ ...form, default_model: event.target.value })} /></Field>
+      <Field label={t('providers.defaultModel')}>
+        <div className="flex gap-2">
+          <Input required className="flex-1" value={form.default_model} onChange={(event) => setForm({ ...form, default_model: event.target.value })} />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={fetchModels.isPending || !form.base_url.trim()}
+            onClick={() => fetchModels.mutate()}
+          >
+            {fetchModels.isPending ? <Loader2 className="size-4 animate-spin" /> : <ListPlus className="size-4" />}
+            {fetchModels.isPending ? t('llmProviders.fetchingModels') : t('llmProviders.fetchModels')}
+          </Button>
+        </div>
+        {fetchedModels && fetchedModels.length > 0 ? (
+          <div className="mt-2">
+            <Select
+              value="__none__"
+              onValueChange={(value) => {
+                if (value !== '__none__') setForm((current) => ({ ...current, default_model: value }));
+              }}
+              options={[
+                { value: '__none__', label: t('llmProviders.pickModel') },
+                ...fetchedModels.map((model) => ({ value: model, label: model })),
+              ]}
+            />
+          </div>
+        ) : null}
+        {fetchedModels && fetchedModels.length === 0 ? (
+          <p className="mt-2 text-xs text-app-muted">{t('llmProviders.noModelsFound')}</p>
+        ) : null}
+      </Field>
       <Field label={t('providers.apiKey')} hint={provider ? t('providers.keepKey') : undefined}>
         <Input type="password" value={form.api_key} onChange={(event) => setForm({ ...form, api_key: event.target.value })} />
       </Field>

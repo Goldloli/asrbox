@@ -2,6 +2,30 @@
 
 All notable ASRbox changes are documented here. The format follows Keep a Changelog, and versions follow Semantic Versioning while the project is pre-1.0.
 
+## [Unreleased]
+
+### Added
+
+- LLM provider setup can now pull the available model IDs straight from the configured endpoint: the add/edit dialog has a "Fetch models" action that works before saving (reusing the stored key when editing), Ollama falls back to its native model listing, and the result is a pick-list that fills the default model field while manual entry stays available. Backed by a new `POST /llm-providers/models` probe endpoint with the same bounded-transport and credential-protection rules as the connection test.
+- Maintainer tooling: `npm run version:bump -- <X.Y.Z>` updates every maintained version source, the README/release-guide anchors, and the CHANGELOG links in one step (promoting the Unreleased section and scaffolding the release-notes file), then re-proves consistency via `check:versions`, which now also enforces CHANGELOG section and link consistency for the current version.
+- GPU acceleration status now carries a machine-readable `reason_code` and the panel offers an explicit "Detect again" action (`POST /settings/cuda-acceleration/redetect`) that re-runs hardware detection; detection caches are also reset automatically on kit lifecycle events, so a GPU that appears after installing a driver no longer stays stuck on "unavailable".
+- On macOS the acceleration settings tab now shows an Apple GPU panel (Metal/MPS and MLX availability plus the models that accelerate automatically) instead of the Windows-only CUDA controls; web and other platforms see a desktop-only explanation.
+
+### Removed
+
+- Global keyboard shortcuts (mod+n / mod+f / mod+, / mod+k), the settings shortcuts card, and the command palette are removed as product decisions; global search remains available from its top-bar button, and settings export/import no longer carries a shortcuts field.
+
+### Changed
+
+- The models page now defaults to the "All" category with "Recommended" as the second filter option, so the full catalog is visible on entry.
+- Not-downloaded model rows now show a localized status description (Chinese/English) instead of the raw backend English sentence, powered by a new machine-readable `compatibility_error_code` field in `GET /models/status`; merely not-downloaded models no longer clutter the "Needs attention" group, and nearby hardcoded English (download status badges, category field, missing-model notice) is localized.
+- The CUDA acceleration panel is now a compact two-card layout, localized failure reasons replace raw backend sentences (with the original text kept as diagnostic detail), and restart-related copy says "restart the app" instead of referring to an internal backend.
+
+### Fixed
+
+- The Windows NSIS installer and uninstaller now use the ASRbox application icon instead of the default NSIS icon.
+- CHANGELOG comparison links for 0.1.7–0.1.9 and the Unreleased baseline now point at the correct tags.
+
 ## [0.1.9] - 2026-09-10
 
 ### Added
@@ -224,7 +248,10 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/Goldloli/asrbox/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/Goldloli/asrbox/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/Goldloli/asrbox/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/Goldloli/asrbox/compare/v0.1.5...v0.1.6
 [0.1.0-rc.2]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...v0.1.0-rc.2
 [0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1

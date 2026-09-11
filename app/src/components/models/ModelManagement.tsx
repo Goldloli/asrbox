@@ -10,13 +10,37 @@ import { Badge, Button, Dialog, DialogContent, DialogTrigger, Progress } from '.
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+function modelCompatibilityIssue(model: ModelStatus, t: Translate): string | null {
+  if (!model.compatibility_error) return null;
+  switch (model.compatibility_error_code) {
+    case 'model_not_downloaded':
+      return t('models.issueNotDownloaded');
+    case 'missing_files':
+      return t('models.issueMissingFiles');
+    case 'unknown_model':
+      return t('models.issueUnknownModel');
+    case 'runtime_incompatible':
+      return t('models.issueRuntimeIncompatible');
+    default:
+      return model.compatibility_error;
+  }
+}
+
+const categoryLabelKeys = {
+  diarization: 'models.categoryDiarization',
+  apple: 'models.categoryApple',
+  chinese: 'models.categoryChinese',
+  faster: 'models.categoryFaster',
+  whisper: 'models.categoryWhisper',
+} as const;
+
 export function createModelGroups(
   models: ModelStatus[],
   progressByModel: Record<string, ModelProgress>,
   pinnedModelNames: string[],
   t: Translate,
 ) {
-  const issues = models.filter((model) => model.compatible === false || Boolean(model.error || model.download_error || model.compatibility_error));
+  const issues = models.filter((model) => Boolean(model.error || model.download_error) || Boolean(model.compatibility_error && model.compatibility_error_code !== 'model_not_downloaded'));
   const downloading = models.filter((model) => model.downloading || progressByModel[model.model_name]);
   const pinned = models.filter((model) => pinnedModelNames.includes(model.model_name));
   const local = models.filter((model) => model.downloaded && !downloading.includes(model) && !pinned.includes(model));
@@ -69,7 +93,7 @@ export function ModelListRow({
   const { t } = useI18n();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
-  const error = progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error;
+  const error = progress?.error ?? model.download_error ?? modelCompatibilityIssue(model, t) ?? model.error;
   const isActive = model.downloading || Boolean(progress);
   const isPaused = progress?.status === 'paused';
   const hasDownloadError = Boolean(progress?.error || model.download_error);
@@ -122,7 +146,7 @@ export function ModelListRow({
                   <StorageMetric label={t('models.runtime')} value={model.runtime} />
                   <StorageMetric label={t('models.deviceSupport')} value={deviceLabels.map((key) => t(key)).join(' / ')} />
                   <StorageMetric label={t('models.size')} value={`${model.size_mb} MB`} />
-                  <StorageMetric label={t('models.categoryAll')} value={modelCategory(model)} />
+                  <StorageMetric label={t('models.categoryLabel')} value={t(categoryLabelKeys[modelCategory(model)])} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {model.languages.map((language) => <Badge key={language}>{language}</Badge>)}
@@ -134,6 +158,9 @@ export function ModelListRow({
                   <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
                     {error}
                   </p>
+                )}
+                {model.compatibility_error_code && model.compatibility_error && model.compatibility_error !== error && (
+                  <p className="text-xs leading-5 text-app-muted">{model.compatibility_error}</p>
                 )}
                 <div className="flex flex-wrap justify-end gap-2">
                   <ConfirmAction

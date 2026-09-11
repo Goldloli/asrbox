@@ -196,6 +196,16 @@ def download_active() -> bool:
     return current_job().get("status") == "running"
 
 
+def _reset_gpu_detection() -> None:
+    """Reset the nvidia-smi gate cache; an in-flight probe is left running."""
+    global _gpu_detect_started, _gpu_detect_result
+    with _gpu_detect_lock:
+        if _gpu_detect_started and _gpu_detect_result is None:
+            return
+        _gpu_detect_started = False
+        _gpu_detect_result = None
+
+
 def _reset_probe_cache() -> None:
     global _probe_warm_started, _probe_warm_failed
     cache_clear = getattr(platform_service.runtime_probe_snapshot, "cache_clear", None)
@@ -204,6 +214,7 @@ def _reset_probe_cache() -> None:
     with _probe_warm_lock:
         _probe_warm_started = False
         _probe_warm_failed = None
+    _reset_gpu_detection()
 
 
 def _schedule_probe_warm() -> None:
@@ -337,6 +348,7 @@ def acceleration_status() -> dict[str, Any]:
             "enabled": False,
             "status": "not_downloaded",
             "reason": "CUDA 加速套件仅支持 Windows 桌面端",
+            "reason_code": "unsupported_platform",
             "supported": False,
             "gpu_detected": None,
             "kit": None,
@@ -351,6 +363,7 @@ def acceleration_status() -> dict[str, Any]:
 
     status = "not_downloaded"
     reason: str | None = None
+    reason_code: str | None = None
     if job.get("status") == "running":
         status = "downloading"
     elif not _kit_present(manifest):
@@ -360,7 +373,8 @@ def acceleration_status() -> dict[str, Any]:
         current_torch = _current_torch_version()
         if current_torch and kit_torch and _base_version(kit_torch) != _base_version(current_torch):
             status = "invalidated"
-            reason = f"加速套件的 torch 版本（{kit_torch}）与当前后端（{current_torch}）不一致，请重新下载加速套件"
+            reason = f"加速套件的 torch 版本（{kit_torch}）与当前软件版本（{current_torch}）不一致，请重新下载加速套件"
+            reason_code = "kit_version_mismatch"
         elif not enabled:
             status = "ready"
         elif snapshot is None:
@@ -370,12 +384,15 @@ def acceleration_status() -> dict[str, Any]:
         elif snapshot.get("_error"):
             status = "enable_failed"
             reason = f"运行时探测失败：{snapshot['_error']}"
+            reason_code = "probe_failed"
         elif not _torch_file_in_kit(snapshot.get("torch_file")):
             status = "enable_failed"
-            reason = "加速套件尚未注入当前进程（开启后需要重启后端才能生效）"
+            reason = "加速套件尚未注入当前进程（开启后需要重启软件才能生效）"
+            reason_code = "kit_not_injected"
         elif not snapshot.get("torch_cuda_available"):
             status = "enable_failed"
             reason = "加速套件已加载，但未检测到可用的 CUDA 设备"
+            reason_code = "cuda_device_missing"
         else:
             status = "enabled"
 
@@ -390,12 +407,20 @@ def acceleration_status() -> dict[str, Any]:
         "enabled": enabled,
         "status": status,
         "reason": reason,
+        "reason_code": reason_code,
         "supported": True,
         "gpu_detected": _gpu_detected_cached(),
         "kit": kit_info,
         "probe": probe,
         "job": job if job.get("status") != "idle" else None,
     }
+
+
+def redetect_and_status() -> dict[str, Any]:
+    if cuda_kit_supported():
+        # _reset_probe_cache 内部一并重置显卡检测缓存
+        _reset_probe_cache()
+    return acceleration_status()
 
 
 def set_enabled(enabled: bool) -> dict[str, Any]:

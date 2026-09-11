@@ -58,6 +58,10 @@ async function fixture(version, backendVersion = version) {
     "const applicationVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;\n"
       + "define: { __ASRBOX_VERSION__: JSON.stringify(applicationVersion) },\n",
   );
+  await writeFile(
+    path.join(root, "CHANGELOG.md"),
+    `# Changelog\n\n## [Unreleased]\n\n## [${version}] - 2026-07-05\n\n### Added\n\n- Entry.\n\n[Unreleased]: https://github.com/Goldloli/asrbox/compare/v${version}...HEAD\n[${version}]: https://github.com/Goldloli/asrbox/releases/tag/v${version}\n`,
+  );
   return root;
 }
 
@@ -116,6 +120,29 @@ test("release tag must be safe semver and match the application", () => {
   assert.equal(validateReleaseTag("v0.1.0-beta.1", "0.1.0-beta.1"), "v0.1.0-beta.1");
   assert.throws(() => validateReleaseTag("v0.1.0\nBAD=1", "0.1.0"), /Invalid release tag/);
   assert.throws(() => validateReleaseTag("v0.1.0", "0.1.0-beta.1"), /does not match/);
+});
+
+test("rejects stale CHANGELOG link references", async () => {
+  const staleUnreleased = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(staleUnreleased, "CHANGELOG.md"),
+    "# Changelog\n\n## [Unreleased]\n\n## [0.1.0-beta.1] - 2026-07-05\n\n[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.0.9...HEAD\n[0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1\n",
+  );
+  await assert.rejects(checkVersions(staleUnreleased), /CHANGELOG\.md#unreleased: missing/);
+
+  const missingLink = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(missingLink, "CHANGELOG.md"),
+    "# Changelog\n\n## [Unreleased]\n\n## [0.1.0-beta.1] - 2026-07-05\n\n[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...HEAD\n",
+  );
+  await assert.rejects(checkVersions(missingLink), /CHANGELOG\.md#link: missing/);
+
+  const missingSection = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(missingSection, "CHANGELOG.md"),
+    "# Changelog\n\n## [Unreleased]\n\n[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.1.0-beta.1...HEAD\n[0.1.0-beta.1]: https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1\n",
+  );
+  await assert.rejects(checkVersions(missingSection), /CHANGELOG\.md#section: missing/);
 });
 
 test("CUDA kit lock torch base version must match the Windows runtime lock", async () => {

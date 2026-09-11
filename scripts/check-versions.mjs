@@ -88,6 +88,22 @@ export async function checkVersions(root) {
         ? expected
         : undefined,
     );
+    const changelog = await readOptional(path.join(root, "CHANGELOG.md"));
+    const escapedExpected = escapeRegExp(expected);
+    versions.set(
+      "CHANGELOG.md#section",
+      changelog && new RegExp(`^## \\[${escapedExpected}\\]`, "m").test(changelog) ? expected : undefined,
+    );
+    versions.set(
+      "CHANGELOG.md#link",
+      changelog && new RegExp(`^\\[${escapedExpected}\\]:\\s*\\S+`, "m").test(changelog) ? expected : undefined,
+    );
+    versions.set(
+      "CHANGELOG.md#unreleased",
+      changelog && new RegExp(`^\\[Unreleased\\]:\\s*\\S+/compare/v${escapedExpected}\\.\\.\\.HEAD\\s*$`, "m").test(changelog)
+        ? expected
+        : undefined,
+    );
   }
 
   const frontendVersionIsBound =
@@ -134,6 +150,10 @@ export function validateReleaseTag(tag, version) {
 
 function matchVersion(contents, pattern) {
   return contents.match(pattern)?.[1];
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseBunWorkspaceVersions(contents) {

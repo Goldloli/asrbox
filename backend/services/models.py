@@ -268,12 +268,12 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
     model_dir = _model_dir(model_name)
     downloaded = is_model_downloaded(model_name)
     if model_config is None:
-        return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model registry entry"], "message": f"Unknown model: {model_name}"}
+        return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model registry entry"], "message": f"Unknown model: {model_name}", "code": "unknown_model"}
     runtime_error = _model_runtime_error(model_config)
     if runtime_error:
-        return {"model_name": model_name, "downloaded": downloaded, "compatible": False, "missing": ["compatible runtime"], "message": runtime_error}
+        return {"model_name": model_name, "downloaded": downloaded, "compatible": False, "missing": ["compatible runtime"], "message": runtime_error, "code": "runtime_incompatible"}
     if not downloaded:
-        return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model.json", "weights"], "message": f"Model {model_name} is not downloaded"}
+        return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model.json", "weights"], "message": f"Model {model_name} is not downloaded", "code": "model_not_downloaded"}
 
     missing: list[str] = []
     engine = model_config.engine
@@ -340,6 +340,7 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
         "compatible": compatible,
         "missing": missing,
         "message": "Compatible" if compatible else f"Missing required files: {', '.join(missing)}",
+        "code": None if compatible else "missing_files",
     }
 
 
@@ -391,6 +392,7 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 download_error=error,
                 compatible=False if runtime_error else compatibility["compatible"] if compatibility["downloaded"] else None,
                 compatibility_error=runtime_error or (None if compatibility["compatible"] else compatibility["message"]),
+                compatibility_error_code="runtime_incompatible" if runtime_error else (None if compatibility["compatible"] else compatibility.get("code")),
                 cache_detected=bool(cache["detected"]),
                 cache_size_mb=round(cache["size_mb"], 2) if cache["size_mb"] else None,
                 cache_path=cache["path"],

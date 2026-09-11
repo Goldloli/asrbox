@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
-import { apiClient, getActiveDownloadItems } from '../lib/api';
+import { apiClient, getActiveDownloadItems, type ModelProgress } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
@@ -14,11 +14,21 @@ import { BenchmarkCard, createModelGroups, ModelListRow, StorageMetric } from '.
 type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
 type ModelViewCategory = ModelCategory | 'all' | 'pinned';
 
+const downloadStatusKeys: Record<ModelProgress['status'], Parameters<ReturnType<typeof useI18n>['t']>[0]> = {
+  queued: 'models.downloadStatusQueued',
+  downloading: 'models.downloadStatusDownloading',
+  paused: 'models.downloadStatusPaused',
+  extracting: 'models.downloadStatusExtracting',
+  complete: 'models.downloadStatusComplete',
+  cancelled: 'models.downloadStatusCancelled',
+  error: 'models.downloadStatusError',
+};
+
 export function ModelsPage() {
   const queryClient = useQueryClient();
   const { locale, t } = useI18n();
   const toast = useToast();
-  const [category, setCategory] = useState<ModelViewCategory>('recommended');
+  const [category, setCategory] = useState<ModelViewCategory>('all');
   const [guidePreference, setGuidePreference] = useState<GuidePreference>('general');
   const [pinnedModelNames, setPinnedModelNames] = useState<string[]>([]);
   const modelsQuery = useModelsQuery();
@@ -112,9 +122,9 @@ export function ModelsPage() {
   const benchmarkModels = visibleModels.slice(0, 4);
   const modelGroups = createModelGroups(visibleModels, progressByModel, pinnedModelNames, t);
   const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
+    { value: 'all', label: t('models.categoryAll') },
     { value: 'recommended', label: t('models.categoryRecommended') },
     { value: 'pinned', label: t('models.categoryPinned') },
-    { value: 'all', label: t('models.categoryAll') },
     { value: 'apple', label: t('models.categoryApple') },
     { value: 'faster', label: t('models.categoryFaster') },
     { value: 'chinese', label: t('models.categoryChinese') },
@@ -277,14 +287,14 @@ export function ModelsPage() {
         </Panel>
 
         <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={`${downloads.length} ${locale === 'zh' ? '进行中' : 'running'}`} />
+          <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={t('models.downloadsRunning', { count: downloads.length })} />
           <div className="grid gap-3 p-5">
             {downloads.map((download) => (
               <div key={download.model_name} className="grid gap-2 rounded-xl border app-control p-3">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate font-medium text-app">{download.model_name}</span>
                   <Badge tone={download.status === 'error' ? 'danger' : download.status === 'complete' ? 'success' : 'warning'}>
-                    {download.status}
+                    {t(downloadStatusKeys[download.status])}
                   </Badge>
                 </div>
                 <Progress value={download.progress} />

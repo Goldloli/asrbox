@@ -59,7 +59,7 @@ async def migrate_progress():
 @router.get("/{model_name}/compatibility", response_model=ModelCompatibilityResponse)
 async def model_compatibility(model_name: str):
     result = model_service.check_model_compatibility(model_name)
-    if result["message"].startswith("Unknown model"):
+    if result.get("code") == "unknown_model":
         raise HTTPException(status_code=404, detail=result["message"])
     return ModelCompatibilityResponse(**result)
 

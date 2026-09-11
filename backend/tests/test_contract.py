@@ -65,6 +65,7 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("GET", "/health/filesystem"),
         ("GET", "/llm-providers"),
         ("POST", "/llm-providers"),
+        ("POST", "/llm-providers/models"),
         ("GET", "/llm-providers/presets"),
         ("DELETE", "/llm-providers/{provider_id}"),
         ("PUT", "/llm-providers/{provider_id}"),
@@ -115,6 +116,7 @@ def test_api_freeze_routes_are_registered(tmp_path: Path) -> None:
         ("POST", "/settings/cuda-acceleration/download"),
         ("POST", "/settings/cuda-acceleration/download/cancel"),
         ("DELETE", "/settings/cuda-acceleration/kit"),
+        ("POST", "/settings/cuda-acceleration/redetect"),
         ("GET", "/settings/media-storage"),
         ("PUT", "/settings/media-storage"),
         ("POST", "/shutdown"),
@@ -247,6 +249,7 @@ def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:
     for key in [
         "downloaded",
         "compatible",
+        "compatibility_error_code",
         "download_error",
         "cache_detected",
         "size_on_disk_mb",
@@ -346,6 +349,8 @@ def test_cuda_acceleration_contract_is_typed(tmp_path: Path) -> None:
     assert update_ref.endswith("CudaAccelerationStatusResponse")
     delete_ref = routes["/settings/cuda-acceleration/kit"]["delete"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
     assert delete_ref.endswith("CudaAccelerationStatusResponse")
+    redetect_ref = routes["/settings/cuda-acceleration/redetect"]["post"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+    assert redetect_ref.endswith("CudaAccelerationStatusResponse")
     for path, operation, code in (
         ("/settings/cuda-acceleration/download", "post", "202"),
         ("/settings/cuda-acceleration/download", "get", "200"),
@@ -356,8 +361,14 @@ def test_cuda_acceleration_contract_is_typed(tmp_path: Path) -> None:
 
     schemas = schema["components"]["schemas"]
     status_fields = schemas["CudaAccelerationStatusResponse"]["properties"]
-    assert {"enabled", "status", "reason", "supported", "gpu_detected", "kit", "probe", "job"} <= status_fields.keys()
+    assert {"enabled", "status", "reason", "reason_code", "supported", "gpu_detected", "kit", "probe", "job"} <= status_fields.keys()
     assert set(status_fields["status"]["enum"]) == {"not_downloaded", "downloading", "ready", "enabled", "enable_failed", "invalidated"}
+    reason_code_values = status_fields["reason_code"]
+    if "anyOf" in reason_code_values:
+        reason_code_enum = {value for option in reason_code_values["anyOf"] for value in option.get("enum", [])}
+    else:
+        reason_code_enum = set(reason_code_values["enum"])
+    assert reason_code_enum == {"unsupported_platform", "kit_version_mismatch", "probe_failed", "kit_not_injected", "cuda_device_missing"}
     probe_fields = schemas["CudaKitProbeStatus"]["properties"]
     assert {"state", "torch_cuda_available", "cuda_device_name", "torch_file"} <= probe_fields.keys()
     assert set(probe_fields["state"]["enum"]) == {"pending", "ok", "failed"}
@@ -370,7 +381,7 @@ def test_cuda_acceleration_contract_is_typed(tmp_path: Path) -> None:
     response = client.get("/settings/cuda-acceleration")
     assert response.status_code == 200
     body = response.json()
-    assert {"enabled", "status", "reason", "supported", "kit", "probe", "job"} <= body.keys()
+    assert {"enabled", "status", "reason", "reason_code", "supported", "kit", "probe", "job"} <= body.keys()
     assert {"state", "torch_cuda_available", "cuda_device_name", "torch_file"} <= body["probe"].keys()
 
 
@@ -536,3 +547,9 @@ def test_llm_compatibility_contract_and_stale_recommendation(tmp_path, monkeypat
         properties = schema['components']['schemas']['LLMProviderResponse']['properties']
         assert 'compatibility' in properties
         assert 'LLMCapabilityTestResponse' in str(schema['paths'][path.replace(row['id'], '{provider_id}') + '/test-capabilities'])
+        models_ref = schema['paths']['/llm-providers/models']['post']['responses']['200']['content']['application/json']['schema']['$ref']
+        assert models_ref.endswith('LLMProviderModelsResponse')
+        models_fields = schema['components']['schemas']['LLMProviderModelsResponse']['properties']
+        assert {'ok', 'items', 'message', 'error_code'} <= models_fields.keys()
+        request_fields = schema['components']['schemas']['LLMProviderModelsRequest']['properties']
+        assert set(request_fields) == {'preset', 'base_url', 'api_key', 'provider_id'}

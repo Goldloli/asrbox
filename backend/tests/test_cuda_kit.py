@@ -332,6 +332,112 @@ def test_unsupported_platform_short_circuits(monkeypatch: pytest.MonkeyPatch) ->
     assert status["probe"]["state"] == "pending"
     with pytest.raises(ASRboxError):
         cuda_kit.set_enabled(True)
+
+
+# --- reason_code 契约 ---
+
+
+def test_reason_code_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cuda_kit, "_host_platform", lambda: "darwin")
+    assert cuda_kit.acceleration_status()["reason_code"] == "unsupported_platform"
+
+
+def test_reason_code_kit_version_mismatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_kit(tmp_path)
+    monkeypatch.setattr(cuda_kit, "_current_torch_version", lambda: "2.12.0")
+    assert cuda_kit.acceleration_status()["reason_code"] == "kit_version_mismatch"
+
+
+def test_reason_code_probe_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_kit(tmp_path)
+    cuda_kit.set_enabled(True)
+    monkeypatch.setattr(cuda_kit, "_probe_snapshot_cached", lambda: {"_error": "boom"})
+    assert cuda_kit.acceleration_status()["reason_code"] == "probe_failed"
+
+
+def test_reason_code_kit_not_injected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_kit(tmp_path)
+    cuda_kit.set_enabled(True)
+    snapshot = {"torch_cuda_available": True, "cuda_device_name": "Fake RTX", "torch_file": "/elsewhere/torch/__init__.py"}
+    monkeypatch.setattr(cuda_kit, "_probe_snapshot_cached", lambda: snapshot)
+    status = cuda_kit.acceleration_status()
+    assert status["reason_code"] == "kit_not_injected"
+    assert "重启软件" in status["reason"]
+
+
+def test_reason_code_cuda_device_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    kit, _manifest = _install_fake_kit(tmp_path)
+    cuda_kit.set_enabled(True)
+    monkeypatch.setattr(cuda_kit, "_probe_snapshot_cached", lambda: _probe_ok(kit, cuda=False))
+    assert cuda_kit.acceleration_status()["reason_code"] == "cuda_device_missing"
+
+
+def test_reason_code_none_when_healthy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    kit, _manifest = _install_fake_kit(tmp_path)
+    assert cuda_kit.acceleration_status()["reason_code"] is None
+    cuda_kit.set_enabled(True)
+    monkeypatch.setattr(cuda_kit, "_probe_snapshot_cached", lambda: _probe_ok(kit))
+    assert cuda_kit.acceleration_status()["reason_code"] is None
+
+
+# --- 按需重新探测 ---
+
+
+def test_redetect_reprobes_after_driver_recovery(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_started", False)
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_result", None)
+    outcomes = iter([False, True])
+    monkeypatch.setattr(cuda_kit, "_detect_nvidia_gpu", lambda: next(outcomes))
+    assert cuda_kit._gpu_detected_cached() is None
+    for _ in range(200):
+        if cuda_kit._gpu_detected_cached() is not None:
+            break
+        time.sleep(0.01)
+    assert cuda_kit._gpu_detected_cached() is False, "首次探测（装驱动前）无显卡"
+    status = cuda_kit.redetect_and_status()
+    assert status["gpu_detected"] is None, "重新探测异步进行，状态端点不阻塞"
+    for _ in range(200):
+        if cuda_kit._gpu_detected_cached() is not None:
+            break
+        time.sleep(0.01)
+    assert cuda_kit._gpu_detected_cached() is True, "装好驱动后重新探测应能看到显卡"
+
+
+def test_redetect_keeps_inflight_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    calls: list[int] = []
+
+    def _slow_detect() -> bool:
+        calls.append(1)
+        started.set()
+        release.wait(timeout=5)
+        return True
+
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_started", False)
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_result", None)
+    monkeypatch.setattr(cuda_kit, "_detect_nvidia_gpu", _slow_detect)
+    assert cuda_kit._gpu_detected_cached() is None
+    assert started.wait(timeout=5)
+    cuda_kit.redetect_and_status()
+    assert cuda_kit._gpu_detect_started is True
+    release.set()
+    for _ in range(200):
+        if cuda_kit._gpu_detected_cached() is not None:
+            break
+        time.sleep(0.01)
+    assert cuda_kit._gpu_detected_cached() is True
+    assert len(calls) == 1, "进行中的探测不被打断、不重复拉起"
+
+
+def test_redetect_noop_on_unsupported_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cuda_kit, "_host_platform", lambda: "darwin")
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_started", False)
+    monkeypatch.setattr(cuda_kit, "_gpu_detect_result", None)
+    status = cuda_kit.redetect_and_status()
+    assert status["supported"] is False
+    assert status["reason_code"] == "unsupported_platform"
+    assert cuda_kit._gpu_detect_started is False, "非 Windows 平台不触发任何探测"
     with pytest.raises(ASRboxError):
         cuda_kit.start_download()
     assert cuda_kit.set_enabled(False)["supported"] is False
@@ -576,15 +682,25 @@ def test_status_route_returns_declared_fields() -> None:
         response = client.get("/settings/cuda-acceleration")
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"enabled", "status", "reason", "supported", "gpu_detected", "kit", "probe", "job"}
+    assert set(body) == {"enabled", "status", "reason", "reason_code", "supported", "gpu_detected", "kit", "probe", "job"}
     assert body["supported"] is True
     assert body["enabled"] is False
     assert body["status"] == "not_downloaded"
     assert body["reason"] is None
+    assert body["reason_code"] is None
     assert body["kit"] is None
     assert body["job"] is None
     assert set(body["probe"]) == {"state", "torch_cuda_available", "cuda_device_name", "torch_file"}
     assert body["probe"]["state"] == "pending"
+
+
+def test_redetect_route_returns_status() -> None:
+    with _make_client() as client:
+        response = client.post("/settings/cuda-acceleration/redetect")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"enabled", "status", "reason", "reason_code", "supported", "gpu_detected", "kit", "probe", "job"}
+    assert body["supported"] is True
 
 
 def test_put_route_persists_switch_and_returns_status() -> None:
@@ -681,4 +797,8 @@ def test_routes_reject_mutations_on_unsupported_platform(monkeypatch: pytest.Mon
         assert disable.json()["supported"] is False
         delete = client.delete("/settings/cuda-acceleration/kit")
         assert delete.status_code == 200
+        redetect = client.post("/settings/cuda-acceleration/redetect")
+        assert redetect.status_code == 200
+        assert redetect.json()["supported"] is False
+        assert redetect.json()["reason_code"] == "unsupported_platform"
     assert not cuda_kit.kit_root().exists(), "非 Windows 平台不得创建任何套件目录"

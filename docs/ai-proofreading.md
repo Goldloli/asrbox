@@ -8,8 +8,8 @@
 
 打开“设置 → AI LLM 提供商”，选择预设或 OpenAI-compatible：
 
-- Ollama：本地服务，不需要接口密钥；必须填写已安装的模型名。
-- MiniMax、Kimi、DeepSeek、Qwen、GLM：通常需要对应厂商密钥。
+- Ollama：本地服务，不需要接口密钥；填写地址后点击“拉取模型”即可从本地已安装模型中点选。
+- MiniMax、Kimi、DeepSeek、Qwen、GLM：通常需要对应厂商密钥；填写地址与密钥后点击“拉取模型”可从可用模型列表中点选，也可以手动输入模型 ID。
 - OpenAI-compatible：填写兼容服务地址、模型和按服务要求提供的密钥。
 
 点击“测试连接”检查地址、鉴权和模型。Docker 访问宿主机 Ollama 使用 `http://host.docker.internal:11434/v1`，不能使用容器自身的 `localhost`。

@@ -208,6 +208,8 @@ def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Pa
         "sensevoice-small",
     } <= names
     by_name = {model["model_name"]: model for model in response.json()["models"]}
+    assert by_name["whisper-base"]["downloaded"] is False
+    assert by_name["whisper-base"]["compatibility_error_code"] == "model_not_downloaded"
     assert by_name["qwen3-asr-1.7b"]["preferred_source"] == "modelscope"
     assert by_name["qwen3-asr-1.7b"]["source"] == "modelscope"
     assert by_name["qwen3-asr-1.7b"]["source_candidates"][0]["source"] == "modelscope"
@@ -489,6 +491,7 @@ def test_linux_runtime_rejects_apple_only_mlx_model(tmp_path: Path, monkeypatch)
     download = client.post("/models/download", json={"model_name": "mlx-whisper-turbo"})
 
     assert mlx["compatible"] is False
+    assert mlx["compatibility_error_code"] == "runtime_incompatible"
     assert "macOS Apple Silicon" in mlx["compatibility_error"]
     assert download.status_code == 400
     assert "unavailable in Linux containers" in download.json()["detail"]

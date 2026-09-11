@@ -9,6 +9,8 @@ from backend.models import (
     LLMProviderCreate,
     LLMCapabilityTestResponse,
     LLMProviderListResponse,
+    LLMProviderModelsRequest,
+    LLMProviderModelsResponse,
     LLMProviderPresetListResponse,
     LLMProviderResponse,
     LLMProviderTestResponse,
@@ -35,6 +37,11 @@ async def create_provider(payload: LLMProviderCreate, db: Session = Depends(get_
         return llm_providers.create_provider(db, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/models", response_model=LLMProviderModelsResponse)
+async def list_provider_models(payload: LLMProviderModelsRequest, db: Session = Depends(get_db)):
+    return await run_in_threadpool(llm_providers.fetch_models, db, payload)
 
 
 @router.put("/{provider_id}", response_model=LLMProviderResponse)

@@ -198,3 +198,24 @@ async def bounded_completion(url, headers, body, timeout, max_response_bytes, on
         raise LLMProviderError('LLM_PROVIDER_UNAVAILABLE', 'LLM provider request failed') from exc
     except UnicodeError as exc:
         raise LLMProviderError('LLM_PROVIDER_INVALID_RESPONSE', 'Provider returned invalid text encoding') from exc
+
+
+async def bounded_get(url, headers, timeout, max_response_bytes):
+    """Bounded GET with the same transport discipline as bounded_completion."""
+    try:
+        async with asyncio.timeout(timeout):
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+                async with client.stream('GET', url, headers=headers) as response:
+                    chunks, size = [], 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > max_response_bytes:
+                            raise LLMProviderError('LLM_PROVIDER_RESPONSE_TOO_LARGE', 'LLM provider response exceeds size limit')
+                        chunks.append(chunk)
+                    return httpx.Response(response.status_code, content=b''.join(chunks))
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise LLMProviderError('LLM_PROVIDER_TIMEOUT', 'LLM provider timed out') from exc
+    except httpx.HTTPError as exc:
+        raise LLMProviderError('LLM_PROVIDER_UNAVAILABLE', 'LLM provider request failed') from exc
+    except UnicodeError as exc:
+        raise LLMProviderError('LLM_PROVIDER_INVALID_RESPONSE', 'Provider returned invalid text encoding') from exc

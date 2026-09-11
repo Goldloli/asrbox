@@ -5,8 +5,6 @@ import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { TaskCenterDrawer } from './TaskCenterDrawer';
 import { GlobalSearch } from './GlobalSearch';
-import { CommandPalette } from './CommandPalette';
-import { GlobalShortcuts } from './GlobalShortcuts';
 import { PersistentAudioPlayer } from './PersistentAudioPlayer';
 import { Badge, Button } from './weiui';
 import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
@@ -29,8 +27,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <GlobalShortcuts />
-        <CommandPalette />
         <TopStatusBar />
         <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
           <div className="mx-auto w-full max-w-[1680px] p-4 xl:p-5">{children}</div>

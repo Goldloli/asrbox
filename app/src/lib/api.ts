@@ -145,6 +145,7 @@ export interface ModelStatus {
   error?: string | null;
   compatible?: boolean | null;
   compatibility_error?: string | null;
+  compatibility_error_code?: 'model_not_downloaded' | 'missing_files' | 'unknown_model' | 'runtime_incompatible' | null;
   download_error?: string | null;
   size_on_disk_mb?: number | null;
   cache_detected?: boolean;
@@ -332,6 +333,13 @@ export interface LLMProviderTestResult {
   error_code?: string | null;
 }
 
+export interface LLMProviderModelsResult {
+  ok: boolean;
+  items: string[];
+  message: string;
+  error_code?: string | null;
+}
+
 export type ChatMessageRole = 'user' | 'assistant';
 export type ChatMessageStatus = 'complete' | 'partial' | 'error';
 
@@ -491,6 +499,13 @@ export type MediaStorageSettingsUpdate = Partial<
 
 export type CudaAccelerationStatus = 'not_downloaded' | 'downloading' | 'ready' | 'enabled' | 'enable_failed' | 'invalidated';
 
+export type CudaAccelerationReasonCode =
+  | 'unsupported_platform'
+  | 'kit_version_mismatch'
+  | 'probe_failed'
+  | 'kit_not_injected'
+  | 'cuda_device_missing';
+
 export interface CudaKitInfo {
   kit_version: string;
   torch_version: string;
@@ -519,6 +534,7 @@ export interface CudaAccelerationSettings {
   enabled: boolean;
   status: CudaAccelerationStatus;
   reason: string | null;
+  reason_code: CudaAccelerationReasonCode | null;
   supported: boolean;
   gpu_detected: boolean | null;
   kit: CudaKitInfo | null;
@@ -1015,6 +1031,10 @@ class ApiClient {
     return this.request<LLMProviderTestResult>(`/llm-providers/${id}/test`, { method: 'POST' });
   }
 
+  fetchLLMProviderModels(data: { preset: string; base_url: string; api_key?: string; provider_id?: string }) {
+    return this.request<LLMProviderModelsResult>('/llm-providers/models', { method: 'POST', body: JSON.stringify(data) });
+  }
+
   createChatSession(input: { task_id?: string | null; provider_id?: string | null; title?: string }) {
     return this.request<ChatSession>('/chat/sessions', { method: 'POST', body: JSON.stringify(input) });
   }
@@ -1136,6 +1156,10 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  redetectCudaAcceleration() {
+    return this.request<CudaAccelerationSettings>('/settings/cuda-acceleration/redetect', { method: 'POST' });
   }
 
   startCudaKitDownload() {

@@ -2,7 +2,9 @@
 
 ## Purpose
 规定前端质量基线：工作台工作流层级、响应式不重叠布局、可访问的交互状态、前端验证要求与活动任务停止控制。
+
 ## Requirements
+
 ### Requirement: Workbench workflow hierarchy
 Each primary route SHALL present a clear main work area and visible next action appropriate to its state without requiring decorative or nested panels to explain the interface.
 
@@ -52,22 +54,16 @@ The maintained frontend SHALL connect to the application event stream without pl
 - **WHEN** the current server requires an API token
 - **THEN** the stream request authenticates by Authorization header and the token is absent from its URL
 
-### Requirement: Non-destructive settings and shortcuts
+### Requirement: Non-destructive settings and bounded comparison
 
-Editing the server address SHALL not clear or replace the active connection token until the user explicitly applies the staged connection values. Global application shortcuts SHALL ignore editable controls, contenteditable targets, and IME composition. Version comparison SHALL bound memory use for large transcripts and provide a truthful truncated summary when a full line LCS would exceed that bound.
+Editing the server address SHALL not clear or replace the active connection token until the user explicitly applies the staged connection values. Version comparison SHALL bound memory use for large transcripts and provide a truthful truncated summary when a full line LCS would exceed that bound.
 
 #### Scenario: User types a server address
 
 - **WHEN** the user changes one or more characters in the server address field without applying
 - **THEN** the active server URL, API token, queries, and event connection remain unchanged
 
-#### Scenario: User types inside an editor
-
-- **WHEN** a shortcut-shaped key combination occurs in an input, textarea, select, contenteditable target, or active IME composition
-- **THEN** the application leaves the editing interaction in control and does not navigate or open a global palette
-
 #### Scenario: Very large versions are compared
 
 - **WHEN** the product of previous and current transcript line counts exceeds the maintained diff-cell limit
 - **THEN** the UI avoids allocating the full LCS matrix and labels or renders a bounded comparison summary
-

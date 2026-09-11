@@ -112,7 +112,12 @@ export function useCudaAccelerationQuery(enabled = true) {
     queryFn: () => apiClient.getCudaAcceleration(),
     retry: 1,
     enabled,
-    refetchInterval: (query) => (query.state.data?.job?.status === 'running' ? 750 : 15000),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.job?.status === 'running') return 750;
+      if (data?.supported === true && data.gpu_detected == null) return 2000;
+      return 15000;
+    },
   });
 }
 
@@ -122,6 +127,18 @@ export function useCudaAccelerationToggleMutation() {
     mutationFn: (enabled: boolean) => apiClient.updateCudaAcceleration({ enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+    },
+  });
+}
+
+export function useCudaAccelerationRedetectMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.redetectCudaAcceleration(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cudaAcceleration });
+      queryClient.invalidateQueries({ queryKey: queryKeys.runtime });
+      queryClient.invalidateQueries({ queryKey: queryKeys.health });
     },
   });
 }

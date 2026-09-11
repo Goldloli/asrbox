@@ -211,7 +211,7 @@ export function TranscribePage() {
   const readinessIssues = [
     ...(readinessQuery.data?.issues ?? []),
     ...(readinessQuery.data?.warnings ?? []),
-    ...(readinessQuery.data?.missing_models ?? []).map((model) => `Missing model: ${model}`),
+    ...(readinessQuery.data?.missing_models ?? []).map((model) => t('transcribe.missingModel', { model })),
   ];
   const firstRunChecklist = [
     {

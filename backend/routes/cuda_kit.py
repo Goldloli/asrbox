@@ -15,6 +15,11 @@ async def get_cuda_acceleration():
     return CudaAccelerationStatusResponse(**cuda_kit_service.acceleration_status())
 
 
+@router.post("/redetect", response_model=CudaAccelerationStatusResponse)
+async def redetect_cuda_acceleration():
+    return CudaAccelerationStatusResponse(**cuda_kit_service.redetect_and_status())
+
+
 @router.put("", response_model=CudaAccelerationStatusResponse)
 async def update_cuda_acceleration(payload: CudaAccelerationUpdate):
     try:

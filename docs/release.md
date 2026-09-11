@@ -16,11 +16,13 @@ These values must match:
 - Current-version and Release references in both README files and this guide.
 - `docs/releases/v<version>.md`, including the matching tag, DMG filename, and NSIS installer filename.
 
-`npm run check:versions` enforces the list above. Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
+`npm run check:versions` enforces the list above, including `CHANGELOG.md` section and link-reference consistency for the current version. Use Semantic Versioning prerelease tags such as `v0.1.0-beta.1`. A tag containing `-` becomes a GitHub prerelease.
+
+Run `npm run version:bump -- <X.Y.Z>` to update every version source, the README/release-guide anchors, and the `CHANGELOG.md` links in one step; it also promotes the `[Unreleased]` changelog section, creates a `docs/releases/v<X.Y.Z>.md` skeleton when missing, regenerates the Bun/Cargo lock entries when the toolchains are available, and reruns `check:versions` to prove consistency.
 
 ## Before Tagging
 
-1. Update `CHANGELOG.md`, both README files, this release guide, package/runtime version sources, and generated Bun/Cargo lock entries.
+1. Run `npm run version:bump -- <version>`: it rewrites the package/runtime version sources, the README and release-guide anchors, and the `CHANGELOG.md` links, promotes the `[Unreleased]` changelog section, regenerates the Bun/Cargo lock entries when `bun`/`cargo` are available, and creates the release-notes skeleton. Then fill in the new version's `CHANGELOG.md` section content.
 2. Create `docs/releases/<tag>.md`, for example `docs/releases/v0.1.0-beta.2.md`. Start from the previous version, then update the GIF URL, downloads, highlights, verification, limitations, and changelog comparison.
 3. Confirm `THIRD_PARTY_NOTICES.md` is current.
 4. Verify `third_party/ffmpeg/SOURCE.md`, licenses, configuration, and checksums.
