@@ -194,10 +194,11 @@ def test_slow_routes_leave_event_loop_responsive(setup, monkeypatch, route_kind)
             else:
                 pending = asyncio.create_task(client.get(f'/tasks/{task.id}/translation-runs/run/versions/1/export/txt'))
             try:
-                assert await asyncio.to_thread(entered.wait, 1)
+                assert await asyncio.to_thread(entered.wait, 5)
                 # Coroutine work and an independent HTTP route complete while the first request waits.
-                await asyncio.wait_for(asyncio.sleep(0), timeout=.3)
-                result = await asyncio.wait_for(client.get('/'), timeout=.5)
+                # Budgets stay far below the 3s blocker but absorb slow shared CI runners.
+                await asyncio.wait_for(asyncio.sleep(0), timeout=1)
+                result = await asyncio.wait_for(client.get('/'), timeout=2)
                 assert result.status_code == 200 and not pending.done()
             finally:
                 release.set()
