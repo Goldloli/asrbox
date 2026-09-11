@@ -1,5 +1,7 @@
 version: 2
 updates:
+  # 组策略：minor/patch 进每日组 PR 统一合并；major 不进入组，
+  # 由 dependabot 单独提 PR，按 AGENTS.md 评估（大版本需独立验证/走 change 流程）后再合。
   # Python：根目录 requirements.txt + requirements-*.lock
   # 注意：合并前需按 AGENTS.md 流程从 requirements-*.in 重新生成 lock，并运行依赖审计
   - package-ecosystem: pip
@@ -9,6 +11,7 @@ updates:
     groups:
       python:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
   # Bun workspace：根 bun.lock 统一覆盖 app/、web/、tauri/
@@ -20,9 +23,11 @@ updates:
     groups:
       frontend:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
   # Rust：Tauri 桌面 shell
+  # 合并前需运行 cargo 检查/测试，涉及更新/下载链路的包（如 reqwest）还需桌面启动验证
   - package-ecosystem: cargo
     directory: /tauri/src-tauri
     schedule:
@@ -30,6 +35,7 @@ updates:
     groups:
       rust:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
 
   # Docker：根目录 Dockerfile + compose.yaml
