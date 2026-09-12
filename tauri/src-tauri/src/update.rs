@@ -509,7 +509,11 @@ async fn download_file(
         snapshot.eta_seconds = None;
     })?;
     ensure_not_cancelled(app)?;
-    let actual_checksum = format!("{:x}", hasher.finalize());
+    let actual_checksum = hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     if actual_checksum != expected_checksum {
         return Err(format!(
             "Installer verification failed: expected {expected_checksum}, got {actual_checksum}."
@@ -769,7 +773,11 @@ async fn hash_file(path: &Path) -> Result<String, String> {
         }
         hasher.update(&buffer[..read]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
 }
 
 async fn remove_file_if_present(path: &Path, description: &str) -> Result<(), String> {
