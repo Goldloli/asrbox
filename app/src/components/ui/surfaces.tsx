@@ -21,13 +21,13 @@ export function PanelHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-start justify-between gap-4 border-b app-border px-5 py-4', className)}>
+    <div className={cn('flex flex-wrap items-start justify-between gap-4 border-b app-border px-5 py-4', className)}>
       <div className="min-w-0">
         {eyebrow && <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-app-accent">{eyebrow}</p>}
         <h1 className="truncate text-lg font-semibold text-app">{title}</h1>
         {description && <p className="mt-1 text-sm text-app-muted">{description}</p>}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="ml-auto shrink-0">{action}</div>}
     </div>
   );
 }

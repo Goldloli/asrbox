@@ -45,7 +45,7 @@ export function AIPage() {
         <PanelHeader
           eyebrow={t('ai.eyebrow')}
           title={chatMode ? t('chat.title') : t('ai.title')}
-          description={chatMode ? t('chat.description') : t('translation.description')}
+          description={chatMode ? t('chat.description') : translationMode ? t('translation.description') : t('ai.description')}
         />
       </Panel>
 

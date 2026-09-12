@@ -42,6 +42,7 @@ export function TranscribePage() {
   const [providerId, setProviderId] = useState('');
   const [language, setLanguage] = useState<TranscriptionLanguage>('zh-Hans');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [audioPlayerHost, setAudioPlayerHost] = useState<HTMLElement | null>(null);
   const [preflight, setPreflight] = useState<TranscriptionPreflight | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
@@ -495,67 +496,70 @@ export function TranscribePage() {
         </div>
       </Panel>
 
-      <TranscriptViewer task={selectedTask} />
+      <TranscriptViewer task={selectedTask} audioPlayerHost={audioPlayerHost} />
 
-      <Panel className="overflow-hidden">
-        <PanelHeader eyebrow={t('transcribe.engine')} title={t('transcribe.runOptions')} description={t('transcribe.runDescription')} />
-        <div className="grid gap-4 p-5">
-          <Field label={t('transcribe.backend')}>
-            <Select
-              value={backend}
-              onValueChange={(value) => {
-                defaultsDirtyRef.current.backend = true;
-                setBackend(value);
-              }}
-              options={[
-                { value: 'local', label: t('transcribe.localModel') },
-                { value: 'provider', label: t('transcribe.providerBackend') },
-              ]}
-            />
-          </Field>
-          {backend === 'local' ? (
-            <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
+      <div className="grid content-start gap-4">
+        <Panel className="overflow-hidden">
+          <PanelHeader eyebrow={t('transcribe.engine')} title={t('transcribe.runOptions')} description={t('transcribe.runDescription')} />
+          <div className="grid gap-4 p-5">
+            <Field label={t('transcribe.backend')}>
               <Select
-                value={modelName}
+                value={backend}
                 onValueChange={(value) => {
-                  defaultsDirtyRef.current.model = true;
-                  setModelName(value);
+                  defaultsDirtyRef.current.backend = true;
+                  setBackend(value);
                 }}
-                options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
-                  value: model.model_name,
-                  label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
-                  disabled: 'compatible' in model && model.compatible === false,
-                }))}
+                options={[
+                  { value: 'local', label: t('transcribe.localModel') },
+                  { value: 'provider', label: t('transcribe.providerBackend') },
+                ]}
               />
             </Field>
-          ) : (
-            <Field label={t('transcribe.provider')}>
+            {backend === 'local' ? (
+              <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
+                <Select
+                  value={modelName}
+                  onValueChange={(value) => {
+                    defaultsDirtyRef.current.model = true;
+                    setModelName(value);
+                  }}
+                  options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
+                    value: model.model_name,
+                    label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
+                    disabled: 'compatible' in model && model.compatible === false,
+                  }))}
+                />
+              </Field>
+            ) : (
+              <Field label={t('transcribe.provider')}>
+                <Select
+                  value={providerId || 'none'}
+                  onValueChange={(value) => {
+                    defaultsDirtyRef.current.provider = true;
+                    setProviderId(value === 'none' ? '' : value);
+                  }}
+                  options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
+                    value: provider.id,
+                    label: provider.name,
+                    disabled: provider.id === 'none',
+                  }))}
+                />
+              </Field>
+            )}
+            <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
               <Select
-                value={providerId || 'none'}
+                value={language}
                 onValueChange={(value) => {
-                  defaultsDirtyRef.current.provider = true;
-                  setProviderId(value === 'none' ? '' : value);
+                  defaultsDirtyRef.current.language = true;
+                  setLanguage(normalizeLanguageValue(value));
                 }}
-                options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
-                  value: provider.id,
-                  label: provider.name,
-                  disabled: provider.id === 'none',
-                }))}
+                options={languageOptions(locale)}
               />
             </Field>
-          )}
-          <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
-            <Select
-              value={language}
-              onValueChange={(value) => {
-                defaultsDirtyRef.current.language = true;
-                setLanguage(normalizeLanguageValue(value));
-              }}
-              options={languageOptions(locale)}
-            />
-          </Field>
-        </div>
-      </Panel>
+          </div>
+        </Panel>
+        <div ref={setAudioPlayerHost} className="app-panel sticky top-4 rounded-xl border p-5 empty:hidden" />
+      </div>
     </section>
   );
 }

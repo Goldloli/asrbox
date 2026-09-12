@@ -1,4 +1,5 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Activity, Clipboard, FileText, FolderOpen, Pause, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -19,7 +20,7 @@ type SegmentDraft = {
   end?: number;
 };
 
-export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
+export function TranscriptViewer({ task, audioPlayerHost }: { task?: TranscriptionTask; audioPlayerHost?: HTMLElement | null }) {
   const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -157,6 +158,15 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
   const seekToSegment = (seconds: number) => {
     setSeekTarget(Math.max(0, seconds));
   };
+  const audioPlayer = (
+    <WaveformAudioPlayer
+      taskId={task.id}
+      title={task.filename}
+      sourceKind={task.source_kind}
+      seekTarget={seekTarget}
+      onSeekHandled={() => setSeekTarget(null)}
+    />
+  );
   return (
     <Panel className="min-h-[calc(100dvh-160px)] overflow-hidden">
       <PanelHeader
@@ -224,18 +234,18 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
               </Badge>
             )}
           </div>
-          <div className="min-h-56 whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
+          <div className="min-h-56 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
             {fullText ? renderHighlightedText(fullText, searchQuery) : <span className="text-app-faint">{t('transcript.placeholder')}</span>}
           </div>
           <p className="text-xs text-app-muted">{t('transcript.fullTextReadOnly')}</p>
         </section>
-        <WaveformAudioPlayer
-          taskId={task.id}
-          title={task.filename}
-          sourceKind={task.source_kind}
-          seekTarget={seekTarget}
-          onSeekHandled={() => setSeekTarget(null)}
-        />
+        {audioPlayerHost === undefined || audioPlayerHost === null ? (
+          audioPlayerHost === undefined ? (
+            audioPlayer
+          ) : null
+        ) : (
+          createPortal(audioPlayer, audioPlayerHost)
+        )}
         <section className="grid gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
@@ -259,7 +269,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
         </section>
         <section className="grid gap-3">
           <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
-          <div className="max-h-[36vh] overflow-auto rounded-lg border app-border">
+          <div className="max-h-[min(36vh,20rem)] overflow-auto rounded-lg border app-border">
             {displaySegments.length > 0 ? (
               displaySegments.map((segment) => (
                 <div key={segment.id} className="grid grid-cols-[132px_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
@@ -308,7 +318,7 @@ export function TranscriptViewer({ task }: { task?: TranscriptionTask }) {
                         onChange={(event) => setSegmentDraft(segment.id, { text: event.target.value })}
                         aria-label={t('transcript.segmentText')}
                         rows={2}
-                        className="min-h-0 text-sm"
+                        className="min-h-0 text-xs"
                       />
                     </div>
                     <Button

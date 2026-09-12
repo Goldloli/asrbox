@@ -128,35 +128,35 @@ function BottomTaskBar() {
 
   return (
     <footer className="app-shell-surface flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-t app-border px-3">
-      <Link to="/tasks" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
-        <Activity className="size-3.5" />
+      <Link to="/tasks" className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
+        <Activity className="size-3.5 shrink-0" />
         {topTask ? (
           <>
             <span className="max-w-36 truncate text-app-soft">{topTask.filename}</span>
             <span className="shrink-0">{statusLabel(topTask.status)} · {formatPercent(topTask.progress)}</span>
           </>
         ) : (
-          <span>{t('status.noActiveTask')}</span>
+          <span className="truncate">{t('status.noActiveTask')}</span>
         )}
       </Link>
-      <Link to="/models" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
-        <DownloadCloud className="size-3.5" />
+      <Link to="/models" className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
+        <DownloadCloud className="size-3.5 shrink-0" />
         {topDownload ? (
           <>
             <span className="max-w-36 truncate text-app-soft">{topDownload.model_name}</span>
             <span className="shrink-0">{topDownload.status} · {formatPercent(topDownload.progress)}</span>
           </>
         ) : (
-          <span>{t('status.noModelDownload')}</span>
+          <span className="truncate">{t('status.noModelDownload')}</span>
         )}
       </Link>
       {appUpdateActive && (
         <Link
           to="/settings"
           search={{ tab: 'about' }}
-          className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app"
+          className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app"
         >
-          <PackageCheck className="size-3.5" />
+          <PackageCheck className="size-3.5 shrink-0" />
           <span className="max-w-40 truncate text-app-soft">{appUpdate.filename ?? t('about.applicationUpdate')}</span>
           <span className="shrink-0">{formatPercent(appUpdate.progress)}</span>
         </Link>
@@ -170,7 +170,7 @@ function BottomTaskBar() {
           className="ml-auto flex shrink-0 items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-1.5 text-xs text-[var(--app-danger)] transition hover:brightness-95"
         >
           <AlertTriangle className="size-4" />
-          {t('status.liveUnavailable')}
+          <span className="hidden sm:inline">{t('status.liveUnavailable')}</span>
         </Link>
       )}
     </footer>
