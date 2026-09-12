@@ -7,7 +7,7 @@ edition = "2021"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.13", features = ["json", "stream"] }
 rand = "0.10"
 semver = "1"
 serde = { version = "1.0", features = ["derive"] }
