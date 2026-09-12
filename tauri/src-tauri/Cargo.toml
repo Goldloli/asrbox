@@ -12,7 +12,7 @@ rand = "0.10"
 semver = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha2 = "0.10"
+sha2 = "0.11"
 tokio = { version = "1", features = ["fs", "io-util", "time"] }
 
 [build-dependencies]
