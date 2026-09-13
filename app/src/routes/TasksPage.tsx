@@ -16,6 +16,7 @@ import { useI18n } from '../lib/i18n';
 import { ErrorDiagnosticsPanel, FilterCheckboxGroup, Metric, TaskRow, useTaskMutation } from '../components/tasks/TaskWorkbenchParts';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { downloadResponse } from '../lib/downloads';
+import { isApproximateTimelineModel } from '../lib/modelCatalog';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'importing', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
@@ -651,6 +652,9 @@ export function TasksPage() {
                       {t('tasks.copyFullText')}
                     </Button>
                   </div>
+                  {isApproximateTimelineModel(selectedTask.model_name) && (
+                    <p className="text-xs leading-5 text-app-muted">{t('tasks.approximateTimelineNote')}</p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {outputFileFormats.map((format) => (
                       <Button

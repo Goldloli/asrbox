@@ -23,7 +23,8 @@ from backend.models import (
 
 from backend.services.llm_compatibility import (
     LLMProviderError, MAX_RESPONSE_BYTES, bounded_completion as _bounded_completion, bounded_get,
-    completion_content, request_body, settings,
+    completion_content, native_completion_content, native_request_body, ollama_native_url, request_body,
+    resolved, settings,
 )
 
 PRESETS = (
@@ -260,12 +261,21 @@ def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, ti
     headers = {"Content-Type": "application/json"}
     if provider.api_key_secret:
         headers["Authorization"] = f"Bearer {provider.api_key_secret}"
-    body = request_body(provider, messages, structured=structured_translation or response_schema is not None,
-                        schema=response_schema, stream=True if on_delta is not None else None)
-    url = f"{provider.base_url.rstrip('/')}/chat/completions"
+    structured = structured_translation or response_schema is not None
+    native = resolved(provider).protocol == "ollama"
+    if native:
+        body = native_request_body(provider, messages, structured=structured, schema=response_schema,
+                                   stream=True if on_delta is not None else None)
+        url = ollama_native_url(provider.base_url, "/api/chat")
+        content_parser = native_completion_content
+    else:
+        body = request_body(provider, messages, structured=structured, schema=response_schema,
+                            stream=True if on_delta is not None else None)
+        url = f"{provider.base_url.rstrip('/')}/chat/completions"
+        content_parser = completion_content
     response = asyncio.run(_bounded_completion(url, headers, body, timeout,
                                                max_response_bytes if max_response_bytes is not None else MAX_RESPONSE_BYTES,
-                                               on_delta))
+                                               on_delta, content_parser))
     if response.status_code in {401, 403}:
         raise LLMProviderError("LLM_PROVIDER_AUTH_FAILED", "LLM provider rejected credentials")
     if response.status_code == 429:
@@ -289,7 +299,7 @@ def chat_completion(provider: LLMProvider, messages: list[dict[str, str]], *, ti
         payload = response.json()
     except (ValueError, RecursionError) as exc:
         raise LLMProviderError("LLM_PROVIDER_INVALID_RESPONSE", "LLM provider returned invalid JSON") from exc
-    return completion_content(payload)
+    return content_parser(payload)
 
 
 def _is_context_too_long(response) -> bool:
@@ -398,8 +408,7 @@ def _fetch_openai_model_ids(base_url: str, headers: dict[str, str]) -> list[str]
 
 
 def _fetch_ollama_model_names(base_url: str, headers: dict[str, str]) -> list[str]:
-    native_base = base_url[:-3] if base_url.lower().endswith("/v1") else base_url
-    response = asyncio.run(bounded_get(f"{native_base}/api/tags", headers, MODEL_LIST_TIMEOUT, MAX_RESPONSE_BYTES))
+    response = asyncio.run(bounded_get(ollama_native_url(base_url, "/api/tags"), headers, MODEL_LIST_TIMEOUT, MAX_RESPONSE_BYTES))
     _classify_list_response(response)
     payload = _parse_json(response)
     if not isinstance(payload, dict):

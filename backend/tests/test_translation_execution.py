@@ -90,9 +90,6 @@ def test_timeout_is_sanitized(setup, monkeypatch, exception, code):
     ('deepseek', 'deepseek-chat', True, {'response_format': {'type': 'json_object'}}),
     ('deepseek', 'deepseek-v4-flash', False, {'thinking': {'type': 'disabled'}}),
     ('custom', 'deepseek-v4-flash', True, {}),
-    ('ollama', 'qwen3', True, {'response_format': {'type': 'json_object'}, 'reasoning_effort': 'none'}),
-    ('ollama', 'qwen3.8:27b-mtp-bf16', True, {'response_format': {'type': 'json_object'}, 'reasoning_effort': 'none'}),
-    ('ollama', 'qwen3.8:27b-mtp-bf16', False, {'reasoning_effort': 'none'}),
     ('custom', 'qwen3.8:27b-mtp-bf16', True, {}),
 ])
 def test_translation_parameters_are_provider_scoped(setup, monkeypatch, preset, model, structured, expected):
@@ -105,6 +102,27 @@ def test_translation_parameters_are_provider_scoped(setup, monkeypatch, preset, 
     mock_transport(monkeypatch, handler)
     assert llm_providers.chat_completion(provider, [], max_response_bytes=1024, structured_translation=structured) == 'OK'
     assert bodies == [{'model': model, 'messages': [], 'stream': False, **expected}]
+
+
+@pytest.mark.parametrize('model,structured,native_format', [
+    ('qwen3', True, 'json'),
+    ('qwen3.8:27b-mtp-bf16', True, 'json'),
+    ('qwen3.8:27b-mtp-bf16', False, None),
+])
+def test_ollama_translation_parameters_use_native_chat_api(setup, monkeypatch, model, structured, native_format):
+    provider = setup[2]; provider.preset = 'ollama'; provider.default_model = model
+    bodies = []
+    def handler(request):
+        assert request.url.path == '/api/chat'
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={'message': {'content': 'OK'}, 'done': True, 'done_reason': 'stop'})
+    mock_transport(monkeypatch, handler)
+    assert llm_providers.chat_completion(provider, [], max_response_bytes=1024, structured_translation=structured) == 'OK'
+    expected = {'model': model, 'messages': [], 'stream': False, 'think': False,
+                'options': {'num_ctx': 32768, 'num_predict': -1}}
+    if native_format:
+        expected['format'] = native_format
+    assert bodies == [expected]
 
 
 @pytest.mark.parametrize('mode', ['keepalive', 'slow-headers'])
@@ -144,7 +162,7 @@ def test_real_http_total_deadline_releases_connection_and_next_request(setup, mo
                         time.sleep(.03)
                 else:
                     self.send_response(200); self.end_headers()
-                    self.wfile.write(b'{"choices":[{"message":{"content":"OK"}}]}')
+                    self.wfile.write(b'{"message":{"content":"OK"},"done":true,"done_reason":"stop"}')
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 disconnected.set()
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
@@ -262,16 +280,269 @@ def test_worker_exit_replaces_worker_and_runs_next_job(monkeypatch):
     assert seen == ['first', 'second']
 
 
+def native_echo_reply(request):
+    data = json.loads(json.loads(request.content)['messages'][1]['content'])
+    content = {'translations': [{'segment_id': s['id'], 'text': '译 ' + s['text']} for s in data['targets']]}
+    return httpx.Response(200, json={'message': {'content': json.dumps(content)}, 'done': True, 'done_reason': 'stop'})
+
+
+def test_truncated_batch_splits_deterministically_and_completes(setup, monkeypatch):
+    db, task, provider, source = setup
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            return httpx.Response(200, json={'done': True, 'done_reason': 'length'})
+        return native_echo_reply(request)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 2
+    assert calls == [[1, 2], [1], [2]]
+    assert json.loads(svc.latest_version(db, run.id).segments_json) == [
+        {'segment_id': 1, 'text': '译 first text'}, {'segment_id': 2, 'text': '译 second text'}]
+
+
+def test_single_segment_still_truncated_fails_run(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={'done': True, 'done_reason': 'length'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    # Full batch + left single segment fail; the right half is never attempted.
+    assert len(calls) == 2
+    assert row.status == 'failed' and row.error_code == 'LLM_PROVIDER_TRUNCATED'
+    assert svc.latest_version(db, run.id) is None
+
+
+def test_cancel_between_sub_batches_stops_without_more_requests(setup, monkeypatch):
+    from backend.database import session as database
+    db, task, provider, source = setup
+    calls = []
+    def fake(provider_arg, messages, **kwargs):
+        data = json.loads(messages[1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            raise llm_providers.LLMProviderError('LLM_PROVIDER_TRUNCATED', 'synthetic')
+        with database.SessionLocal() as other:
+            victim = other.get(TranslationRun, run.id)
+            victim.status = 'cancelled'
+            other.commit()
+        return json.dumps({'translations': [{'segment_id': s['id'], 'text': '译 ' + s['text']} for s in data['targets']]})
+    monkeypatch.setattr(llm_providers, 'chat_completion', fake)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert calls == [[1, 2], [1]]
+    assert row.status == 'cancelled' and svc.latest_version(db, run.id) is None
+
+
+def test_invalid_response_splits_deterministically_and_completes(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            content = json.dumps({'translations': [{'segment_id': 1, 'text': '只一段'}]})
+            return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+        return native_echo_reply(request)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 2
+    assert calls == [[1, 2], [1], [2]]
+    assert json.loads(svc.latest_version(db, run.id).segments_json) == [
+        {'segment_id': 1, 'text': '译 first text'}, {'segment_id': 2, 'text': '译 second text'}]
+
+
+def test_single_segment_invalid_response_fails_run(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    def handler(request):
+        calls.append(request)
+        content = json.dumps({'translations': [{'segment_id': 1, 'text': '甲'}, {'segment_id': 1, 'text': '乙'}]})
+        return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    # Full batch + left single segment fail; the right half is never attempted.
+    assert len(calls) == 2
+    assert row.status == 'failed' and row.error_code == 'TRANSLATION_INVALID_RESPONSE'
+    assert svc.latest_version(db, run.id) is None
+
+
+def test_timeout_batch_splits_deterministically_and_completes(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            raise httpx.ReadTimeout('slow local model')
+        return native_echo_reply(request)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 2
+    assert calls == [[1, 2], [1], [2]]
+
+
+def test_sliding_window_batch_splits_deterministically_and_completes(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    window = '幻灯片式的连续译文窗口片段，长度超过二十五个字符以上'
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            content = json.dumps({'translations': [
+                {'segment_id': s['id'], 'text': f'第{s["id"]}段 {window} 后缀'} for s in data['targets']]})
+            return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+        return native_echo_reply(request)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 2
+    assert calls == [[1, 2], [1], [2]]
+    assert json.loads(svc.latest_version(db, run.id).segments_json) == [
+        {'segment_id': 1, 'text': '译 first text'}, {'segment_id': 2, 'text': '译 second text'}]
+
+
+def test_bloated_batch_splits_deterministically_and_completes(setup, monkeypatch):
+    db = setup[0]
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        if len(data['targets']) > 1:
+            content = json.dumps({'translations': [
+                {'segment_id': s['id'], 'text': f'第{s["id"]}段独特内容' * 30} for s in data['targets']]})
+            return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+        return native_echo_reply(request)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 2
+    assert calls == [[1, 2], [1], [2]]
+
+
+def test_single_segment_bloat_is_accepted_without_split(setup, monkeypatch):
+    db, task, provider, source = setup
+    source.segments_json = json.dumps([{'id': 1, 'start': 0, 'end': 2, 'text': 'first text'}])
+    db.commit()
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        content = json.dumps({'translations': [{'segment_id': 1, 'text': '逐段详尽的完整译文段落' * 20}]})
+        return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert row.status == 'completed' and row.completed_segments == 1
+    assert calls == [[1]]
+    assert json.loads(svc.latest_version(db, run.id).segments_json) == [
+        {'segment_id': 1, 'text': '逐段详尽的完整译文段落' * 20}]
+
+
+def test_repeated_source_lines_do_not_trigger_overlap_split(setup, monkeypatch):
+    db, task, provider, source = setup
+    line = 'We will never forget what happened here on that morning.'
+    source.segments_json = json.dumps([
+        {'id': 1, 'start': 0, 'end': 2, 'text': line},
+        {'id': 2, 'start': 2, 'end': 4, 'text': line}])
+    db.commit()
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        calls.append([s['id'] for s in data['targets']])
+        content = json.dumps({'translations': [
+            {'segment_id': s['id'], 'text': '我们永远永远不会忘记那个早晨在这里所发生的一切事情。'} for s in data['targets']]})
+        return httpx.Response(200, json={'message': {'content': content}, 'done': True, 'done_reason': 'stop'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [[1, 2]]
+
+
+def test_create_run_uses_local_batch_limits_for_ollama_only(setup, monkeypatch):
+    db, task, provider, source = setup
+    source.segments_json = json.dumps([
+        {'id': i, 'start': i * 2, 'end': i * 2 + 2, 'text': 'x' * 50} for i in range(1, 41)])
+    db.commit()
+    run = create(setup)
+    shapes = [json.loads(row.target_ids_json) for row in
+              db.query(svc.TranslationBatch).filter_by(run_id=run.id).order_by(svc.TranslationBatch.batch_index)]
+    assert [len(batch) for batch in shapes] == [16, 16, 8]
+
+    db.get(TranslationRun, run.id).status = 'failed'
+    provider.preset = 'deepseek'
+    provider.default_model = 'deepseek-chat'
+    provider.api_key_secret = 'synthetic-key'
+    db.commit()
+    run = create(setup)
+    assert db.query(svc.TranslationBatch).filter_by(run_id=run.id).count() == 1
+
+
+def test_translate_batch_timeout_is_provider_protocol_scoped(setup, monkeypatch):
+    from backend.database import session as database
+    db, task, provider, source = setup
+    timeouts = []
+    def fake(provider_arg, messages, **kwargs):
+        timeouts.append(kwargs.get('timeout'))
+        data = json.loads(messages[1]['content'])
+        return json.dumps({'translations': [{'segment_id': s['id'], 'text': '译 ' + s['text']} for s in data['targets']]})
+    monkeypatch.setattr(llm_providers, 'chat_completion', fake)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    assert timeouts == [svc.LOCAL_REQUEST_TIMEOUT]
+
+    with database.SessionLocal() as other:
+        remote = other.get(type(provider), provider.id)
+        remote.preset = 'deepseek'
+        remote.default_model = 'deepseek-chat'
+        remote.api_key_secret = 'synthetic-key'
+        other.commit()
+    timeouts.clear()
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    assert timeouts == [svc.REMOTE_REQUEST_TIMEOUT]
+
+
 def test_ollama_translation_sends_schema_and_validates_complete_result(setup, monkeypatch):
     import jsonschema
     db, task, provider, source = setup
     expected = [{'segment_id': 1, 'text': 'Bonjour'}, {'segment_id': 2, 'text': 'Salut'}]
     def handler(request):
+        assert request.url.path == '/api/chat'
         body = json.loads(request.content)
-        assert body['reasoning_effort'] == 'none'
-        format = body['response_format']
-        assert format['type'] == 'json_schema' and format['json_schema']['strict']
-        schema = format['json_schema']['schema']
+        assert body['think'] is False
+        assert body['options'] == {'num_ctx': 32768, 'num_predict': -1}
+        schema = body['format']
         jsonschema.validate({'translations': expected}, schema)
         invalid = [
             {'translations': expected[:1]},
@@ -282,7 +553,7 @@ def test_ollama_translation_sends_schema_and_validates_complete_result(setup, mo
         ]
         for value in invalid:
             with pytest.raises(jsonschema.ValidationError): jsonschema.validate(value, schema)
-        return httpx.Response(200, json={'choices': [{'message': {'content': json.dumps({'translations': expected})}}]})
+        return httpx.Response(200, json={'message': {'content': json.dumps({'translations': expected})}, 'done': True, 'done_reason': 'stop'})
     mock_transport(monkeypatch, handler)
     run = create(setup)
     svc.execute_run(run.id, run.attempt)

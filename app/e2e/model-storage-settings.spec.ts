@@ -51,7 +51,7 @@ test('docker web shows allowlisted model-storage mounts and container path actio
 test('model page reports unavailable storage without offering download', async ({ page }) => {
   await page.route(`${serverUrl}/models/status`, (route) => route.fulfill({ json: { models: [{
     model_name: 'whisper-base', display_name: 'Whisper Base', engine: 'whisper_transformers', source: 'huggingface', model_size: 'base', size_mb: 290,
-    languages: ['auto'], runtime: 'torch', supports_timestamps: true, supports_word_timestamps: false, supports_diarization: false, supports_streaming: false,
+    languages: ['auto'], runtime: 'torch', supported_devices: ['cpu'], supports_timestamps: true, supports_word_timestamps: false, supports_diarization: false, supports_streaming: false,
     downloaded: null, downloading: false, loaded: false, storage_status: 'unavailable', storage_error: '模型存储位置不可用',
   }] } }));
   await page.route(`${serverUrl}/models/active-downloads`, (route) => route.fulfill({ json: [] }));

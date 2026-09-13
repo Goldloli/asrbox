@@ -4,6 +4,26 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-13
+### Added
+
+- The models page now opens with a full-width model ladder: every local catalog model gets one row with S/A/B/C grades for speed, accuracy, and language coverage plus GPU/CPU, precise-timeline, and speaker-diarization capability marks and its download status. Speed and accuracy grades come from the Windows + RTX 5080 measurement run (90-second Chinese clip, agreement with large-v3) and are labeled as reference values; unmeasured models fall back to engine/size estimates marked with `*`. The ladder replaces the old estimated benchmark panel.
+
+### Changed
+
+- Ollama providers now use the Ollama native chat API instead of the OpenAI-compatible shim: every request carries a per-request context size (default 32768, adjustable in the provider's compatibility settings as "Context length"), explicit non-thinking mode, native JSON Schema output constraints and unlimited output length. Default-configured Ollama installs (4k context) no longer truncate real translation batches, and thinking models stop burning context on hidden reasoning. Gateways that only speak the OpenAI-compatible API can pin the protocol back to OpenAI in compatibility settings.
+
+### Fixed
+
+- Translation batches sent to local Ollama providers are now capped at 16 segments / 1600 source characters (other protocols keep 100 / 6000): small local models visibly misplace content in larger structured batches, returning sliding-window translations that overlap neighbouring segments. Batches whose translations share long substrings their sources do not share, or whose total length implausibly exceeds the source, are now halved and retried through the same deterministic split path as invalid responses instead of being saved as misaligned checkpoints; single-segment results are accepted as-is. The translation prompt now also states explicitly that each text must translate only its own segment.
+- The translation waiting and timeout messages now show the request limit that actually applies to the run's provider (300 seconds for Ollama, 90 for other protocols) instead of a hardcoded 90 seconds.
+- Translation requests to local Ollama providers now get a 300-second total deadline (other protocols keep 90 seconds), covering cold model loads plus large batches; batches that fail with `LLM_PROVIDER_TIMEOUT` or with an incomplete/duplicated provider response (`TRANSLATION_INVALID_RESPONSE`) are now halved and retried deterministically like context/truncation failures, instead of failing the whole run. Single-segment failures still fail explicitly with the original error code.
+- The models page and model-status metadata no longer claim segment/word timestamps for `sensevoice-small` (its FunASR integration emits none, like Qwen3-ASR): both SenseVoice and Qwen3-ASR entries are now marked as producing an approximate timeline whose cue times are spread across the audio, and `docs/models.md` matches. The task detail output panel now shows the same approximate-timeline note for tasks transcribed with these models, so exported subtitles are not mistaken for measured timings.
+- Subtitle line splitting no longer cuts English words in half: when a segment exceeds the per-line character budget the splitter now prefers the last space inside the window, falling back to a hard cut only for text without spaces (e.g. Chinese).
+- Local models whose backends return no timestamps (Qwen3-ASR family, SenseVoice) no longer lose every chunk after the first on media longer than two minutes: the chunk combiner treated their single zero-length segment as overlap and discarded it, so an 18-minute video collapsed to the first chunk's ~14 subtitle lines. Timestamp-less segments now span their chunk window before overlap filtering, keeping the full text from every chunk.
+- Translation batches that still exceed a provider's context or output capacity are now halved and retried deterministically (recursively down to a single segment, merged back in order into the same persisted checkpoint) instead of failing the whole run with `LLM_PROVIDER_TRUNCATED`; single-segment failures still fail explicitly and completed batches are never resent.
+- The translation truncation error now tells local-provider users to raise the context length or switch models instead of a generic "check settings" message.
+
 ## [0.2.0] - 2026-09-11
 ### Added
 
@@ -249,7 +269,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Goldloli/asrbox/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Goldloli/asrbox/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/Goldloli/asrbox/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/Goldloli/asrbox/compare/v0.1.7...v0.1.8

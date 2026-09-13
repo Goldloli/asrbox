@@ -130,6 +130,60 @@ test('model page expands detailed model intro for a natively diarizing model', a
   await expect(card.getByText('Known limitations')).toBeVisible();
 });
 
+test('model page renders the model ladder instead of the estimated benchmark panel', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
+  });
+  await page.route('**/models/status', (route) => route.fulfill({
+    json: {
+      models: [
+        modelStatus({ downloaded: true, compatible: true }),
+        modelStatus({
+          model_name: 'faster-whisper-small',
+          display_name: 'Faster Whisper Small',
+          engine: 'faster_whisper',
+          model_size: 'small',
+        }),
+        modelStatus({
+          model_name: 'mlx-whisper-turbo',
+          display_name: 'MLX Whisper Turbo',
+          engine: 'mlx_whisper',
+          runtime: 'mlx',
+          model_size: 'turbo',
+          supported_devices: ['mlx'],
+        }),
+      ],
+    },
+  }));
+  await page.route('**/models/active-downloads', (route) => route.fulfill({ json: [] }));
+  await page.route('**/models/storage', (route) => route.fulfill({
+    json: { models_dir: '/tmp/asrbox/models', used_bytes: 0, free_bytes: 0, total_bytes: 0, models: [] },
+  }));
+
+  await page.goto('/models');
+
+  const ladder = page.getByRole('heading', { name: 'Model ladder' }).locator('xpath=ancestor::section[1]');
+  const table = ladder.getByRole('table');
+  await expect(table.getByRole('row')).toHaveCount(4);
+
+  const whisperRow = table.getByRole('row', { name: /Whisper Base/ });
+  await expect(whisperRow.getByText('A', { exact: true })).toBeVisible();
+  await expect(whisperRow.getByText('C', { exact: true })).toBeVisible();
+  await expect(whisperRow.getByText('S', { exact: true })).toBeVisible();
+  await expect(whisperRow.locator('[title="Downloaded"]')).toHaveCount(1);
+
+  const mlxRow = table.getByRole('row', { name: /MLX Whisper Turbo/ });
+  await expect(mlxRow.getByText('A*', { exact: true })).toHaveCount(2);
+  await expect(mlxRow.getByText('S*', { exact: true })).toBeVisible();
+  await expect(mlxRow.locator('[title="Not downloaded"]')).toHaveCount(1);
+
+  await expect(ladder).toContainText('Windows + RTX 5080');
+  await expect(ladder).toContainText('* marks estimates');
+
+  await expect(page.getByRole('heading', { name: 'Performance view' })).toHaveCount(0);
+  await expect(page.getByText('Estimated from model metadata', { exact: false })).toHaveCount(0);
+});
+
 test('transcription model selector shows compact CPU and GPU support', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));

@@ -110,6 +110,33 @@ def test_combining_local_chunks_filters_overlap_and_offsets_timestamps() -> None
     assert result.duration == pytest.approx(121.0)
 
 
+def test_combining_local_chunks_keeps_timestampless_segments_from_every_chunk() -> None:
+    from backend.services.tasks import _combine_local_worker_results
+
+    row = SimpleNamespace(duration_ms=238_000, language="en", model_name="qwen3-asr-1.7b")
+    inputs = [
+        {"audio_path": "first.wav", "start_ms": 0, "end_ms": 120_000},
+        {"audio_path": "second.wav", "start_ms": 118_000, "end_ms": 238_000},
+    ]
+    payloads = [
+        TranscriptionResult(
+            text="alpha",
+            segments=[TranscriptSegment(id=1, start=0.0, end=0.0, text="alpha")],
+        ).model_dump(mode="json"),
+        TranscriptionResult(
+            text="bravo",
+            segments=[TranscriptSegment(id=1, start=0.0, end=0.0, text="bravo")],
+        ).model_dump(mode="json"),
+    ]
+
+    result = _combine_local_worker_results(row, inputs, payloads)
+
+    assert [segment.text for segment in result.segments] == ["alpha", "bravo"]
+    assert (result.segments[0].start, result.segments[0].end) == (0.0, 120.0)
+    assert (result.segments[1].start, result.segments[1].end) == (118.0, 238.0)
+    assert result.text == "alpha bravo"
+
+
 def test_short_local_worker_progress_accepts_one_result_without_chunk_rows() -> None:
     from backend.services.tasks import _publish_local_worker_progress
 

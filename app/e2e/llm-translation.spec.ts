@@ -10,7 +10,9 @@ const task = {
   created_at: '2026-09-06T01:00:00Z', updated_at: '2026-09-06T01:00:00Z', completed_at: '2026-09-06T01:00:00Z',
 };
 const provider = { id: 'ollama', name: 'Ollama', preset: 'ollama', base_url: 'http://localhost:11434/v1',
-  api_key_masked: null, default_model: 'qwen3', enabled: true, is_local: true, created_at: task.created_at, updated_at: task.updated_at };
+  api_key_masked: null, default_model: 'qwen3', enabled: true, is_local: true, created_at: task.created_at, updated_at: task.updated_at,
+  compatibility: { protocol: 'auto', thinking: 'auto', output_format: 'auto', transport: 'json', context_length: null } };
+const cloud = { ...provider, id: 'kimi', name: 'Kimi', preset: 'kimi', base_url: 'https://api.moonshot.cn/v1', is_local: false };
 const completed = { id: 'run-1', task_id: task.id, source_version_id: 1,
   source_language: { kind: 'preset', code: 'ja' }, target_language: { kind: 'preset', code: 'fr' },
   source_is_current: true, llm_provider_id: provider.id, provider_name: provider.name, provider_preset: provider.preset,
@@ -23,7 +25,7 @@ const version = { id: 10, run_id: completed.id, revision: 1, version_type: 'tran
   segments: task.segments.map((s, i) => ({ ...s, speaker: null, source_text: s.text, text: i ? 'Bonjour' : 'مرحبا' })) };
 
 async function mock(page: Page, options: { empty?: boolean; activeTask?: boolean; noProvider?: boolean; conflict?: boolean } = {}) {
-  const state = { runs: options.empty ? [] : [{ ...completed }], versions: [{ ...version }], posts: [] as Record<string, unknown>[], downloads: [] as string[] };
+  const state = { runs: options.empty ? [] : [{ ...completed }], versions: [{ ...version }], posts: [] as Record<string, unknown>[], downloads: [] as string[], providers: options.noProvider ? [] : [provider] };
   await page.addInitScript(url => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
     localStorage.setItem('asrbox-ui', JSON.stringify({ state: { locale: 'en' }, version: 0 }));
@@ -34,7 +36,7 @@ async function mock(page: Page, options: { empty?: boolean; activeTask?: boolean
     { id: 2, version_type: 'proofread', created_at: task.created_at, segments: task.segments },
     { id: 1, version_type: 'transcribe', created_at: task.created_at, segments: task.segments },
   ] }));
-  await page.route(`${server}/llm-providers`, route => route.fulfill({ json: { items: options.noProvider ? [] : [provider] } }));
+  await page.route(`${server}/llm-providers`, route => route.fulfill({ json: { items: state.providers } }));
   await page.route(`${server}/tasks/${task.id}/proofreading-runs`, route => route.fulfill({ json: { items: [] } }));
   await page.route(base, route => {
     if (route.request().method() === 'POST') {
@@ -233,7 +235,7 @@ test('shows real batch waiting time without inventing progress, then exposes tim
   await page.goto('/ai?task=translation-task&mode=translation&run=run-1');
   const waitText = page.getByTestId('translation-wait');
   await expect(waitText).toContainText('Waiting for this batch:');
-  await expect(waitText).toContainText('90-second limit');
+  await expect(waitText).toContainText('300-second limit');
   const shownSeconds = async () => Number((await waitText.textContent())?.match(/batch: (\d+)s/)?.[1]);
   const before = await shownSeconds();
   expect(before).toBeGreaterThanOrEqual(15);
@@ -243,8 +245,19 @@ test('shows real batch waiting time without inventing progress, then exposes tim
   await expect(page.getByText('0 / 2 segments · 0 / 2 batches saved')).toBeVisible();
   state.runs[0] = { ...state.runs[0], status: 'failed', error_code: 'LLM_PROVIDER_TIMEOUT', can_retry: true };
   await page.clock.fastForward(2000);
-  await expect(page.getByText('The provider did not finish within 90 seconds.', { exact: false })).toBeVisible();
+  await expect(page.getByText('The provider did not finish within 300 seconds.', { exact: false })).toBeVisible();
   await expect(waitText).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Resume unfinished batches' })).toBeEnabled();
   expect(state.posts).toHaveLength(0);
+});
+
+test('shows the 90-second request limit for online providers', async ({ page }) => {
+  const state = await mock(page, { empty: true });
+  state.providers = [cloud];
+  state.runs = [{ ...completed, llm_provider_id: cloud.id, provider_preset: cloud.preset, model_name: cloud.default_model,
+    status: 'running', completed_segments: 0, completed_batches: 0, latest_translation_version_id: null,
+    can_edit: false, can_export: false, updated_at: '2026-09-07T02:14:45.000000' }];
+  await page.clock.install({ time: new Date('2026-09-07T02:15:00Z') });
+  await page.goto('/ai?task=translation-task&mode=translation&run=run-1');
+  await expect(page.getByTestId('translation-wait')).toContainText('90-second limit');
 });

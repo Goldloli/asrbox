@@ -301,6 +301,7 @@ export interface LLMCompatibility {
   thinking: 'auto' | 'default' | 'disabled';
   output_format: 'auto' | 'json_schema' | 'json_object' | 'prompt';
   transport: 'json' | 'sse';
+  context_length: number | null;
 }
 
 export interface LLMCapabilityTestResult {

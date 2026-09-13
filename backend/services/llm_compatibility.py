@@ -11,6 +11,7 @@ import httpx
 from backend.models import LLMCompatibility
 
 MAX_RESPONSE_BYTES = 1024 * 1024
+OLLAMA_DEFAULT_CONTEXT_LENGTH = 32768
 
 
 class LLMProviderError(RuntimeError):
@@ -87,6 +88,30 @@ def request_body(provider, messages, *, structured=False, schema=None, stream=No
     return body
 
 
+def ollama_native_url(base_url, path):
+    base = base_url.rstrip('/')
+    if base.lower().endswith('/v1'):
+        base = base[:-3]
+    return f"{base}{path}"
+
+
+def native_request_body(provider, messages, *, structured=False, schema=None, stream=None):
+    """Ollama native /api/chat body; per-request num_ctx keeps default-configured servers usable."""
+    options = resolved(provider)
+    body = {"model": provider.default_model, "messages": messages,
+            "stream": (options.transport == "sse") if stream is None else stream,
+            "options": {"num_ctx": options.context_length or OLLAMA_DEFAULT_CONTEXT_LENGTH,
+                        "num_predict": -1}}
+    if options.thinking == "disabled":
+        body["think"] = False
+    if structured:
+        if options.output_format == "json_schema" and schema is not None:
+            body["format"] = schema
+        elif options.output_format in {"json_schema", "json_object"}:
+            body["format"] = "json"
+    return body
+
+
 def check_finish(reason):
     if reason == "length":
         raise LLMProviderError("LLM_PROVIDER_TRUNCATED", "Provider output was truncated; reduce the input or use another model")
@@ -102,6 +127,23 @@ def completion_content(payload):
         check_finish(choice.get("finish_reason"))
         message = choice["message"]
         if message.get("refusal") or message.get("tool_calls") or message.get("function_call"):
+            raise LLMProviderError("LLM_PROVIDER_REFUSED", "Provider did not return subtitle text")
+        content = message["content"]
+        if not isinstance(content, str) or not content.strip():
+            invalid()
+        return content
+    except (KeyError, IndexError, TypeError, AttributeError):
+        invalid()
+
+
+def native_completion_content(payload):
+    """Ollama native response: done_reason maps through the same finish-reason discipline."""
+    try:
+        if payload.get("error"):
+            invalid()
+        check_finish(payload.get("done_reason"))
+        message = payload["message"]
+        if message.get("tool_calls"):
             raise LLMProviderError("LLM_PROVIDER_REFUSED", "Provider did not return subtitle text")
         content = message["content"]
         if not isinstance(content, str) or not content.strip():
@@ -159,37 +201,81 @@ class _SSE:
         return httpx.Response(200, json={'choices': [{'message': {'content': ''.join(self.parts)}, 'finish_reason': 'stop'}]})
 
 
-async def bounded_completion(url, headers, body, timeout, max_response_bytes, on_delta=None):
+class _NDJSON:
+    """Ollama native stream: one JSON object per line, done/done_reason terminates."""
+
+    def __init__(self, on_delta=None):
+        self.parts = []
+        self.finished = False
+        self.done = False
+        self.on_delta = on_delta
+
+    def line(self, line):
+        if not line.strip():
+            return
+        try:
+            payload = json.loads(line)
+            if not isinstance(payload, dict):
+                invalid()
+            if payload.get('error'):
+                invalid()
+            message = payload.get('message') or {}
+            if message.get('tool_calls'):
+                raise LLMProviderError('LLM_PROVIDER_REFUSED', 'Provider did not return subtitle text')
+            content = message.get('content')
+            if content is not None:
+                if not isinstance(content, str) or self.finished and content:
+                    invalid()
+                self.parts.append(content)
+                if content and self.on_delta is not None:
+                    self.on_delta(content)
+            if payload.get('done'):
+                check_finish(payload.get('done_reason'))
+                self.finished = True
+                self.done = True
+        except (ValueError, TypeError, AttributeError, RecursionError):
+            invalid()
+
+    def response(self):
+        if not self.finished or not ''.join(self.parts).strip():
+            invalid()
+        return httpx.Response(200, json={'message': {'content': ''.join(self.parts)}, 'done': True, 'done_reason': 'stop'})
+
+
+async def bounded_completion(url, headers, body, timeout, max_response_bytes, on_delta=None, content_parser=completion_content):
     try:
         async with asyncio.timeout(timeout):
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
                 async with client.stream('POST', url, headers=headers, json=body) as response:
-                    is_sse = response.is_success and 'text/event-stream' in response.headers.get('content-type', '')
+                    content_type = response.headers.get('content-type', '')
+                    is_sse = response.is_success and 'text/event-stream' in content_type
+                    is_ndjson = response.is_success and 'application/x-ndjson' in content_type
+                    streamed = is_sse or is_ndjson
                     chunks, size, buffer = [], 0, b''
-                    sse = _SSE(on_delta)
+                    stream_parser = _SSE(on_delta) if is_sse else _NDJSON(on_delta)
                     async for chunk in response.aiter_bytes():
                         size += len(chunk)
                         if size > max_response_bytes:
                             raise LLMProviderError('LLM_PROVIDER_RESPONSE_TOO_LARGE', 'LLM provider response exceeds size limit')
-                        if not is_sse:
+                        if not streamed:
                             chunks.append(chunk)
                             continue
                         buffer += chunk
                         while b'\n' in buffer:
                             line, buffer = buffer.split(b'\n', 1)
-                            sse.line(line.rstrip(b'\r').decode('utf-8'))
-                            if sse.done:
-                                return sse.response()
-                    if is_sse:
+                            stream_parser.line(line.rstrip(b'\r').decode('utf-8'))
+                            if stream_parser.done:
+                                return stream_parser.response()
+                    if streamed:
                         if buffer:
-                            sse.line(buffer.rstrip(b'\r').decode('utf-8'))
-                        sse.line('')
-                        return sse.response()
+                            stream_parser.line(buffer.rstrip(b'\r').decode('utf-8'))
+                        stream_parser.line('')
+                        return stream_parser.response()
                     result = httpx.Response(response.status_code, content=b''.join(chunks))
                     if on_delta is not None and result.is_success:
                         try:
-                            on_delta(completion_content(result.json()))
-                        except (ValueError, RecursionError):
+                            on_delta(content_parser(result.json()))
+                        except (ValueError, RecursionError, LLMProviderError):
                             pass
                     return result
     except (TimeoutError, httpx.TimeoutException) as exc:

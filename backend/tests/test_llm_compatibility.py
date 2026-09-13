@@ -25,7 +25,7 @@ def configured(setup, **options):
 
 
 @pytest.mark.parametrize('protocol,expected', [
-    ('openai', {'reasoning_effort': 'none'}), ('ollama', {'reasoning_effort': 'none'}),
+    ('openai', {'reasoning_effort': 'none'}),
     ('deepseek', {'thinking': {'type': 'disabled'}}), ('glm', {'thinking': {'type': 'disabled'}}),
     ('qwen', {'enable_thinking': False}),
 ])
@@ -43,6 +43,29 @@ def test_custom_protocol_applies_to_both_workloads(setup, monkeypatch, protocol,
     for translation in (True, False):
         assert llm_providers.chat_completion(p, [], structured_translation=translation, response_schema={'type': 'object'}) == '{}'
     assert len(calls) == 2
+
+
+def test_ollama_protocol_uses_native_chat_api_with_context_length(setup, monkeypatch):
+    p = configured(setup, protocol='ollama', thinking='disabled', output_format='json_schema', transport='sse')
+    p.base_url = 'http://localhost:11434/v1'
+    calls = []
+    def respond(request):
+        assert request.url.path == '/api/chat'
+        body = json.loads(request.content); calls.append(body)
+        assert body['think'] is False
+        assert body['options']['num_predict'] == -1
+        return httpx.Response(200, json={'message': {'content': '{}'}, 'done': True, 'done_reason': 'stop'})
+    mock_transport(monkeypatch, respond)
+    for translation in (True, False):
+        assert llm_providers.chat_completion(p, [], structured_translation=translation, response_schema={'type': 'object'}) == '{}'
+    assert len(calls) == 2 and all(body['stream'] is True for body in calls)
+    for body in calls:
+        assert body['format'] == {'type': 'object'} and body['options']['num_ctx'] == 32768
+        assert set(body) == {'model', 'messages', 'stream', 'think', 'format', 'options'}
+    p.compatibility_json = LLMCompatibility(protocol='ollama', context_length=8192).model_dump_json()
+    assert llm_providers.chat_completion(p, []) == '{}'
+    assert calls[-1]['options']['num_ctx'] == 8192 and calls[-1]['think'] is False and 'format' not in calls[-1]
+    assert calls[-1]['stream'] is False
 
 
 def test_explicit_defaults_override_preset_and_unknown_endpoint_does_not_guess_model(setup):
@@ -107,8 +130,32 @@ def test_json_rejects_truncation_refusal_and_reasoning_only(setup, monkeypatch, 
         calls.append(request)
         return httpx.Response(200, json={'choices': [{'message': message, 'finish_reason': reason}]})
     mock_transport(monkeypatch, reply)
-    with pytest.raises(compat.LLMProviderError) as exc: llm_providers.chat_completion(setup[2], [])
+    with pytest.raises(compat.LLMProviderError) as exc: llm_providers.chat_completion(configured(setup), [])
     assert exc.value.code == code and 'secret' not in str(exc.value) and len(calls) == 1
+
+
+@pytest.mark.parametrize('payload,code', [
+    ({'message': {'content': '{}'}, 'done': True, 'done_reason': 'length'}, 'LLM_PROVIDER_TRUNCATED'),
+    ({'message': {'content': '{}', 'tool_calls': [{}]}, 'done': True, 'done_reason': 'stop'}, 'LLM_PROVIDER_REFUSED'),
+    ({'message': {'thinking': 'secret thinking', 'content': ''}, 'done': True, 'done_reason': 'stop'}, 'LLM_PROVIDER_INVALID_RESPONSE'),
+    ({'error': 'secret failure'}, 'LLM_PROVIDER_INVALID_RESPONSE'),
+])
+def test_native_json_rejects_truncation_refusal_thinking_and_error(setup, monkeypatch, payload, code):
+    def reply(request):
+        assert request.url.path == '/api/chat'
+        return httpx.Response(200, json=payload)
+    mock_transport(monkeypatch, reply)
+    with pytest.raises(compat.LLMProviderError) as exc: llm_providers.chat_completion(setup[2], [])
+    assert exc.value.code == code and 'secret' not in str(exc.value)
+
+
+def test_context_length_bounds_and_default():
+    from pydantic import ValidationError
+    assert LLMCompatibility().context_length is None
+    assert LLMCompatibility(context_length=2048).context_length == 2048
+    assert LLMCompatibility(context_length=1048576).context_length == 1048576
+    for bad in (2047, 1048577, 'unlimited'):
+        with pytest.raises(ValidationError): LLMCompatibility(context_length=bad)
 
 
 def test_proofreading_accepts_whole_fence_but_not_duplicate_keys_or_coercion():
@@ -127,6 +174,8 @@ def sample_reply(request):
         content = {'translations': [{'segment_id': 1, 'text': '你好。'}, {'segment_id': 2, 'text': '谢谢。'}]}
     else:
         content = {'suggestions': [{'segment_id': 1, 'suggested_text': 'I have a book.', 'reason': 'Subject agreement'}]}
+    if request.url.path == '/api/chat':
+        return httpx.Response(200, json={'message': {'content': json.dumps(content)}, 'done': True, 'done_reason': 'stop'})
     return httpx.Response(200, json={'choices': [{'message': {'content': json.dumps(content)}, 'finish_reason': 'stop'}]})
 
 
@@ -137,7 +186,7 @@ def test_capabilities_probe_fallback_never_saves_settings_or_exposes_content(set
     def respond(r):
         body = json.loads(r.content); calls.append(body)
         assert 'filename' not in r.content.decode() and 'audio' not in r.content.decode()
-        if 'response_format' in body:
+        if 'response_format' in body or 'format' in body:
             return httpx.Response(400, json={'error': {'message': 'response_format not supported secret'}})
         return sample_reply(r)
     mock_transport(monkeypatch, respond)
@@ -166,6 +215,8 @@ def test_capability_max_six_requests_and_budget(setup, monkeypatch):
     def reply(r):
         calls.append(r)
         if len(calls) % 2: return sample_reply(r)
+        if r.url.path == '/api/chat':
+            return httpx.Response(200, json={'message': {'content': '{"suggestions": []}'}, 'done': True, 'done_reason': 'stop'})
         return httpx.Response(200, json={'choices': [{'message': {'content': '{"suggestions": []}'}}]})
     mock_transport(monkeypatch, reply)
     result = llm_capabilities.test_capabilities(setup[0], setup[2].id)

@@ -18,7 +18,7 @@ ASRbox SHALL 独立于 ASR 转写提供商管理 LLM 提供商，并 SHALL 为 M
 
 ### Requirement: 经过校验的 LLM 提供商使用
 
-系统 SHALL 要求提供商处于启用状态、HTTP endpoint 有效且模型已显式配置，才能执行连接测试、启动校对或启动／继续翻译；系统 SHALL 只使用受维护的 JSON 或 SSE OpenAI-compatible Chat Completions contract。翻译 SHALL 复用现有 LLM 提供商配置与传输安全边界，不要求用户重复创建翻译专用凭据。
+系统 SHALL 要求提供商处于启用状态、HTTP endpoint 有效且模型已显式配置，才能执行连接测试、启动校对或启动／继续翻译；系统 SHALL 只使用受维护的 contract：OpenAI-compatible Chat Completions（JSON 或 SSE），或当协议解析为 ollama 时使用同一 endpoint 主机的 Ollama 原生 Chat API（JSON 或 NDJSON 流式）。翻译 SHALL 复用现有 LLM 提供商配置与传输安全边界，不要求用户重复创建翻译专用凭据。
 
 #### Scenario: 提供商配置不完整
 - **WHEN** 连接测试、校对或翻译请求引用了已禁用的提供商，或提供商缺少可用 endpoint、必需凭据或模型
@@ -39,6 +39,10 @@ ASRbox SHALL 独立于 ASR 转写提供商管理 LLM 提供商，并 SHALL 为 M
 #### Scenario: 已配置提供商用于翻译
 - **WHEN** 用户在翻译工作区选择已启用且配置有效的 LLM 提供商
 - **THEN** 系统使用相同 endpoint、凭据和已配置模型执行翻译，并沿用分类且脱敏的错误反馈
+
+#### Scenario: Ollama 协议使用原生 Chat API
+- **WHEN** 提供商协议解析为 ollama 并发起 chat completion（翻译、校对、对话或连接测试）
+- **THEN** 请求使用同一 endpoint 主机的 Ollama 原生 Chat API 并按已配置上下文长度覆盖本地上下文，不再使用该主机的 OpenAI-compatible Chat Completions 路径
 
 ### Requirement: 独立的 LLM 设置入口
 ASRbox SHALL 在设置页使用一级 `AI LLM提供商` tab 管理 LLM 提供商，并 SHALL 与现有 ASR 在线提供商设置保持分离。
@@ -62,7 +66,7 @@ LLM 提供商 secret SHALL 在 API 和用户界面响应中脱敏，并从日志
 - **THEN** 完整 API key 和任何包含字幕内容的提供商响应都不会被暴露
 
 ### Requirement: 可保存的共享兼容设置
-系统 SHALL 为预设和自定义提供商暴露强类型协议、思考、输出约束及传输设置，供翻译和校对共同使用；未知自定义服务以基础兼容协议处理，显式设置优先。旧配置 SHALL 无损迁移，设置不得允许覆盖 endpoint、凭据或安全边界。
+系统 SHALL 为预设和自定义提供商暴露强类型协议、思考、输出约束、传输及上下文长度设置，供翻译和校对共同使用；未知自定义服务以基础兼容协议处理，显式设置优先。上下文长度 SHALL 仅对协议解析为 ollama 的提供商生效，未设置时按默认值 32768 发送，取值 SHALL 限制在有界整数范围内。旧配置 SHALL 无损迁移，设置不得允许覆盖 endpoint、凭据或安全边界。
 
 #### Scenario: 自定义平台需要专用参数
 - **WHEN** 用户为自定义提供商选择协议和兼容选项并保存
@@ -71,6 +75,14 @@ LLM 提供商 secret SHALL 在 API 和用户界面响应中脱敏，并从日志
 #### Scenario: 旧数据库升级
 - **WHEN** 旧 LLM 提供商没有兼容配置
 - **THEN** 返回有效默认设置，原凭据与字幕版本保留，重复迁移不出错
+
+#### Scenario: 用户调整 Ollama 上下文长度
+- **WHEN** 用户为协议解析为 ollama 的提供商设置有界范围内的上下文长度并保存
+- **THEN** 后续翻译、校对与对话请求按该值覆盖本地模型上下文；未显式设置时按默认值 32768 发送
+
+#### Scenario: 上下文长度越界或协议不适用
+- **WHEN** 用户提交超出有界范围的上下文长度
+- **THEN** 配置被拒绝且不改变已保存设置；协议非 ollama 时该字段不向上游发送任何额外参数
 
 ### Requirement: 显式的字幕能力测试
 系统 SHALL 提供与连接测试分离的翻译与校对能力测试，仅发送内置示例。测试 SHALL 分别使用实际业务输出校验，最多尝试三档输出约束、六次请求和 180 秒总限；鉴权、限流、连接或超时失败不得触发候选重试。界面 SHALL 说明请求预算、可能计费和示例通过不代表长任务或语义质量保证。

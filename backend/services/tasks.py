@@ -717,6 +717,11 @@ def _combine_local_worker_results(
         for segment in result.segments:
             start = segment.start + offset
             end = segment.end + offset
+            if segment.end <= segment.start:
+                # Backends without timestamps (Qwen3-ASR, SenseVoice) emit one
+                # zero-length segment per chunk; treat it as covering the chunk window.
+                start = offset
+                end = float(item["end_ms"]) / 1000
             if index > 0 and ((start + end) / 2) <= previous_end:
                 continue
             segments.append(

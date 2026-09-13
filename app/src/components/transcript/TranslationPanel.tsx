@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Languages, Play, Save } from 'lucide-react';
-import { apiClient, type TranscriptionTask, type TranslationLanguage, type TranslationRun, type TranslationVersion, type TranslationExportFormat, type TranslationExportMode, type TranslationExportOrder } from '../../lib/api';
+import { apiClient, type LLMProvider, type TranscriptionTask, type TranslationLanguage, type TranslationRun, type TranslationVersion, type TranslationExportFormat, type TranslationExportMode, type TranslationExportOrder } from '../../lib/api';
 import { useI18n, type DictionaryKey } from '../../lib/i18n';
 import { queryKeys, useLLMProvidersQuery } from '../../lib/queries';
 import { languageLabel, sameTranslationLanguage, translationLanguages, validTranslationLanguage } from '../../lib/translationLanguages';
@@ -14,6 +14,14 @@ import { toastErrorMessage, useToast } from '../Toast';
 import { Badge, Button, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../weiui';
 
 const isActive = (run: TranslationRun) => run.status === 'queued' || run.status === 'running';
+
+// Mirrors backend/services/translation.py: the Ollama native protocol gets a 300-second
+// request deadline (LOCAL_REQUEST_TIMEOUT), every other protocol 90 (REMOTE_REQUEST_TIMEOUT).
+function translationRequestLimit(provider: LLMProvider | undefined, preset: string | undefined): number {
+  const configured = provider?.compatibility?.protocol ?? 'auto';
+  const protocol = configured === 'auto' ? provider?.preset ?? preset : configured;
+  return protocol === 'ollama' ? 300 : 90;
+}
 
 function LanguageSelect({ value, onChange, target = false }: {
   value: TranslationLanguage; onChange: (value: TranslationLanguage) => void; target?: boolean;
@@ -56,6 +64,8 @@ export function TranslationPanel({ task, runId }: { task: TranscriptionTask; run
   const provider = available.find(p => p.id === providerId) ?? available[0];
   const sourceVersionId = sourceId || String(sources.data?.[0]?.id ?? '');
   const current = runId ? runs.data?.items.find(r => r.id === runId) : runs.data?.items[0];
+  const currentProvider = providers.data?.items.find(p => p.id === current?.llm_provider_id);
+  const requestLimit = translationRequestLimit(currentProvider, current?.provider_preset);
   const active = runs.data?.items.some(isActive);
   const validLanguages = validTranslationLanguage(sourceLanguage) && validTranslationLanguage(targetLanguage, true) && !sameTranslationLanguage(sourceLanguage, targetLanguage);
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.translationRuns(task.id) });
@@ -107,12 +117,12 @@ export function TranslationPanel({ task, runId }: { task: TranscriptionTask; run
         {!current.source_is_current && <p role="status" className="rounded-lg border app-border p-3 text-sm">{t('translation.sourceUpdated')}</p>}
         <Progress value={current.total_segments ? current.completed_segments / current.total_segments * 100 : 0} />
         <p className="text-xs text-app-muted" role="status">{t('translation.progress', { completed: current.completed_segments, total: current.total_segments, batches: current.completed_batches, totalBatches: current.total_batches })}</p>
-        {current.status === 'running' && <TranslationWait key={`${current.id}:${current.attempt}:${current.updated_at}`} since={current.updated_at} />}
+        {current.status === 'running' && <TranslationWait key={`${current.id}:${current.attempt}:${current.updated_at}`} since={current.updated_at} limit={requestLimit} />}
         {isActive(current) ? <>
           <Button className="w-fit" variant="secondary" disabled={action.isPending} onClick={() => action.mutate('cancel')}>{t('translation.cancel')}</Button>
           <p className="text-xs text-app-muted">{t('translation.cancelNote')}</p>
         </> : current.status !== 'completed' && <>
-          {current.error_code && <div role="alert" className="grid gap-1 text-sm text-app-muted"><p>{t(errorLabel(current.error_code))}</p><code className="break-all text-xs">{current.error_code}</code></div>}
+          {current.error_code && <div role="alert" className="grid gap-1 text-sm text-app-muted"><p>{t(errorLabel(current.error_code), { limit: requestLimit })}</p><code className="break-all text-xs">{current.error_code}</code></div>}
           <Button className="w-fit" variant="secondary" disabled={!current.can_retry || action.isPending} onClick={() => action.mutate('retry')}>{t('translation.retry')}</Button>
           <p className="text-xs text-app-muted">{t(current.can_retry ? 'translation.retryNote' : 'translation.unavailableRetry')}</p>
         </>}
@@ -122,7 +132,7 @@ export function TranslationPanel({ task, runId }: { task: TranscriptionTask; run
   </Panel>;
 }
 
-function TranslationWait({ since }: { since: string }) {
+function TranslationWait({ since, limit }: { since: string; limit: number }) {
   const { t } = useI18n();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -132,7 +142,7 @@ function TranslationWait({ since }: { since: string }) {
   // Persisted backend timestamps without an offset are UTC, not local time.
   const timestamp = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(since) ? since : `${since}Z`);
   const seconds = Number.isFinite(timestamp) ? Math.max(0, Math.floor((now - timestamp) / 1000)) : 0;
-  return <p className="text-xs text-app-muted" data-testid="translation-wait">{t('translation.waiting', { seconds })}</p>;
+  return <p className="text-xs text-app-muted" data-testid="translation-wait">{t('translation.waiting', { seconds, limit })}</p>;
 }
 
 function errorLabel(code: string): DictionaryKey {

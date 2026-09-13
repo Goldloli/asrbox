@@ -257,6 +257,7 @@ class LLMCompatibility(BaseModel):
     thinking: Literal["auto", "default", "disabled"] = "auto"
     output_format: Literal["auto", "json_schema", "json_object", "prompt"] = "auto"
     transport: Literal["json", "sse"] = "json"
+    context_length: int | None = Field(None, ge=2048, le=1048576)
 
 
 class LLMCapabilityCheck(BaseModel):

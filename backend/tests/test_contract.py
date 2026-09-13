@@ -522,7 +522,7 @@ def test_llm_compatibility_contract_and_stale_recommendation(tmp_path, monkeypat
         })
         assert original.status_code == 200
         row = original.json()
-        assert row['compatibility'] == {'protocol': 'auto', 'thinking': 'auto', 'output_format': 'auto', 'transport': 'json'}
+        assert row['compatibility'] == {'protocol': 'auto', 'thinking': 'auto', 'output_format': 'auto', 'transport': 'json', 'context_length': None}
         path = '/llm-providers/' + row['id']
         checked = client.post(path + '/test-capabilities')
         assert checked.status_code == 200
@@ -539,7 +539,8 @@ def test_llm_compatibility_contract_and_stale_recommendation(tmp_path, monkeypat
         assert client.put(path, json=update).status_code == 409
         listing = client.get('/llm-providers').json()['items'][0]
         assert listing['compatibility'] == result['recommended']
-        for invalid in ({'protocol': 'unknown'}, {'headers': {'Authorization': 'override'}}, {'transport': 'other'}):
+        for invalid in ({'protocol': 'unknown'}, {'headers': {'Authorization': 'override'}}, {'transport': 'other'},
+                        {'context_length': 1024}, {'context_length': 'unlimited'}):
             assert client.put(path, json={'compatibility': invalid}).status_code == 422
         assert client.put(path, json={'compatibility': None}).status_code == 400
         assert client.post('/llm-providers/missing/test-capabilities').status_code == 404

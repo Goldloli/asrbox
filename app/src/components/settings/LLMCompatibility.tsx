@@ -4,7 +4,9 @@ import { apiClient, type LLMProvider, type LLMCompatibility, type LLMCapabilityT
 import { useI18n } from '../../lib/i18n';
 import { Button, ErrorState, Field, Select } from '../weiui';
 
-export const defaultCompatibility: LLMCompatibility = { protocol: 'auto', thinking: 'auto', output_format: 'auto', transport: 'json' };
+export const defaultCompatibility: LLMCompatibility = { protocol: 'auto', thinking: 'auto', output_format: 'auto', transport: 'json', context_length: null };
+
+const CONTEXT_LENGTH_TIERS = ['8192', '16384', '32768', '65536', '131072'];
 
 export function LLMCompatibilityFields({ value, onChange }: {
   value: LLMCompatibility; onChange: (value: LLMCompatibility) => void;
@@ -25,10 +27,18 @@ export function LLMCompatibilityFields({ value, onChange }: {
       ? '自定义地址也可选择对应平台的参数协议。关闭思考需要模型支持；纯思考模型请选择保留默认，必要时使用流式响应。更改后请重新测试字幕能力。'
       : 'Custom endpoints can use a platform protocol. Thinking-only models need the model default and may require streaming. Test subtitle capabilities again after changes.'}</p>
     <div className="grid gap-3">
-      {(Object.keys(choices) as Array<keyof LLMCompatibility>).map((key) => <Field key={key} label={labels[key]}>
+      {(Object.keys(choices) as Array<keyof typeof choices>).map((key) => <Field key={key} label={labels[key]}>
         <Select value={value[key]} options={choices[key].map(([value, label]) => ({ value, label }))}
           onValueChange={(next) => onChange({ ...value, [key]: next })} />
       </Field>)}
+      <Field label={zh ? '上下文长度' : 'Context length'}>
+        <Select value={value.context_length == null ? 'auto' : String(value.context_length)}
+          options={[['auto', zh ? '默认（32768）' : 'Default (32768)'], ...CONTEXT_LENGTH_TIERS.map((tier) => [tier, tier])].map(([value, label]) => ({ value, label }))}
+          onValueChange={(next) => onChange({ ...value, context_length: next === 'auto' ? null : Number(next) })} />
+      </Field>
+      <p className="-mt-1 text-xs text-app-muted">{zh
+        ? '仅 Ollama 协议生效，按请求覆盖本地模型上下文。更大的上下文占用更多显存；低端显卡可调低。'
+        : 'Ollama protocol only; overrides the local model context per request. Larger contexts use more VRAM—lower it on low-end GPUs.'}</p>
     </div>
   </details>;
 }
@@ -81,7 +91,7 @@ export function LLMCapabilityPanel({ provider, onSaved }: { provider: LLMProvide
         {result[kind].error_code && <code className="ml-2 break-all">{result[kind].error_code}</code>}
       </p>)}
       {result.ok && result.recommended && <>
-        <p>{zh ? '已验证设置' : 'Tested settings'}：{Object.values(result.recommended).join(' · ')}</p>
+        <p>{zh ? '已验证设置' : 'Tested settings'}：{Object.values(result.recommended).filter((v) => v != null).join(' · ')}</p>
         <Button size="sm" disabled={apply.isPending || test.isPending} onClick={() => apply.mutate()}>{zh ? '应用已验证设置' : 'Apply tested settings'}</Button>
       </>}
     </div>}

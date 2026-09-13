@@ -45,8 +45,16 @@ def _split_text(text: str, max_chars: int) -> list[str]:
     parts = []
     remaining = text
     while remaining:
-        parts.append(remaining[:max_chars].strip())
-        remaining = remaining[max_chars:].strip()
+        if len(remaining) <= max_chars:
+            parts.append(remaining)
+            break
+        # Prefer a word boundary near the limit so English words are not cut in half;
+        # text without spaces (e.g. Chinese) falls back to a hard cut.
+        cut = remaining.rfind(" ", max_chars // 2, max_chars + 1)
+        if cut == -1:
+            cut = max_chars
+        parts.append(remaining[:cut].strip())
+        remaining = remaining[cut:].strip()
     return [part for part in parts if part]
 
 

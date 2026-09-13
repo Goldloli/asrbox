@@ -155,6 +155,31 @@ def test_process_segments_collapses_runs_across_merge_boundary() -> None:
     assert processed[0].text == "par par"
 
 
+def test_split_text_breaks_english_at_word_boundary() -> None:
+    words = ["word%02d" % index for index in range(20)]
+    text = " ".join(words)
+
+    parts = postprocess._split_text(text, max_chars=42)
+
+    assert len(parts) > 1
+    assert all(len(part) <= 42 for part in parts)
+    assert " ".join(parts) == text
+    for part in parts:
+        first, *rest = part.split(" ")
+        assert first in words
+        assert all(word in words for word in rest)
+
+
+def test_split_text_hard_cuts_text_without_spaces() -> None:
+    text = "这是一段没有空格的中文字幕文本" * 6
+
+    parts = postprocess._split_text(text, max_chars=42)
+
+    assert len(parts) > 1
+    assert all(len(part) <= 42 for part in parts)
+    assert "".join(parts) == text
+
+
 def test_quality_word_level_repetition_warns_for_english() -> None:
     task = type("Task", (), {"text": "par " * 100, "duration_ms": 600_000})()
 

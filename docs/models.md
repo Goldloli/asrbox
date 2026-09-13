@@ -39,7 +39,7 @@ Sizes are registry estimates, not exact download promises.
 | `faster-whisper-large-v3` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 3,100 MB | Yes |
 | `faster-whisper-large-v3-turbo` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 1,600 MB | Yes |
 | `mlx-whisper-turbo` | MLX Whisper | Apple GPU (MLX; Apple Silicon only) | ModelScope, then Hugging Face | 1,600 MB | Yes |
-| `sensevoice-small` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope | 900 MB | Yes |
+| `sensevoice-small` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope | 900 MB | No |
 | `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 1,600 MB | No |
 | `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 3,900 MB | No |
 | `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 1,900 MB | No |
@@ -60,6 +60,8 @@ These device labels describe the execution paths supported by each ASRbox engine
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
+
+Timeline note: `qwen3-asr-*` and `sensevoice-small` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model or `moss-transcribe-diarize` when precise timing matters.
 
 ## Transcription Safeguards
 

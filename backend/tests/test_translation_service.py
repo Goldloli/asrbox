@@ -111,6 +111,19 @@ def test_batch_limits_and_coverage():
     assert len(svc.make_batches([{'id': i, 'text': 'x'} for i in range(101)])) == 2
 
 
+def test_local_batch_limits():
+    segments = [{'id': i, 'text': 'x' * 50} for i in range(40)]
+    batches = svc.make_batches(segments, local=True)
+    assert [len(b['targets']) for b in batches] == [16, 16, 8]
+    assert [s['id'] for b in batches for s in b['targets']] == list(range(40))
+    for b in batches:
+        assert sum(len(s['text']) for s in b['targets']) <= 1600
+    # A single segment above the local character cap (but under the hard 6000) still
+    # forms its own batch instead of looping forever.
+    batches = svc.make_batches([{'id': 1, 'text': 'x' * 2000}, {'id': 2, 'text': 'x' * 50}], local=True)
+    assert [len(b['targets']) for b in batches] == [1, 1]
+
+
 @pytest.mark.parametrize('value', [
     {}, {'translations': []}, {'translations': [{'segment_id': 1, 'text': 'x', 'start': 1}]},
     {'translations': [{'segment_id': 1, 'text': ''}]}, {'translations': [{'segment_id': True, 'text': 'x'}]},
@@ -131,6 +144,7 @@ def test_identical_text_and_strict_json():
 
 def test_partial_failure_resumes_only_unfinished_batches(setup, monkeypatch):
     db, task, provider, source = setup
+    monkeypatch.setattr(svc, 'LOCAL_MAX_CHARACTERS', 6000)
     segments = [{'id': i, 'start': i, 'end': i+1, 'text': '字' * 3000} for i in range(5)]
     source.segments_json = json.dumps(segments); db.commit()
     seen = []
@@ -138,7 +152,7 @@ def test_partial_failure_resumes_only_unfinished_batches(setup, monkeypatch):
         ids = [s['id'] for s in json.loads(messages[1]['content'])['targets']]
         seen.append(ids)
         if len(seen) == 2:
-            raise llm_providers.LLMProviderError('LLM_PROVIDER_TIMEOUT', 'SECRET raw text')
+            raise llm_providers.LLMProviderError('LLM_PROVIDER_UNAVAILABLE', 'SECRET raw text')
         return echo(p, messages, **kwargs)
     monkeypatch.setattr(llm_providers, 'chat_completion', flaky)
     run = create(setup); svc.execute_run(run.id, run.attempt); db.expire_all()
@@ -228,10 +242,10 @@ def test_publication_failure_is_atomic_and_can_resume(setup, monkeypatch):
 
 def test_retry_uses_saved_batch_membership_if_default_batch_size_changes(setup, monkeypatch):
     db, task, provider, source = setup
-    monkeypatch.setattr(svc, 'MAX_SEGMENTS', 1)
+    monkeypatch.setattr(svc, 'LOCAL_MAX_SEGMENTS', 1)
     run = create(setup)
     svc.mark_interrupted_runs(db)
-    monkeypatch.setattr(svc, 'MAX_SEGMENTS', 100)
+    monkeypatch.setattr(svc, 'LOCAL_MAX_SEGMENTS', 16)
     calls = []
     def capture(p, messages, **kwargs):
         calls.append([s['id'] for s in json.loads(messages[1]['content'])['targets']])
@@ -268,18 +282,22 @@ def test_missing_final_segment_fails_without_publishing_and_keeps_source(setup, 
     db, task, provider, source = setup
     before = source.segments_json
     run = create(setup)
+    calls = []
     def omit_last(provider, messages, **kwargs):
         payload = json.loads(messages[1]['content'])
-        assert payload['required_segment_ids'] == [1, 2]
-        assert payload['required_translation_count'] == 2
+        calls.append(payload['required_segment_ids'])
         assert kwargs['structured_translation'] is True
-        return '{"translations":[{"segment_id":1,"text":"only first"}]}'
+        covered = payload['required_segment_ids'][:-1]
+        return json.dumps({'translations': [{'segment_id': sid, 'text': 'only first'} for sid in covered]})
     monkeypatch.setattr(llm_providers, 'chat_completion', omit_last)
     svc.execute_run(run.id, run.attempt)
     db.expire_all()
     row = db.get(TranslationRun, run.id)
     assert row.status == 'failed' and row.error_code == 'TRANSLATION_INVALID_RESPONSE'
     assert row.completed_segments == 0
+    # Full batch splits after the incomplete response; the left single segment is
+    # still incomplete and fails, so the right half is never attempted.
+    assert calls == [[1, 2], [1]]
     assert svc.latest_version(db, run.id) is None
     assert source.segments_json == before
     assert svc.to_response(db, row).can_retry

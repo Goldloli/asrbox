@@ -25,14 +25,87 @@ export function modelDescription(model: ModelStatus, locale: Locale) {
   if (model.model_name === 'whisper-base') return zh ? '入门首选，体积小，适合快速验证和短音频。' : 'Best starter model for quick checks and short audio.';
   if (model.model_name === 'faster-whisper-small') return zh ? '速度和效果比较均衡，适合日常转写。' : 'Balanced speed and quality for daily transcription.';
   if (model.model_name === 'mlx-whisper-turbo') return zh ? '苹果芯片优先选择，速度快，适合本机使用。' : 'Best first pick on Apple Silicon, fast for local work.';
-  if (model.model_name === 'sensevoice-small') return zh ? '中文和中英混合场景友好，依赖 FunASR。' : 'Good for Chinese and mixed Chinese-English audio, requires FunASR.';
+  if (model.model_name === 'sensevoice-small') return zh ? '中文和中英混合场景友好，依赖 FunASR；时间轴为近似值。' : 'Good for Chinese and mixed Chinese-English audio, requires FunASR; timeline is approximate.';
   if (model.model_name === 'moss-transcribe-diarize') return zh
     ? '端到端转写 + 说话人分离一次完成，输出 [S01]/[S02] 标签；INTERSPEECH 2026 MLC-SLM 冠军模型，Apache 2.0。'
     : 'End-to-end transcription with speaker diarization in one pass, emitting [S01]/[S02] labels. INTERSPEECH 2026 MLC-SLM winner, Apache 2.0.';
-  if (model.model_name.startsWith('qwen3-asr')) return zh ? '中文能力强但依赖较新，适合愿意调环境的用户。' : 'Strong Chinese ASR, but needs newer dependencies.';
+  if (model.model_name.startsWith('qwen3-asr')) return zh ? '中文能力强但依赖较新，适合愿意调环境的用户；时间轴为近似值。' : 'Strong Chinese ASR, but needs newer dependencies; timeline is approximate.';
   if (model.engine === 'faster_whisper') return zh ? 'CTranslate2 运行，通常比标准 Whisper 更省资源。' : 'CTranslate2 runtime, usually lighter than standard Whisper.';
   if (model.engine === 'whisper_transformers') return zh ? '标准 Whisper 系列，兼容稳定，越大越准也越占资源。' : 'Standard Whisper family, stable compatibility, larger means heavier.';
   return zh ? '通用转写模型，请按语言和运行时选择。' : 'General transcription model. Choose by language and runtime.';
+}
+
+export type Tier = 'S' | 'A' | 'B' | 'C';
+
+export interface ModelLadderEntry {
+  speed: Tier;
+  accuracy: Tier;
+  languages: Tier;
+}
+
+export interface ModelLadderResult extends ModelLadderEntry {
+  estimated: boolean;
+}
+
+// Grading rules, from the 2026-09-10 Windows + RTX 5080 + CUDA-kit measurement run
+// (90-second Chinese clip, character agreement with large-v3):
+//   speed:    S <=16s, A <=20s, B <=26s, C >26s
+//   accuracy: S <=5%, A <=10%, B <=20%, C >20% (CER agreement with large-v3)
+//   language coverage: whisper family and MOSS (50+ languages) S, qwen3-asr (13) A,
+//   sensevoice (5) B.
+export const MODEL_LADDER: Record<string, ModelLadderEntry> = {
+  'sensevoice-small': { speed: 'S', accuracy: 'A', languages: 'B' }, // 15.3s, 8.4%
+  'faster-whisper-base': { speed: 'S', accuracy: 'C', languages: 'S' }, // 15.3s, 38.7%
+  'whisper-base': { speed: 'A', accuracy: 'C', languages: 'S' }, // 18.4s, 40.2%
+  'whisper-large-v3-turbo': { speed: 'A', accuracy: 'A', languages: 'S' }, // 18.4s, 7.4%
+  'faster-whisper-small': { speed: 'A', accuracy: 'C', languages: 'S' }, // 18.4s, 24.8%
+  'faster-whisper-large-v3-turbo': { speed: 'A', accuracy: 'A', languages: 'S' }, // 18.4s, 6.7%
+  'qwen3-asr-0.6b': { speed: 'B', accuracy: 'A', languages: 'A' }, // 21.4s, 8.8%
+  'whisper-small': { speed: 'B', accuracy: 'C', languages: 'S' }, // 21.5s, 28.4%
+  'faster-whisper-medium': { speed: 'B', accuracy: 'C', languages: 'S' }, // 21.5s, 25.3%
+  'qwen3-asr-1.7b': { speed: 'B', accuracy: 'A', languages: 'A' }, // 24.5s, 8.2%
+  'whisper-medium': { speed: 'C', accuracy: 'B', languages: 'S' }, // 27.6s, 11.4%
+  'faster-whisper-large-v3': { speed: 'C', accuracy: 'S', languages: 'S' }, // 27.6s, 0% (baseline)
+  'moss-transcribe-diarize': { speed: 'C', accuracy: 'A', languages: 'S' }, // 27.6s, 8.4%
+  'whisper-large-v3': { speed: 'C', accuracy: 'S', languages: 'S' }, // 30.7s, 2.1%
+};
+
+export function modelLadder(model: ModelStatus): ModelLadderResult {
+  if (model.model_name === 'mlx-whisper-turbo') {
+    // Not measurable on the Windows reference machine; same architecture as
+    // faster-whisper-large-v3-turbo, so its grades are reused as an estimate.
+    return { ...MODEL_LADDER['faster-whisper-large-v3-turbo'], estimated: true };
+  }
+  const entry = MODEL_LADDER[model.model_name];
+  if (entry) return { ...entry, estimated: false };
+  return estimateModelLadder(model);
+}
+
+function estimateModelLadder(model: ModelStatus): ModelLadderResult {
+  const size = model.model_size.toLowerCase();
+  const sizeSpeed = size.includes('tiny') ? 95 : size.includes('base') ? 86 : size.includes('small') ? 74 : size.includes('medium') ? 58 : 42;
+  const runtimeBoost = model.runtime.toLowerCase().includes('mlx') || model.engine.toLowerCase().includes('faster') ? 10 : 0;
+  const speedScore = Math.min(98, sizeSpeed + runtimeBoost);
+  const speed: Tier = speedScore >= 90 ? 'S' : speedScore >= 80 ? 'A' : speedScore >= 65 ? 'B' : 'C';
+  const sizeAccuracy = size.includes('large') ? 92 : size.includes('medium') ? 78 : size.includes('small') ? 64 : 52;
+  const accuracyScore = Math.min(98, sizeAccuracy + (model.supports_word_timestamps ? 3 : 0) + (model.supports_diarization ? 3 : 0));
+  const accuracy: Tier = accuracyScore >= 90 ? 'S' : accuracyScore >= 75 ? 'A' : accuracyScore >= 60 ? 'B' : 'C';
+  const languages: Tier = model.engine === 'funasr'
+    ? 'B'
+    : model.engine === 'qwen3_asr' || model.model_name.startsWith('qwen3-asr')
+      ? 'A'
+      : model.languages.length >= 40
+        ? 'S'
+        : model.languages.length >= 10
+          ? 'A'
+          : 'B';
+  return { speed, accuracy, languages, estimated: true };
+}
+
+export function isApproximateTimelineModel(modelName: string | null | undefined) {
+  // Mirrors the registry's supports_timestamps=False local models: their cue times
+  // are spread across each chunk's audio window instead of measured.
+  return Boolean(modelName) && (modelName!.startsWith('qwen3-asr') || modelName === 'sensevoice-small');
 }
 
 export function modelBestFor(model: ModelStatus, locale: Locale) {
@@ -218,13 +291,13 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
       capabilities: ['多语言识别（中文与粤语较强）', '自动语言检测'],
       languages: QWEN3_ASR_LANGUAGES.zh,
       bestFor: ['中文与粤语内容', '不需要时间轴的场景'],
-      limitations: ['无段级与词级时间戳', '依赖较新的 transformers'],
+      limitations: ['时间轴为近似值：模型不输出时间戳，字幕时间按音频均摊', '依赖较新的 transformers'],
     },
     en: {
       capabilities: ['Multilingual recognition (strong on Chinese and Cantonese)', 'Automatic language detection'],
       languages: QWEN3_ASR_LANGUAGES.en,
       bestFor: ['Chinese and Cantonese audio', 'Scenarios that do not need timestamps'],
-      limitations: ['No segment or word-level timestamps', 'Requires newer transformers dependencies'],
+      limitations: ['Approximate timeline: the model emits no timestamps, so cue times are spread across the audio', 'Requires newer transformers dependencies'],
     },
   },
   'qwen3-asr-1.7b': {
@@ -232,13 +305,13 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
       capabilities: ['多语言识别（中文与粤语较强）', '自动语言检测'],
       languages: QWEN3_ASR_LANGUAGES.zh,
       bestFor: ['中文与粤语内容', '更高精度需求'],
-      limitations: ['无段级与词级时间戳', '体积较大（约 3.9 GB）', '依赖较新的 transformers'],
+      limitations: ['时间轴为近似值：模型不输出时间戳，字幕时间按音频均摊', '体积较大（约 3.9 GB）', '依赖较新的 transformers'],
     },
     en: {
       capabilities: ['Multilingual recognition (strong on Chinese and Cantonese)', 'Automatic language detection'],
       languages: QWEN3_ASR_LANGUAGES.en,
       bestFor: ['Chinese and Cantonese audio', 'Higher accuracy needs'],
-      limitations: ['No segment or word-level timestamps', 'Larger download (about 3.9 GB)', 'Requires newer transformers dependencies'],
+      limitations: ['Approximate timeline: the model emits no timestamps, so cue times are spread across the audio', 'Larger download (about 3.9 GB)', 'Requires newer transformers dependencies'],
     },
   },
   'moss-transcribe-diarize': {
@@ -271,16 +344,16 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
   },
   'sensevoice-small': {
     zh: {
-      capabilities: ['段级时间戳', '词级时间戳', '中英混合识别', '自动语言检测'],
+      capabilities: ['中英混合识别', '自动语言检测'],
       languages: '自动检测 + 中（含粤语）、英、日、韩',
       bestFor: ['中文及中英混合内容', '快速本地转写'],
-      limitations: ['语言覆盖较少（中、英、日、韩、粤语）', '依赖 FunASR 运行时'],
+      limitations: ['时间轴为近似值：模型不输出时间戳，字幕时间按音频均摊', '语言覆盖较少（中、英、日、韩、粤语）', '依赖 FunASR 运行时'],
     },
     en: {
-      capabilities: ['Segment timestamps', 'Word-level timestamps', 'Mixed Chinese-English recognition', 'Automatic language detection'],
+      capabilities: ['Mixed Chinese-English recognition', 'Automatic language detection'],
       languages: 'Auto-detect plus Chinese (including Cantonese), English, Japanese, and Korean',
       bestFor: ['Chinese and mixed Chinese-English audio', 'Fast local transcription'],
-      limitations: ['Limited language coverage (Chinese, English, Japanese, Korean, Cantonese)', 'Requires the FunASR runtime'],
+      limitations: ['Approximate timeline: the model emits no timestamps, so cue times are spread across the audio', 'Limited language coverage (Chinese, English, Japanese, Korean, Cantonese)', 'Requires the FunASR runtime'],
     },
   },
 };

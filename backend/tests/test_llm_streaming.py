@@ -35,10 +35,42 @@ def test_json_upstream_falls_back_to_single_full_text_delta(setup, monkeypatch):
 
 def test_default_json_transport_invokes_delta_once(setup, monkeypatch):
     mock_transport(monkeypatch, lambda request: httpx.Response(
-        200, json={'choices': [{'message': {'content': 'OK'}, 'finish_reason': 'stop'}]}))
+        200, json={'message': {'content': 'OK'}, 'done': True, 'done_reason': 'stop'}))
     deltas = []
     assert llm_providers.chat_completion(setup[2], [], on_delta=deltas.append) == 'OK'
     assert deltas == ['OK']
+
+
+def ndjson(*objects):
+    return ''.join(json.dumps(obj, ensure_ascii=False) + '\n' for obj in objects).encode()
+
+
+def test_native_ndjson_delivers_deltas_and_full_result(setup, monkeypatch):
+    data = ndjson({'message': {'content': '你'}, 'done': False},
+                  {'message': {'content': '好'}, 'done': False},
+                  {'done': True, 'done_reason': 'stop'})
+    def reply(request):
+        assert request.url.path == '/api/chat' and json.loads(request.content)['stream'] is True
+        return httpx.Response(200, headers={'content-type': 'application/x-ndjson'}, stream=TrackedBody(data))
+    mock_transport(monkeypatch, reply)
+    deltas = []
+    assert llm_providers.chat_completion(setup[2], [], on_delta=deltas.append) == '你好'
+    assert deltas == ['你', '好']
+
+
+@pytest.mark.parametrize('payload,code', [
+    ({'done': True, 'done_reason': 'length'}, 'LLM_PROVIDER_TRUNCATED'),
+    ({'error': 'secret mid-stream failure'}, 'LLM_PROVIDER_INVALID_RESPONSE'),
+])
+def test_native_ndjson_finish_and_error_classification(setup, monkeypatch, payload, code):
+    data = ndjson({'message': {'content': '半截'}, 'done': False}, payload)
+    mock_transport(monkeypatch, lambda request: httpx.Response(
+        200, headers={'content-type': 'application/x-ndjson'}, stream=TrackedBody(data)))
+    deltas = []
+    with pytest.raises(compat.LLMProviderError) as caught:
+        llm_providers.chat_completion(setup[2], [], on_delta=deltas.append)
+    assert caught.value.code == code and 'secret' not in str(caught.value)
+    assert deltas == ['半截']
 
 
 def test_midstream_network_error_keeps_classification_and_delivered_deltas(setup, monkeypatch):

@@ -193,7 +193,8 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             supported_devices=["cpu", "cuda"],
             languages=["auto", "zh", "en", "ja", "ko", "yue"],
             runtime="funasr",
-            supports_word_timestamps=True,
+            supports_timestamps=False,
+            supports_word_timestamps=False,
             source_candidates=[ModelSourceCandidate("modelscope", "iic/SenseVoiceSmall", priority=0, verified=True)],
         ),
     ]

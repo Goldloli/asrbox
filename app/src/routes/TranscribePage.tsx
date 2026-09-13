@@ -275,7 +275,7 @@ export function TranscribePage() {
 
   return (
     <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_340px]">
-      <Panel className="overflow-hidden">
+      <Panel className="flex flex-col overflow-hidden">
         <PanelHeader
           eyebrow="Input"
           title={t('transcribe.title')}
@@ -286,7 +286,7 @@ export function TranscribePage() {
             </Button>
           }
         />
-        <div className="grid gap-3 p-4 sm:gap-4 sm:p-5">
+        <div className="flex flex-1 flex-col gap-3 p-4 sm:gap-4 sm:p-5">
           <label
             className={cn(
               'grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6',
@@ -438,7 +438,7 @@ export function TranscribePage() {
             </div>
           )}
 
-          {tasks.length > 0 && <div className="grid gap-2">
+          {tasks.length > 0 && <div className="flex min-h-0 flex-1 flex-col gap-2">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -473,7 +473,7 @@ export function TranscribePage() {
                 </ConfirmAction>
               </div>
             </div>
-            <div className="grid max-h-[36vh] gap-2 overflow-auto pr-1">
+            <div className="grid max-h-[36vh] min-h-0 flex-1 gap-2 overflow-auto pr-1 xl:max-h-none">
               {recentTasks.map((task) => (
                 <button
                   key={task.id}

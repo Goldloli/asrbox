@@ -87,8 +87,8 @@ export function Sidebar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <div className={cn(
-            'mb-1 rounded-lg border app-control px-2 py-1.5 text-[10px] font-semibold uppercase text-app-muted',
-            expanded ? 'text-center tracking-[0.04em]' : 'w-11 text-center tracking-[0.16em]',
+            'mb-1 whitespace-nowrap rounded-lg border app-control px-2 py-1.5 text-[10px] font-semibold uppercase text-app-muted',
+            expanded ? 'text-center tracking-[0.04em]' : 'min-w-11 text-center tracking-[0.08em]',
           )}>
             {expanded ? `${appVersion} · Local` : appVersion}
           </div>

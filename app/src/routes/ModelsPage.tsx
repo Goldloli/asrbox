@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
+import { Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
 import { apiClient, getActiveDownloadItems, type ModelProgress } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
@@ -9,7 +9,8 @@ import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, modelDetails, type ModelCategory } from '../lib/modelCatalog';
 import { modelDeviceSummaryKey } from '../lib/modelDevices';
 import { useI18n } from '../lib/i18n';
-import { BenchmarkCard, createModelGroups, ModelListRow, StorageMetric } from '../components/models/ModelManagement';
+import { createModelGroups, ModelListRow, StorageMetric } from '../components/models/ModelManagement';
+import { ModelLadder } from '../components/models/ModelLadder';
 
 type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
 type ModelViewCategory = ModelCategory | 'all' | 'pinned';
@@ -119,7 +120,6 @@ export function ModelsPage() {
   const guideRecommendedModel =
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && model.downloaded === false) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
-  const benchmarkModels = visibleModels.slice(0, 4);
   const modelGroups = createModelGroups(visibleModels, progressByModel, pinnedModelNames, t);
   const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
     { value: 'all', label: t('models.categoryAll') },
@@ -146,7 +146,9 @@ export function ModelsPage() {
   };
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid gap-4">
+      <ModelLadder models={models} />
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('models.eyebrow')}
@@ -272,21 +274,6 @@ export function ModelsPage() {
         </Panel>
 
         <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('models.benchmarkEyebrow')} title={t('models.benchmarkTitle')} description={t('models.benchmarkBody')} />
-          <div className="grid gap-3 p-5">
-            {benchmarkModels.map((model) => (
-              <BenchmarkCard key={model.model_name} model={model} />
-            ))}
-            {benchmarkModels.length === 0 && (
-              <div className="flex items-center gap-2 rounded-lg border app-control px-3 py-3 text-sm text-app-muted">
-                <BarChart3 className="size-4" />
-                {t('models.noBenchmarkModels')}
-              </div>
-            )}
-          </div>
-        </Panel>
-
-        <Panel className="overflow-hidden">
           <PanelHeader eyebrow={t('status.modelDownload')} title={t('models.activeDownloads')} description={t('models.downloadsRunning', { count: downloads.length })} />
           <div className="grid gap-3 p-5">
             {downloads.map((download) => (
@@ -360,6 +347,7 @@ export function ModelsPage() {
           </div>
         </Panel>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
