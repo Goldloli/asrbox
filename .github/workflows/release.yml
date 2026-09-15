@@ -152,7 +152,6 @@ jobs:
           mkdir -p release-assets
           cp tauri/src-tauri/target/release/bundle/dmg/ASRbox_*.dmg release-assets/
           ./scripts/prepare-ffmpeg-source.sh release-assets
-          (cd release-assets && shasum -a 256 ./*.dmg ASRbox-ffmpeg-source-8.1.2.tar.gz > SHA256SUMS.macos.txt)
           ls -lh release-assets
 
       - name: Upload macOS release assets
@@ -245,7 +244,6 @@ jobs:
         run: |
           mkdir -p release-assets
           cp tauri/src-tauri/target/release/bundle/nsis/ASRbox_*-setup.exe release-assets/
-          (cd release-assets && sha256sum ./*-setup.exe > SHA256SUMS.windows.txt)
           ls -lh release-assets
 
       - name: Upload Windows release assets
@@ -289,7 +287,6 @@ jobs:
         run: |
           mkdir -p release-assets
           cp dist/cuda-kit/asrbox-cuda-kit-windows-x64.zip.part* dist/cuda-kit/cuda-kit-manifest.json release-assets/
-          (cd release-assets && sha256sum asrbox-cuda-kit-windows-x64.zip.part* cuda-kit-manifest.json > SHA256SUMS.cuda-kit.txt)
           ls -lh release-assets
 
       - name: Upload CUDA kit release assets
@@ -326,11 +323,16 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Merge checksums and verify release assets
+      - name: Generate checksums and verify release assets
         run: |
           cd release-assets
-          cat SHA256SUMS.macos.txt SHA256SUMS.windows.txt SHA256SUMS.cuda-kit.txt > SHA256SUMS.txt
-          rm SHA256SUMS.macos.txt SHA256SUMS.windows.txt SHA256SUMS.cuda-kit.txt
+          LC_ALL=C sha256sum \
+            ASRbox_*.dmg \
+            ASRbox_*-setup.exe \
+            ASRbox-ffmpeg-source-8.1.2.tar.gz \
+            asrbox-cuda-kit-windows-x64.zip.part* \
+            cuda-kit-manifest.json \
+            > SHA256SUMS.txt
           cd ..
           npm run verify:release-assets -- release-assets
           ls -lh release-assets

@@ -71,7 +71,7 @@ Merging `main` alone does not create a release. Do not tag until the intended co
 
 ## Workflow Output
 
-The Release workflow builds the macOS DMG and the Windows NSIS installer in parallel jobs, then a publish job merges both asset sets, regenerates the combined `SHA256SUMS.txt`, verifies the full asset set, and publishes:
+The Release workflow builds the macOS DMG, Windows NSIS installer, and optional CUDA kit in parallel jobs. Those jobs upload assets only. After collecting every platform asset, the publish job generates the one final `SHA256SUMS.txt` in a deterministic order, verifies the full asset set, and publishes:
 
 ```text
 ASRbox_0.1.0-beta.1_aarch64.dmg
@@ -79,6 +79,8 @@ ASRbox_0.1.0-beta.1_x64-setup.exe
 ASRbox-ffmpeg-source-8.1.2.tar.gz
 SHA256SUMS.txt
 ```
+
+Every checksum filename must be the exact GitHub Release asset basename, with no `./`, directory, or absolute-path prefix. The release gate validates this format before hashing the files because the maintained desktop updater deliberately resolves the platform installer by exact basename. This keeps each new Release downloadable and verifiable by the previous maintained client instead of relying on platform-specific checksum output conventions.
 
 The installers contain the Tauri app, frozen FastAPI sidecar, and ffmpeg/ffprobe. They do not contain ASR model weights.
 
@@ -104,7 +106,7 @@ npm run test:docker
 
 Before publishing or immediately after downloading the Release assets:
 
-1. Verify `SHA256SUMS.txt` against the DMG, the NSIS installer, and the FFmpeg source archive.
+1. Confirm every `SHA256SUMS.txt` entry uses an exact Release asset basename, then verify it against the DMG, the NSIS installer, the FFmpeg source archive, and any CUDA kit assets.
 2. Run `hdiutil verify` on the DMG (macOS).
 3. Copy the app to a clean location and confirm the expected unsigned-app warning (Gatekeeper on macOS, SmartScreen on Windows).
 4. Launch with no manually running backend and wait for backend health.

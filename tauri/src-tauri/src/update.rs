@@ -967,14 +967,40 @@ mod tests {
     fn checksum_parser_requires_exact_filename_and_sha256() {
         let digest = "a".repeat(64);
         let contents = format!(
-            "{digest}  ASRbox_0.1.3_aarch64.dmg\n{}  other.dmg\n",
+            "{digest}  ASRbox_0.1.3_aarch64.dmg\n{digest}  ASRbox_0.1.3_x64-setup.exe\n{}  other.dmg\n",
             "b".repeat(64)
         );
         assert_eq!(
             parse_checksum(&contents, "ASRbox_0.1.3_aarch64.dmg"),
-            Some(digest)
+            Some(digest.clone())
+        );
+        assert_eq!(
+            parse_checksum(&contents, "ASRbox_0.1.3_x64-setup.exe"),
+            Some(digest.clone())
         );
         assert_eq!(parse_checksum(&contents, "ASRbox_0.1.3.dmg"), None);
+
+        for filename in [
+            "ASRbox_0.1.3_aarch64.dmg",
+            "ASRbox_0.1.3_x64-setup.exe",
+        ] {
+            assert_eq!(
+                parse_checksum(&format!("{digest}  ./{filename}\n"), filename),
+                None
+            );
+            assert_eq!(
+                parse_checksum(&format!("{digest}  nested/{filename}\n"), filename),
+                None
+            );
+            assert_eq!(
+                parse_checksum(&format!("{}  {filename}\n", "a".repeat(63)), filename),
+                None
+            );
+            assert_eq!(
+                parse_checksum(&format!("{}  {filename}\n", "g".repeat(64)), filename),
+                None
+            );
+        }
     }
 
     #[test]

@@ -83,7 +83,7 @@ In addition to the CI-class checks, Release:
 - Builds the optional Windows CUDA acceleration kit in a parallel `cuda-kit` job: installs the pinned cu128 torch tree from `requirements-windows-cuda.lock` via `scripts/build-cuda-kit.py`, replays the install path with `--verify-parts` (concat the byte-range parts, check the zip hash, extract, per-file SHA-256), and uploads the parts plus `cuda-kit-manifest.json`. The kit lock must keep the same torch base version as `requirements-windows.lock`; `check-versions.mjs` rejects drift.
 - Smoke-tests the frozen backend on both platforms.
 - Creates the FFmpeg source archive required by the bundled GPL builds.
-- Merges both platform asset sets and the CUDA kit checksums, regenerates a combined `SHA256SUMS.txt`, and validates the full asset set in a final publish job.
+- Collects the macOS, Windows, FFmpeg source, and CUDA kit assets without carrying forward platform-generated checksum fragments; the final publish job generates one deterministic `SHA256SUMS.txt` from exact asset basenames and validates both its format and the full asset set before publication.
 - Publishes the DMG, NSIS installer, CUDA kit parts and manifest, FFmpeg source archive, and checksums to GitHub Releases.
 
 Release also rebuilds and smoke-tests the Docker deployment, but the current workflow does not publish an image to a registry. Docker users build the tagged source locally.

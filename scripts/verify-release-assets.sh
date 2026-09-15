@@ -50,14 +50,18 @@ for part in "${KIT_PARTS[@]}"; do
 done
 test -s "$ASSET_DIR/$KIT_MANIFEST"
 test -s "$ASSET_DIR/SHA256SUMS.txt"
-test "$(wc -l < "$ASSET_DIR/SHA256SUMS.txt" | tr -d ' ')" -eq $((3 + ${#KIT_PARTS[@]} + 1))
-grep -Fq "$(basename "${dmgs[0]}")" "$ASSET_DIR/SHA256SUMS.txt"
-grep -Fq "$(basename "${installers[0]}")" "$ASSET_DIR/SHA256SUMS.txt"
-grep -Fq "$SOURCE_ARCHIVE" "$ASSET_DIR/SHA256SUMS.txt"
+CHECKSUM_ASSETS=(
+  "$(basename "${dmgs[0]}")"
+  "$(basename "${installers[0]}")"
+  "$SOURCE_ARCHIVE"
+)
 for part in "${KIT_PARTS[@]}"; do
-  grep -Fq "$(basename "$part")" "$ASSET_DIR/SHA256SUMS.txt"
+  CHECKSUM_ASSETS+=("$(basename "$part")")
 done
-grep -Fq "$KIT_MANIFEST" "$ASSET_DIR/SHA256SUMS.txt"
+CHECKSUM_ASSETS+=("$KIT_MANIFEST")
+node "$ROOT/scripts/verify-release-checksums.mjs" \
+  "$ASSET_DIR/SHA256SUMS.txt" \
+  "${CHECKSUM_ASSETS[@]}"
 (cd "$ASSET_DIR" && "${SHA256[@]}" -c SHA256SUMS.txt)
 # 先取完整清单再匹配：tar | grep -q 在 pipefail 下会因 grep 提前退出给 tar 发 SIGPIPE（141）。
 archive_listing="$(tar -tzf "$ASSET_DIR/$SOURCE_ARCHIVE")"
