@@ -217,6 +217,11 @@ body,
   background: var(--app-shell);
 }
 
+/* Vendored brand marks ship as black glyphs; invert them on dark surfaces. */
+[data-theme="dark"] .app-brand-icon {
+  filter: invert(1);
+}
+
 .app-panel {
   border-color: var(--app-border);
   background: var(--app-panel);

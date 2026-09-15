@@ -7,7 +7,9 @@ import { queryKeys, useActiveTasksQuery, useHealthQuery, useModelStorageQuery, u
 import { formatBytes } from '../lib/format';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore, type DensityMode, type FontScale, type Locale, type ReducedMotionMode, type SidebarMode, type ThemeMode } from '../stores/uiStore';
-import { Badge, Button, ErrorState, Field, Input, Panel, PanelHeader, Select, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
+import { ACCENT_COLORS, normalizeAccentColor } from '../lib/appearance';
+import { cn } from '../lib/cn';
+import { Badge, Button, ErrorState, Field, Input, PageTitle, Panel, PanelHeader, Select, Tabs, TabsContent, TabsList, TabsTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { useI18n } from '../lib/i18n';
@@ -39,6 +41,18 @@ function normalizeSettingsTab(value: unknown): SettingsTab {
   return value === 'transcription' || value === 'acceleration' || value === 'providers' || value === 'llm' || value === 'storage' || value === 'about' ? value : 'general';
 }
 
+// Static swatch preview per accent; the applied token set lives in index.css.
+const accentSwatches: Record<string, string> = {
+  orange: '#f59e0b',
+  blue: '#2563eb',
+  purple: '#7c3aed',
+  pink: '#db2777',
+  red: '#dc2626',
+  green: '#16a34a',
+  cyan: '#0891b2',
+  gray: '#52525b',
+};
+
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const { t } = useI18n();
@@ -49,6 +63,7 @@ export function SettingsPage() {
   const sidebarMode = useUiStore((state) => state.sidebarMode);
   const fontScale = useUiStore((state) => state.fontScale);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const accentColor = useUiStore((state) => state.accentColor);
   const exportDirectory = useUiStore((state) => state.exportDirectory);
   const updateChannel = useUiStore((state) => state.updateChannel);
   const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
@@ -58,6 +73,7 @@ export function SettingsPage() {
   const setDensity = useUiStore((state) => state.setDensity);
   const setSidebarMode = useUiStore((state) => state.setSidebarMode);
   const setFontScale = useUiStore((state) => state.setFontScale);
+  const setAccentColor = useUiStore((state) => state.setAccentColor);
   const setReducedMotion = useUiStore((state) => state.setReducedMotion);
   const setExportDirectory = useUiStore((state) => state.setExportDirectory);
   const setUpdateChannel = useUiStore((state) => state.setUpdateChannel);
@@ -217,6 +233,7 @@ export function SettingsPage() {
         sidebarMode,
         fontScale,
         reducedMotion,
+        accentColor,
         exportDirectory,
         updateChannel,
         autoCheckUpdates,
@@ -243,6 +260,7 @@ export function SettingsPage() {
       if (ui.sidebarMode === 'icons' || ui.sidebarMode === 'expanded') setSidebarMode(ui.sidebarMode);
       if (ui.fontScale === 'standard' || ui.fontScale === 'large') setFontScale(ui.fontScale);
       if (ui.reducedMotion === 'system' || ui.reducedMotion === 'reduce' || ui.reducedMotion === 'normal') setReducedMotion(ui.reducedMotion);
+      if (typeof ui.accentColor === 'string') setAccentColor(normalizeAccentColor(ui.accentColor));
       if (typeof ui.exportDirectory === 'string' || ui.exportDirectory === null) setExportDirectory(ui.exportDirectory);
       if (ui.updateChannel === 'stable' || ui.updateChannel === 'prerelease') setUpdateChannel(ui.updateChannel);
       if (typeof ui.autoCheckUpdates === 'boolean') setAutoCheckUpdates(ui.autoCheckUpdates);
@@ -278,8 +296,8 @@ export function SettingsPage() {
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(normalizeSettingsTab(value))} className="grid gap-4">
       <Panel className="overflow-hidden">
-        <PanelHeader eyebrow={t('settings.eyebrow')} title={t('settings.title')} description={t('settings.description')} />
-        <div className="border-b app-border px-5 py-4">
+        <div className="grid gap-4 px-4 py-4 sm:px-5 sm:py-5">
+          <PageTitle title={t('settings.title')} description={t('settings.description')} />
           <TabsList className="flex w-full flex-wrap gap-1 md:w-fit">
             <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
             <TabsTrigger value="transcription">{t('settings.tabTranscription')}</TabsTrigger>
@@ -296,7 +314,6 @@ export function SettingsPage() {
           </TabsList>
         </div>
       </Panel>
-
       <TabsContent value="general">
         <Panel className="overflow-hidden">
           <PanelHeader title={t('settings.tabGeneral')} description={t('settings.generalDescription')} />
@@ -356,6 +373,26 @@ export function SettingsPage() {
                     { value: 'light', label: t('settings.themeLight') },
                   ]}
                 />
+              </Field>
+              <Field label={t('settings.accentColor')} hint={t('settings.accentColorHint')}>
+                <div data-testid="accent-color-picker" role="radiogroup" aria-label={t('settings.accentColor')} className="flex flex-wrap items-center gap-2 py-1.5">
+                  {ACCENT_COLORS.map((accent) => (
+                    <button
+                      key={accent}
+                      type="button"
+                      role="radio"
+                      aria-checked={accentColor === accent}
+                      aria-label={accent}
+                      title={t(`settings.accent.${accent}`)}
+                      onClick={() => setAccentColor(accent)}
+                      className={cn(
+                        'size-7 rounded-full border-2 transition focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/40',
+                        accentColor === accent ? 'border-[var(--app-text)] shadow-sm' : 'border-transparent ring-1 ring-[var(--app-border)]',
+                      )}
+                      style={{ background: accentSwatches[accent] }}
+                    />
+                  ))}
+                </div>
               </Field>
               <Field label={t('settings.density')}>
                 <Select

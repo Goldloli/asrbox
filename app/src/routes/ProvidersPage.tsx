@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Activity, CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { BrandIcon } from '../components/BrandIcon';
 import { apiClient, type Provider } from '../lib/api';
 import { queryKeys, useProvidersQuery, useSettingsQuery } from '../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../components/weiui';
@@ -91,7 +92,7 @@ export function ProvidersPage() {
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                 <div className="flex min-w-0 gap-3">
                   <div className="grid size-10 shrink-0 place-items-center rounded-lg border app-control text-app-accent">
-                    <Activity className="size-5" />
+                    <BrandIcon name={`${provider.provider_type} ${provider.name}`} />
                   </div>
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold text-app">{provider.name}</h2>

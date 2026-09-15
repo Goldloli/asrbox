@@ -4,7 +4,7 @@ import { BrainCircuit, Clock3, FileAudio, Languages, MessagesSquare, Search } fr
 import { TranslationPanel } from '../components/transcript/TranslationPanel';
 import { ProofreadingPanel } from '../components/transcript/ProofreadingPanel';
 import { ChatPanel } from '../components/transcript/ChatPanel';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, PageTitle, Panel, PanelHeader } from '../components/weiui';
 import { formatDate, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useTasksQuery } from '../lib/queries';
@@ -41,13 +41,10 @@ export function AIPage() {
 
   return (
     <section className="grid gap-4">
-      <Panel className="overflow-hidden">
-        <PanelHeader
-          eyebrow={t('ai.eyebrow')}
-          title={chatMode ? t('chat.title') : t('ai.title')}
-          description={chatMode ? t('chat.description') : translationMode ? t('translation.description') : t('ai.description')}
-        />
-      </Panel>
+      <PageTitle
+        title={chatMode ? t('chat.title') : t('ai.title')}
+        description={chatMode ? t('chat.description') : translationMode ? t('translation.description') : t('ai.description')}
+      />
 
       <nav className="flex flex-wrap gap-2" aria-label={t('ai.title')}>
         <Button asChild variant={!translationMode && !chatMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode && !chatMode ? 'page' : undefined}>{t('translation.proofreading')}</Link></Button>

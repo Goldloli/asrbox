@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
 import { apiClient, getActiveDownloadItems, type ModelProgress } from '../lib/api';
-import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery } from '../lib/queries';
+import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, PageTitle, Panel, PanelHeader, Progress } from '../components/weiui';
+import { Link } from '@tanstack/react-router';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, modelDetails, type ModelCategory } from '../lib/modelCatalog';
 import { modelDeviceSummaryKey } from '../lib/modelDevices';
@@ -104,6 +105,24 @@ export function ModelsPage() {
     },
     onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
   });
+  const settingsQuery = useSettingsQuery();
+  const currentDefaultModelName = settingsQuery.data?.default_backend === 'local'
+    ? settingsQuery.data?.default_model_name ?? null
+    : null;
+  const setDefaultModel = useMutation({
+    mutationFn: (modelName: string) => apiClient.updateSettings({
+      default_backend: 'local',
+      default_model_name: modelName,
+      default_provider_id: null,
+    }),
+    onSuccess: (settings) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings });
+      queryClient.invalidateQueries({ queryKey: queryKeys.models });
+      queryClient.invalidateQueries({ queryKey: queryKeys.readiness });
+      toast.success(t('toast.modelDefaultSet'), settings.default_model_name ?? '');
+    },
+    onError: (error) => toast.error(t('toast.actionFailed'), toastErrorMessage(error)),
+  });
 
   const downloadedCount = models.filter((model) => model.downloaded).length;
   const loadedCount = models.filter((model) => model.loaded).length;
@@ -146,9 +165,21 @@ export function ModelsPage() {
   };
 
   return (
-    <div className="grid gap-4">
+    <section className="grid gap-5">
+      <PageTitle
+        title={t('models.title')}
+        description={t('models.pageDescription')}
+        action={
+          <Button asChild variant="secondary">
+            <Link to="/settings" search={{ tab: 'storage' }}>
+              <Database className="size-4" />
+              {t('models.openStorageSettings')}
+            </Link>
+          </Button>
+        }
+      />
       <ModelLadder models={models} />
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('models.eyebrow')}
@@ -186,6 +217,8 @@ export function ModelsPage() {
                       description={modelDescription(model, locale)}
                       bestFor={modelBestFor(model, locale)}
                       details={modelDetails(model, locale)}
+                      isDefault={currentDefaultModelName === model.model_name}
+                      onSetDefault={() => setDefaultModel.mutate(model.model_name)}
                       onTogglePin={() => togglePinnedModel(model.model_name)}
                       onDownload={() => download.mutate(model.model_name)}
                       onPause={() => pause.mutate(model.model_name)}
@@ -347,7 +380,7 @@ export function ModelsPage() {
           </div>
         </Panel>
       </div>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

@@ -5,7 +5,7 @@ import { ArchiveX, BrainCircuit, CheckSquare, ChevronDown, Clipboard, Download, 
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, DataRow, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../components/weiui';
+import { Badge, Button, DataRow, EmptyState, ErrorState, Input, PageTitle, Panel, Progress, Select, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -313,36 +313,40 @@ export function TasksPage() {
   };
 
   return (
-    <section className="mx-auto grid w-full max-w-[1680px] min-h-0 gap-4 pb-28 xl:h-[calc(100dvh-7.5rem)] xl:grid-cols-[320px_minmax(0,1fr)] xl:pb-0">
+    <section className="mx-auto grid w-full max-w-[1680px] gap-5 pb-28 xl:pb-0">
+      <PageTitle
+        title={t('tasks.title')}
+        description={t('tasks.listOnlyDescription')}
+        action={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button size="sm" variant={showFilters ? 'primary' : 'secondary'} onClick={() => setShowFilters((current) => !current)}>
+              <Filter className="size-4" />
+              {activeFilterCount > 0 ? `${t('tasks.filters')} ${activeFilterCount}` : t('tasks.filters')}
+            </Button>
+            <Button size="sm" variant={selectionMode ? 'primary' : 'secondary'} onClick={toggleSelectionMode}>
+              <CheckSquare className="size-4" />
+              {selectionMode ? t('common.cancel') : t('tasks.selectMode')}
+            </Button>
+            <ConfirmAction
+              title={t('confirm.clearTasksTitle')}
+              description={t('confirm.clearTasksDescription')}
+              confirmLabel={t('tasks.clearAll')}
+              onConfirm={clearAllTasks}
+            >
+              <Button size="sm" variant="danger" disabled={tasks.length === 0 || clearingTasks}>
+                <Trash2 className="size-4" />
+                {t('tasks.clearAll')}
+              </Button>
+            </ConfirmAction>
+          </div>
+        }
+      />
+      <div className="grid min-h-0 gap-4 xl:h-[calc(100dvh-12rem)] xl:grid-cols-[320px_minmax(0,1fr)]">
       <Panel data-testid="task-center-list" className="flex min-h-0 flex-col overflow-hidden">
-        <PanelHeader
-          eyebrow={t('tasks.eyebrow')}
-          title={t('tasks.title')}
-          description={t('tasks.listOnlyDescription')}
-          action={
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" variant={showFilters ? 'primary' : 'secondary'} onClick={() => setShowFilters((current) => !current)}>
-                <Filter className="size-4" />
-                {activeFilterCount > 0 ? `${t('tasks.filters')} ${activeFilterCount}` : t('tasks.filters')}
-              </Button>
-              <Button size="sm" variant={selectionMode ? 'primary' : 'secondary'} onClick={toggleSelectionMode}>
-                <CheckSquare className="size-4" />
-                {selectionMode ? t('common.cancel') : t('tasks.selectMode')}
-              </Button>
-              <ConfirmAction
-                title={t('confirm.clearTasksTitle')}
-                description={t('confirm.clearTasksDescription')}
-                confirmLabel={t('tasks.clearAll')}
-                onConfirm={clearAllTasks}
-              >
-                <Button size="sm" variant="danger" disabled={tasks.length === 0 || clearingTasks}>
-                  <Trash2 className="size-4" />
-                  {t('tasks.clearAll')}
-                </Button>
-              </ConfirmAction>
-            </div>
-          }
-        />
+        <div className="flex items-center justify-between gap-3 border-b app-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-app">{t('tasks.listTitle')}</h2>
+          <Badge>{filteredTasks.length}</Badge>
+        </div>
         <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
@@ -826,6 +830,7 @@ export function TasksPage() {
           />
         </Panel>
       )}
+      </div>
     </section>
   );
 }

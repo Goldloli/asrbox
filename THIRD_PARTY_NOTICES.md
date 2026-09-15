@@ -63,3 +63,11 @@ Before a public release:
 - Confirm model documentation does not imply redistribution rights that ASRbox does not have.
 - Confirm release artifacts do not include model weights, test media, caches, `.venv`, or `node_modules`.
 - For any future published container image, inventory Debian ffmpeg and Python/runtime package licenses and provide required source or notices before publication.
+
+## Brand Icons
+
+| Asset | Purpose | Source | License / rights record |
+| --- | --- | --- | --- |
+| `app/src/assets/brands/openai.svg` | Icon for OpenAI providers and models | `@lobehub/icons-static-svg` npm package (`icons/openai.svg`) | Package code MIT; OpenAI wordmark/logo remains a trademark of OpenAI, used nominatively to identify the corresponding provider |
+| `app/src/assets/brands/ollama.svg` | Icon for Ollama providers | `@lobehub/icons-static-svg` npm package (`icons/ollama.svg`) | Package code MIT; Ollama mark remains a trademark of Ollama, used nominatively to identify the corresponding provider |
+| `app/src/assets/brands/qwen.svg` | Icon for Qwen models and Alibaba providers | `@lobehub/icons-static-svg` npm package (`icons/qwen.svg`) | Package code MIT; Qwen mark remains a trademark of Alibaba, used nominatively to identify the corresponding provider |

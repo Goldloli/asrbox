@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, DownloadCloud, HardDrive, Info, Pause, Play, RefreshCw, Square, Star, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, DownloadCloud, Info, Pause, Play, RefreshCw, Square, Star, Trash2 } from 'lucide-react';
+import { BrandIcon } from '../BrandIcon';
 import { type ModelProgress, type ModelStatus } from '../../lib/api';
 import { formatBytes, formatPercent } from '../../lib/format';
 import { isRecommendedModel, modelCategory, type ModelDetails } from '../../lib/modelCatalog';
@@ -66,6 +67,8 @@ export function ModelListRow({
   description,
   bestFor,
   details,
+  isDefault,
+  onSetDefault,
   onTogglePin,
   onDownload,
   onPause,
@@ -81,6 +84,8 @@ export function ModelListRow({
   description: string;
   bestFor: string;
   details: ModelDetails;
+  isDefault?: boolean;
+  onSetDefault?: () => void;
   onTogglePin: () => void;
   onDownload: () => void;
   onPause: () => void;
@@ -101,14 +106,15 @@ export function ModelListRow({
   const deviceLabels = modelDeviceLabelKeys(model.supported_devices);
 
   return (
-    <article className="grid gap-2 rounded-lg border app-control px-3 py-3">
+    <article data-testid="model-row" className="grid gap-2 rounded-lg border app-control px-3 py-3">
       <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
         <div className="grid size-10 place-items-center rounded-lg border app-control text-app-accent">
-          <HardDrive className="size-5" />
+          <BrandIcon name={`${model.model_name} ${model.engine}`} />
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-semibold text-app">{model.display_name}</h2>
+            {isDefault && <Badge tone="accent">{t('models.currentDefault')}</Badge>}
             <Badge tone={storageUnavailable ? 'danger' : model.downloaded ? 'success' : model.downloading ? 'warning' : 'neutral'}>
               {storageUnavailable ? t('settings.modelStorageUnavailable') : model.downloaded ? t('common.downloaded') : model.downloading ? t('common.downloading') : t('common.notDownloaded')}
             </Badge>
@@ -121,6 +127,11 @@ export function ModelListRow({
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          {onSetDefault && model.downloaded && model.compatible !== false && !isDefault && (
+            <Button type="button" size="sm" variant="secondary" onClick={onSetDefault}>
+              {t('models.setDefault')}
+            </Button>
+          )}
           <Button
             type="button"
             size="icon"
