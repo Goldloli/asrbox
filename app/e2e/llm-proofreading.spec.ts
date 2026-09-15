@@ -226,7 +226,6 @@ test('completed task has a lightweight AI entry and settings has a top-level LLM
 
   await page.goto('/tasks');
   await page.getByRole('button', { name: /interview\.wav/ }).click();
-  await page.getByText('Task information and actions', { exact: true }).click();
   const aiEntry = page.getByRole('link', { name: 'AI subtitle proofreading' });
   await expect(aiEntry).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Subtitle proofreading' })).toHaveCount(0);

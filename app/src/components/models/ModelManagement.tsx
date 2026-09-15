@@ -109,7 +109,7 @@ export function ModelListRow({
     <article data-testid="model-row" className="grid gap-2 rounded-lg border app-control px-3 py-3">
       <div className="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
         <div className="grid size-10 place-items-center rounded-lg border app-control text-app-accent">
-          <BrandIcon name={`${model.model_name} ${model.engine}`} />
+          <BrandIcon name={`${model.model_name} ${model.engine} ${model.repo_id ?? ''}`} />
         </div>
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">

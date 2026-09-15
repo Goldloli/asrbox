@@ -34,29 +34,29 @@
 
 ## 6. 重构 AI 与模型页签
 
-- [ ] 6.1 将 `AIPage.tsx` 的聊天、校对、翻译及任务选择统一为共享页头、模式工具栏、列表／编辑工作区和反馈位置，保持流式响应与既有操作 contract；以 `llm-proofreading`、`llm-translation` 和 `chat` 维护场景验证
-- [ ] 6.2 将 `ModelsPage.tsx` 的模型天梯、目录、推荐、下载、设备能力和存储入口迁移到统一分区与分隔行模式，保持天梯默认折叠及各列排序；以模型天梯排序、下载控制和存储设置维护场景验证
-- [ ] 6.3 验证模型天梯展开后的多列表格只在自身区域滚动，并在亮暗主题及 390px 宽度保持排序控件可操作；以聚焦 Playwright 响应式场景验证
-- [ ] 6.4 让模型管理“设为默认”与设置默认模型复用同一 ASR 设置更新并集中刷新相关 query，首页仅在新建／重置或未手动覆盖时吸收默认值；以 1.4 的联动场景验证三处一致
-- [ ] 6.5 盘点并接入 Ollama、Qwen、OpenAI 等已知项的正确官方品牌图标，为未知项保留通用图标并记录资源来源／许可；以亮暗主题视觉检查和资源／notice 审计验证
+- [x] 6.1 将 `AIPage.tsx` 的聊天、校对、翻译及任务选择统一为共享页头、模式工具栏、列表／编辑工作区和反馈位置，保持流式响应与既有操作 contract；以 `llm-proofreading`、`llm-translation` 和 `chat` 维护场景验证
+- [x] 6.2 将 `ModelsPage.tsx` 的模型天梯、目录、推荐、下载、设备能力和存储入口迁移到统一分区与分隔行模式，保持天梯默认折叠及各列排序；以模型天梯排序、下载控制和存储设置维护场景验证
+- [x] 6.3 验证模型天梯展开后的多列表格只在自身区域滚动，并在亮暗主题及 390px 宽度保持排序控件可操作；以聚焦 Playwright 响应式场景验证
+- [x] 6.4 让模型管理“设为默认”与设置默认模型复用同一 ASR 设置更新并集中刷新相关 query，首页仅在新建／重置或未手动覆盖时吸收默认值；以 1.4 的联动场景验证三处一致
+- [x] 6.5 盘点并接入 Ollama、Qwen、OpenAI 等已知项的正确官方品牌图标，为未知项保留通用图标并记录资源来源／许可；以亮暗主题视觉检查和资源／notice 审计验证
 
 ## 7. 重构设置及全部子页签
 
-- [ ] 7.1 将 `SettingsPage.tsx` 的顶层页签和通用设置分组迁移为统一页头、页签栏及说明／控件响应式布局，保留主题、密度、字体、侧边栏和转写默认值；以设置持久化及 `transcription-defaults` 场景验证
-- [ ] 7.2 在通用设置增加橙色默认的固定强调色色板，支持蓝、紫、粉、红、绿、青、灰并同步设置导入／导出，保证成功／错误等语义色不随选择变化；以 1.3 的单元测试和逐色浏览器检查验证
-- [ ] 7.3 将提供商、模型存储、CUDA／加速、更新、隐私／关于等全部现有设置子页签迁移到同一分组、表单、状态和反馈模式，减少嵌套卡片但不删除字段或诊断；以 `llm-provider-models`、`model-storage-settings`、`cuda-acceleration` 和 `about-updates` 维护场景验证
-- [ ] 7.4 检查 `ProvidersPage.tsx` 的重定向与兼容入口在新壳体下保持一致，并验证直接访问旧入口仍进入正确设置页签
+- [x] 7.1 将 `SettingsPage.tsx` 的顶层页签和通用设置分组迁移为统一页头、页签栏及说明／控件响应式布局，保留主题、密度、字体、侧边栏和转写默认值；以设置持久化及 `transcription-defaults` 场景验证
+- [x] 7.2 在通用设置增加橙色默认的固定强调色色板，支持蓝、紫、粉、红、绿、青、灰并同步设置导入／导出，保证成功／错误等语义色不随选择变化；以 1.3 的单元测试和逐色浏览器检查验证
+- [x] 7.3 将提供商、模型存储、CUDA／加速、更新、隐私／关于等全部现有设置子页签迁移到同一分组、表单、状态和反馈模式，减少嵌套卡片但不删除字段或诊断；以 `llm-provider-models`、`model-storage-settings`、`cuda-acceleration` 和 `about-updates` 维护场景验证
+- [x] 7.4 检查 `ProvidersPage.tsx` 的重定向与兼容入口在新壳体下保持一致，并验证直接访问旧入口仍进入正确设置页签
 
 ## 8. 文案、可访问性与视觉验收
 
-- [ ] 8.1 更新受影响的中英文 i18n 文案，使页面标题、操作、空态、错误与状态反馈在全部页签中使用一致产品语言；以 i18n key 检查、`npm run typecheck` 和中英文浏览器抽查验证
-- [ ] 8.2 对导航、搜索、页签、表单、菜单、详情侧区和危险操作执行键盘与可访问名称检查，并修复亮暗主题焦点与对比度问题；以维护中的键盘场景和浏览器可访问性人工检查验证
-- [ ] 8.3 采集亮色首页、亮色任务详情、同构暗色首页，以及 AI、模型、设置代表页面的桌面／窄屏截图，与用户选定方向比较并记录视觉 QA；以无主题割裂、无遮挡、无截断、无页面级横向溢出作为通过条件
+- [x] 8.1 更新受影响的中英文 i18n 文案，使页面标题、操作、空态、错误与状态反馈在全部页签中使用一致产品语言；以 i18n key 检查、`npm run typecheck` 和中英文浏览器抽查验证
+- [x] 8.2 对导航、搜索、页签、表单、菜单、详情侧区和危险操作执行键盘与可访问名称检查，并修复亮暗主题焦点与对比度问题；以维护中的键盘场景和浏览器可访问性人工检查验证
+- [x] 8.3 采集亮色首页、亮色任务详情、同构暗色首页，以及 AI、模型、设置代表页面的桌面／窄屏截图，与用户选定方向比较并记录视觉 QA；以无主题割裂、无遮挡、无截断、无页面级横向溢出作为通过条件
 
 ## 9. 集成验证与归档
 
-- [ ] 9.1 运行 `npm run test:frontend:unit`、`npm run typecheck`、`npm run build:web`、`npm run audit:frontend` 和相关聚焦 Playwright 场景，修复所有由本 change 引入的失败
-- [ ] 9.2 运行完整 `npm run test:e2e:maintained`，确认自动更新、模型管理、字幕编辑、AI 和设置等相邻工作流未回归
-- [ ] 9.3 审阅最终 diff 与独立自动更新 change 的边界，运行 `git diff --check` 和 `npm run check:open-source`，准确记录任何因环境限制未执行的检查
-- [ ] 9.4 在全部功能与回归通过后运行 `npm run version:bump -- 0.3.0`，再运行 `npm run check:versions` 验证根 workspace、app、web、Tauri、后端和 lockfile 的版本一致；不得在本任务中 tag 或发布
-- [ ] 9.5 更新受影响的 README／用户文档或产品截图，勾选全部已完成任务，运行 `openspec validate --changes unify-professional-ui-system`，随后按项目流程同步并归档 change，再以 `openspec list --json` 和 `openspec validate --specs` 确认主规格有效
+- [x] 9.1 运行 `npm run test:frontend:unit`、`npm run typecheck`、`npm run build:web`、`npm run audit:frontend` 和相关聚焦 Playwright 场景，修复所有由本 change 引入的失败
+- [x] 9.2 运行完整 `npm run test:e2e:maintained`，确认自动更新、模型管理、字幕编辑、AI 和设置等相邻工作流未回归
+- [x] 9.3 审阅最终 diff 与独立自动更新 change 的边界，运行 `git diff --check` 和 `npm run check:open-source`，准确记录任何因环境限制未执行的检查
+- [x] 9.4 在全部功能与回归通过后运行 `npm run version:bump -- 0.3.0`，再运行 `npm run check:versions` 验证根 workspace、app、web、Tauri、后端和 lockfile 的版本一致；不得在本任务中 tag 或发布
+- [x] 9.5 更新受影响的 README／用户文档或产品截图，勾选全部已完成任务，运行 `openspec validate --changes unify-professional-ui-system`，随后按项目流程同步并归档 change，再以 `openspec list --json` 和 `openspec validate --specs` 确认主规格有效

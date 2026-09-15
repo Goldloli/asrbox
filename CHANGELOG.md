@@ -4,6 +4,23 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-15
+
+### Changed
+
+- Unified professional visual system across all pages: continuous light/dark surfaces replace translucent panels and full-screen gradients; dark theme is isomorphic to the light base layout.
+- The home page is a single creation workspace (file drop, model/language/backend row, one start action) above a divided recent-task list.
+- The task center is a persistent three-region workspace on desktop (task list, player/transcript detail, task status inspector); narrow widths keep an overlay drawer.
+- The desktop sidebar shows text labels by default for new users; saved sidebar preferences are unchanged.
+- Model management, AI workbench and settings pages share the page header, toolbar and section language; all settings tabs keep their fields.
+
+### Added
+
+- Configurable accent color (orange default; blue, purple, pink, red, green, cyan, gray) applied to primary actions, selection and focus; success/warning/danger states stay fixed. Included in frontend settings export/import.
+- "Set as default" on model rows writes the authoritative ASR setting and syncs the settings page and home preselection; a manually chosen model on an open home draft is not overwritten.
+- Correct brand icons for Ollama, Qwen and OpenAI providers/models with a generic fallback for unknown entries.
+- Global search gains a Cmd/Ctrl+K shortcut.
+
 ## [0.2.1] - 2026-09-13
 ### Added
 
@@ -269,7 +286,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Goldloli/asrbox/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Goldloli/asrbox/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Goldloli/asrbox/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/Goldloli/asrbox/compare/v0.1.8...v0.1.9
