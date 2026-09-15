@@ -22,6 +22,7 @@ import {
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
 import { desktopCapabilities, type DesktopMediaFile } from '../lib/desktopCapabilities';
 import { modelDeviceSummaryKey } from '../lib/modelDevices';
+import { downloadResponse } from '../lib/downloads';
 
 const formats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
 const activeTaskStatuses = new Set(['queued', 'importing', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting']);
@@ -208,6 +209,16 @@ export function TranscribePage() {
   });
 
   const selectedTaskIsActive = Boolean(selectedTask && activeTaskStatuses.has(selectedTask.status));
+  const downloadQuickResult = async (format: 'srt' | 'txt') => {
+    if (!selectedTask) return;
+    try {
+      const response = await apiClient.exportTask(selectedTask.id, format);
+      const savedPath = await downloadResponse(response, `${selectedTask.filename}.${format}`, { saveAsText: true });
+      if (savedPath) toast.info(t('toast.downloadStarted'), format.toUpperCase());
+    } catch (error) {
+      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
+    }
+  };
 
   const readinessIssues = [
     ...(readinessQuery.data?.issues ?? []),
@@ -496,7 +507,12 @@ export function TranscribePage() {
         </div>
       </Panel>
 
-      <TranscriptViewer task={selectedTask} audioPlayerHost={audioPlayerHost} />
+      <TranscriptViewer
+        task={selectedTask}
+        mode="summary"
+        audioPlayerHost={audioPlayerHost}
+        onDownloadFormat={(format) => void downloadQuickResult(format)}
+      />
 
       <div className="grid content-start gap-4">
         <Panel className="overflow-hidden">

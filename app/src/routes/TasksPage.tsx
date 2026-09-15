@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
-import { ArchiveX, BrainCircuit, CheckSquare, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
+import { ArchiveX, BrainCircuit, CheckSquare, ChevronDown, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Tabs, TabsContent, TabsList, TabsTrigger, Textarea } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -42,7 +42,6 @@ export function TasksPage() {
   const [errorFilter, setErrorFilter] = useState<ErrorFilter>('all');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
-  const [detailTab, setDetailTab] = useState<'timeline' | 'transcript'>('timeline');
   const [timelineTab, setTimelineTab] = useState<TaskTimelineTab>('diagnostics');
   const [taskTagsById, setTaskTagsById] = useState<Record<string, string[]>>({});
   const [favoriteTaskIds, setFavoriteTaskIds] = useState<string[]>([]);
@@ -544,8 +543,8 @@ export function TasksPage() {
             aria-label={t('tasks.closeDetails')}
             onClick={() => setSelectedTaskId(null)}
           />
-          <aside className="absolute inset-y-0 right-0 grid w-full max-w-[920px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-l app-border bg-[var(--app-panel-solid)] text-app shadow-2xl shadow-[var(--app-shadow)]">
-            <header className="flex items-start justify-between gap-4 border-b app-border px-5 py-4">
+          <aside className="absolute inset-y-0 right-0 grid w-full max-w-[min(1080px,calc(100vw-96px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-l app-border bg-[var(--app-panel-solid)] text-app shadow-2xl shadow-[var(--app-shadow)] max-[640px]:max-w-none">
+            <header className="z-10 flex items-start justify-between gap-4 border-b app-border bg-[var(--app-panel-solid)] px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase text-app-accent">{t('tasks.inspector')}</p>
                 <h2 className="mt-1 truncate text-lg font-semibold text-app">{selectedTask.filename}</h2>
@@ -558,8 +557,16 @@ export function TasksPage() {
                 </Button>
               </div>
             </header>
-            <div className="grid content-start gap-4 overflow-auto p-5">
+            <div className="grid content-start gap-5 overflow-auto p-4 pb-24 sm:p-5 sm:pb-8">
               <Progress value={selectedTask.progress} />
+              {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
+              <TranscriptViewer task={selectedTask} mode="detail" />
+              <details className="group rounded-xl border app-control">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
+                  <span>{t('tasks.detailsAndActions')}</span>
+                  <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="grid gap-4 border-t app-border p-4">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <Metric label={t('tasks.engine')} value={selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source} />
                 <Metric label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
@@ -618,7 +625,6 @@ export function TasksPage() {
                   </Button>
                 </div>
               </div>
-              {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               {(selectedTask.error || selectedTask.status === 'failed' || selectedTask.status === 'failed_resumable') && (
                 <ErrorDiagnosticsPanel
                   task={selectedTask}
@@ -745,7 +751,6 @@ export function TasksPage() {
                   size="sm"
                   variant="secondary"
                   onClick={() => {
-                    setDetailTab('timeline');
                     setTimelineTab('versions');
                   }}
                 >
@@ -776,26 +781,20 @@ export function TasksPage() {
                   </Button>
                 </ConfirmAction>
               </div>
-              <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'timeline' | 'transcript')} className="grid gap-4 rounded-xl border app-control p-3">
-                <TabsList>
-                  <TabsTrigger value="timeline">{t('tasks.timeline')}</TabsTrigger>
-                  <TabsTrigger value="transcript">{t('transcript.title')}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="timeline">
-                  <TaskTimeline
-                    diagnostics={diagnosticsQuery.data}
-                    logs={logsQuery.data}
-                    versions={versionsQuery.data}
-                    quality={qualityQuery.data}
-                    currentText={selectedTask.text}
-                    value={timelineTab}
-                    onValueChange={setTimelineTab}
-                  />
-                </TabsContent>
-                <TabsContent value="transcript">
-                  <TranscriptViewer task={selectedTask} />
-                </TabsContent>
-              </Tabs>
+              <section className="grid gap-3 rounded-xl border app-control p-3">
+                <h3 className="text-sm font-semibold text-app">{t('tasks.timeline')}</h3>
+                <TaskTimeline
+                  diagnostics={diagnosticsQuery.data}
+                  logs={logsQuery.data}
+                  versions={versionsQuery.data}
+                  quality={qualityQuery.data}
+                  currentText={selectedTask.text}
+                  value={timelineTab}
+                  onValueChange={setTimelineTab}
+                />
+              </section>
+                </div>
+              </details>
             </div>
           </aside>
         </div>

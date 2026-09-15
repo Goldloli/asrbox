@@ -130,7 +130,7 @@ test('model page expands detailed model intro for a natively diarizing model', a
   await expect(card.getByText('Known limitations')).toBeVisible();
 });
 
-test('model page renders the model ladder instead of the estimated benchmark panel', async ({ page }) => {
+test('model page keeps the model ladder collapsed, then expands and sorts it predictably', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
   });
@@ -143,6 +143,7 @@ test('model page renders the model ladder instead of the estimated benchmark pan
           display_name: 'Faster Whisper Small',
           engine: 'faster_whisper',
           model_size: 'small',
+          supported_devices: ['cpu'],
         }),
         modelStatus({
           model_name: 'mlx-whisper-turbo',
@@ -163,6 +164,12 @@ test('model page renders the model ladder instead of the estimated benchmark pan
   await page.goto('/models');
 
   const ladder = page.getByRole('heading', { name: 'Model ladder' }).locator('xpath=ancestor::section[1]');
+  const toggle = ladder.getByRole('button', { name: /Model ladder/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(ladder.getByRole('table')).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const table = ladder.getByRole('table');
   await expect(table.getByRole('row')).toHaveCount(4);
 
@@ -179,6 +186,25 @@ test('model page renders the model ladder instead of the estimated benchmark pan
 
   await expect(ladder).toContainText('Windows + RTX 5080');
   await expect(ladder).toContainText('* marks estimates');
+
+  const sort = ladder.getByRole('combobox', { name: 'Sort models by' });
+  await sort.click();
+  await page.getByRole('option', { name: 'Model name' }).click();
+  await expect(table.getByRole('row').nth(1)).toContainText('Faster Whisper Small');
+
+  await sort.click();
+  await page.getByRole('option', { name: 'Downloaded' }).click();
+  await expect(table.getByRole('row').nth(1)).toContainText('Whisper Base');
+
+  await sort.click();
+  await page.getByRole('option', { name: 'GPU' }).click();
+  await expect(table.getByRole('row').nth(1)).toContainText('MLX Whisper Turbo');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
+  const tableScroll = ladder.getByTestId('model-ladder-table-scroll');
+  const scrollMetrics = await tableScroll.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }));
+  expect(scrollMetrics.scrollWidth).toBeGreaterThan(scrollMetrics.clientWidth);
 
   await expect(page.getByRole('heading', { name: 'Performance view' })).toHaveCount(0);
   await expect(page.getByText('Estimated from model metadata', { exact: false })).toHaveCount(0);

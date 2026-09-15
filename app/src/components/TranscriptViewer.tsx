@@ -1,6 +1,6 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Clipboard, FileText, FolderOpen, Pause, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
+import { Activity, ChevronDown, Clipboard, Download, FileText, FolderOpen, Pause, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SegmentBulkUpdateItem, type TranscriptionTask } from '../lib/api';
@@ -20,7 +20,20 @@ type SegmentDraft = {
   end?: number;
 };
 
-export function TranscriptViewer({ task, audioPlayerHost }: { task?: TranscriptionTask; audioPlayerHost?: HTMLElement | null }) {
+type TranscriptViewerMode = 'summary' | 'detail';
+type QuickDownloadFormat = 'srt' | 'txt';
+
+export function TranscriptViewer({
+  task,
+  audioPlayerHost,
+  mode = 'summary',
+  onDownloadFormat,
+}: {
+  task?: TranscriptionTask;
+  audioPlayerHost?: HTMLElement | null;
+  mode?: TranscriptViewerMode;
+  onDownloadFormat?: (format: QuickDownloadFormat) => void;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -50,7 +63,10 @@ export function TranscriptViewer({ task, audioPlayerHost }: { task?: Transcripti
     () => displaySegments.reduce((total, segment) => total + countTextMatches(segment.text, searchQuery), 0),
     [displaySegments, searchQuery],
   );
-  const subtitlePreview = useMemo(() => formatSubtitlePreview(displaySegments, subtitleFormat), [displaySegments, subtitleFormat]);
+  const subtitlePreview = useMemo(
+    () => mode === 'detail' ? formatSubtitlePreview(displaySegments, subtitleFormat) : '',
+    [displaySegments, mode, subtitleFormat],
+  );
 
   useEffect(() => {
     setDraftEdits({});
@@ -167,180 +183,196 @@ export function TranscriptViewer({ task, audioPlayerHost }: { task?: Transcripti
       onSeekHandled={() => setSeekTarget(null)}
     />
   );
-  return (
-    <Panel className="min-h-[calc(100dvh-160px)] overflow-hidden">
-      <PanelHeader
-        eyebrow={t('transcript.title')}
-        title={task.filename}
-        description={`${formatPercent(task.progress)} · ${formatDuration(task.duration_ms)}`}
-        action={<StatusPill status={task.status} />}
-      />
-      <div className="grid gap-5 p-5">
-        <Progress value={task.progress} />
-        {task.error && (
-          <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
-            {task.error_code && <p className="mb-1 font-medium">{task.error_code}</p>}
-            <p>{task.error}</p>
-          </div>
-        )}
-        <div className="sticky top-0 z-10 -mx-5 flex flex-wrap items-center justify-between gap-3 border-y app-border bg-[var(--app-panel-solid)] px-5 py-3">
-          <div className="flex min-w-0 items-center gap-2">
+  const renderedAudioPlayer = audioPlayerHost === undefined || audioPlayerHost === null
+    ? (audioPlayerHost === undefined ? audioPlayer : null)
+    : createPortal(audioPlayer, audioPlayerHost);
+
+  if (mode === 'summary') {
+    return (
+      <Panel className="min-h-[32rem] overflow-hidden">
+        <PanelHeader
+          eyebrow={t('transcript.title')}
+          title={task.filename}
+          description={`${formatPercent(task.progress)} · ${formatDuration(task.duration_ms)}`}
+          action={<StatusPill status={task.status} />}
+        />
+        <div className="grid gap-5 p-5">
+          <Progress value={task.progress} />
+          {task.error && (
+            <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
+              {task.error_code && <p className="mb-1 font-medium">{task.error_code}</p>}
+              <p>{task.error}</p>
+            </div>
+          )}
+          <section className="grid gap-3">
             <h2 className="text-sm font-semibold text-app">{t('transcript.text')}</h2>
+            <div className="min-h-56 max-h-[min(42vh,24rem)] overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
+              {fullText || <span className="text-app-faint">{t('transcript.placeholder')}</span>}
+            </div>
+          </section>
+          {renderedAudioPlayer}
+          {task.status === 'completed' && onDownloadFormat && (
+            <section className="grid gap-3" aria-labelledby="quick-downloads-title">
+              <h2 id="quick-downloads-title" className="text-sm font-semibold text-app">{t('transcript.quickDownloads')}</h2>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                {(['srt', 'txt'] as const).map((format) => (
+                  <Button key={format} variant="secondary" onClick={() => onDownloadFormat(format)}>
+                    <Download className="size-4" />
+                    {format.toUpperCase()}
+                  </Button>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="grid gap-5" data-testid="transcript-detail-workspace">
+      {audioPlayer}
+      <section className="grid gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
+          <div className="flex rounded-lg border app-control p-1">
+            {(['srt', 'vtt'] as const).map((format) => (
+              <Button
+                key={format}
+                variant={subtitleFormat === format ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => setSubtitleFormat(format)}
+                className="h-7"
+              >
+                {format.toUpperCase()}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <pre className="max-h-48 overflow-auto rounded-lg border app-control p-3 font-mono text-xs leading-5 text-app-soft">
+          {subtitlePreview || t('transcript.noSegments')}
+        </pre>
+      </section>
+      <section className="grid gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
             {hasDraftEdits && <Badge tone="warning">{t('transcript.unsavedChanges')}</Badge>}
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {hasDraftEdits && (
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={discardDraftEdits} disabled={saveEdits.isPending}>
+                <X className="size-4" />
+                {t('transcript.discardChanges')}
+              </Button>
+              <Button size="sm" onClick={saveDraftEdits} disabled={saveEdits.isPending}>
+                <Save className="size-4" />
+                {saveEdits.isPending ? t('transcript.savingChanges') : t('transcript.saveChanges')}
+              </Button>
+            </div>
+          )}
+        </div>
+        <div className="max-h-[min(42vh,24rem)] overflow-auto rounded-lg border app-border">
+          {displaySegments.length > 0 ? (
+            displaySegments.map((segment) => (
+              <div key={segment.id} className="grid grid-cols-[clamp(112px,18vw,148px)_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
+                <div className="grid content-start gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+                    onClick={() => seekToSegment(segment.start)}
+                    aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
+                    title={t('transcript.jumpToSegment')}
+                  >
+                    {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
+                  </button>
+                  <div className="grid grid-cols-2 gap-1">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={segment.start}
+                      onChange={(event) => setSegmentTime(segment.id, 'start', event.target.value)}
+                      aria-label={t('transcript.timestampStart')}
+                      className="h-8 min-w-0 px-1.5 text-[11px]"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={segment.end}
+                      onChange={(event) => setSegmentTime(segment.id, 'end', event.target.value)}
+                      aria-label={t('transcript.timestampEnd')}
+                      className="h-8 min-w-0 px-1.5 text-[11px]"
+                    />
+                  </div>
+                </div>
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="grid min-w-0 flex-1 gap-2">
+                    <Input
+                      value={segment.speaker ?? ''}
+                      onChange={(event) => setSegmentDraft(segment.id, { speaker: event.target.value })}
+                      placeholder={t('transcript.speakerPlaceholder')}
+                      className="h-8 max-w-48 text-xs"
+                      aria-label={t('transcript.speakerLabel')}
+                    />
+                    <Textarea
+                      value={segment.text}
+                      onChange={(event) => setSegmentDraft(segment.id, { text: event.target.value })}
+                      aria-label={t('transcript.segmentText')}
+                      rows={2}
+                      className="min-h-16 resize-y text-xs"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 shrink-0"
+                    onClick={() => copyText(segment.text)}
+                    aria-label={t('transcript.copySegment')}
+                    title={t('transcript.copySegment')}
+                  >
+                    <Clipboard className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="px-3 py-8 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>
+          )}
+        </div>
+      </section>
+      <details className="group rounded-xl border app-control">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
+          <span>{t('transcript.fullTextTools')}</span>
+          <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <section className="grid gap-3 border-t app-border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1 sm:min-w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
+                <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('transcript.searchPlaceholder')} className="pl-9" />
+              </div>
+              <Input value={replaceQuery} onChange={(event) => setReplaceQuery(event.target.value)} placeholder={t('transcript.replacePlaceholder')} className="min-w-0 flex-1 sm:min-w-48" />
+              <Button variant="secondary" size="sm" onClick={replaceAllMatches} disabled={!searchQuery.trim() || matchCount === 0}>
+                <Replace className="size-4" />
+                {t('transcript.replaceAll')}
+              </Button>
+              {searchQuery.trim() && <Badge tone={matchCount > 0 ? 'accent' : 'neutral'}>{matchCount} {t('transcript.matches')}</Badge>}
+            </div>
             <Button variant="secondary" size="sm" onClick={() => copyText(fullText)} disabled={!fullText}>
               <Clipboard className="size-4" />
               {t('tasks.copyFullText')}
             </Button>
-            {hasDraftEdits && (
-              <>
-                <Button variant="secondary" size="sm" onClick={discardDraftEdits} disabled={saveEdits.isPending}>
-                  <X className="size-4" />
-                  {t('transcript.discardChanges')}
-                </Button>
-                <Button size="sm" onClick={saveDraftEdits} disabled={saveEdits.isPending}>
-                  <Save className="size-4" />
-                  {saveEdits.isPending ? t('transcript.savingChanges') : t('transcript.saveChanges')}
-                </Button>
-              </>
-            )}
           </div>
-        </div>
-        <section className="grid gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:min-w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t('transcript.searchPlaceholder')}
-                className="pl-9"
-              />
-            </div>
-            <Input
-              value={replaceQuery}
-              onChange={(event) => setReplaceQuery(event.target.value)}
-              placeholder={t('transcript.replacePlaceholder')}
-              className="min-w-0 flex-1 sm:min-w-48"
-            />
-            <Button variant="secondary" size="sm" onClick={replaceAllMatches} disabled={!searchQuery.trim() || matchCount === 0}>
-              <Replace className="size-4" />
-              {t('transcript.replaceAll')}
-            </Button>
-            {searchQuery.trim() && (
-              <Badge tone={matchCount > 0 ? 'accent' : 'neutral'}>
-                {matchCount} {t('transcript.matches')}
-              </Badge>
-            )}
-          </div>
-          <div className="min-h-56 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
+          <div className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
             {fullText ? renderHighlightedText(fullText, searchQuery) : <span className="text-app-faint">{t('transcript.placeholder')}</span>}
           </div>
           <p className="text-xs text-app-muted">{t('transcript.fullTextReadOnly')}</p>
         </section>
-        {audioPlayerHost === undefined || audioPlayerHost === null ? (
-          audioPlayerHost === undefined ? (
-            audioPlayer
-          ) : null
-        ) : (
-          createPortal(audioPlayer, audioPlayerHost)
-        )}
-        <section className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
-            <div className="flex rounded-lg border app-control p-1">
-              {(['srt', 'vtt'] as const).map((format) => (
-                <Button
-                  key={format}
-                  variant={subtitleFormat === format ? 'primary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setSubtitleFormat(format)}
-                  className="h-7"
-                >
-                  {format.toUpperCase()}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <pre className="max-h-56 overflow-auto rounded-lg border app-control p-3 font-mono text-xs leading-5 text-app-soft">
-            {subtitlePreview || t('transcript.noSegments')}
-          </pre>
-        </section>
-        <section className="grid gap-3">
-          <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
-          <div className="max-h-[min(36vh,20rem)] overflow-auto rounded-lg border app-border">
-            {displaySegments.length > 0 ? (
-              displaySegments.map((segment) => (
-                <div key={segment.id} className="grid grid-cols-[132px_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
-                  <div className="grid gap-2">
-                    <button
-                      type="button"
-                      className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
-                      onClick={() => seekToSegment(segment.start)}
-                      aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
-                      title={t('transcript.jumpToSegment')}
-                    >
-                      {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
-                    </button>
-                    <div className="grid grid-cols-2 gap-1">
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={segment.start}
-                        onChange={(event) => setSegmentTime(segment.id, 'start', event.target.value)}
-                        aria-label={t('transcript.timestampStart')}
-                        className="h-8 px-2 text-[11px]"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={segment.end}
-                        onChange={(event) => setSegmentTime(segment.id, 'end', event.target.value)}
-                        aria-label={t('transcript.timestampEnd')}
-                        className="h-8 px-2 text-[11px]"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="grid min-w-0 flex-1 gap-2">
-                      <Input
-                        value={segment.speaker ?? ''}
-                        onChange={(event) => setSegmentDraft(segment.id, { speaker: event.target.value })}
-                        placeholder={t('transcript.speakerPlaceholder')}
-                        className="h-8 max-w-40 text-xs"
-                        aria-label={t('transcript.speakerLabel')}
-                      />
-                      <Textarea
-                        value={segment.text}
-                        onChange={(event) => setSegmentDraft(segment.id, { text: event.target.value })}
-                        aria-label={t('transcript.segmentText')}
-                        rows={2}
-                        className="min-h-0 text-xs"
-                      />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 shrink-0"
-                      onClick={() => copyText(segment.text)}
-                      aria-label={t('transcript.copySegment')}
-                      title={t('transcript.copySegment')}
-                    >
-                      <Clipboard className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="px-3 py-8 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>
-            )}
-          </div>
-        </section>
-      </div>
-    </Panel>
+      </details>
+    </div>
   );
 }
 
