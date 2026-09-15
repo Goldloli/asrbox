@@ -188,7 +188,6 @@ test('edits a segment, saves it to the backend, and exports the edited subtitle'
   ]);
   await expect(segmentTextboxes.nth(1)).toHaveValue('corrected words');
 
-  await page.getByText('Task information and actions', { exact: true }).click();
   const outputFilesPanel = page.getByRole('heading', { name: 'Output files' }).locator('xpath=../..');
   const downloadPromise = page.waitForEvent('download');
   await outputFilesPanel.getByRole('button', { name: 'SRT', exact: true }).click();
@@ -223,18 +222,22 @@ test('task detail keeps its content and controls reachable at desktop and narrow
   await page.setViewportSize({ width: 1280, height: 820 });
   await openTaskDetails(page);
 
-  const drawer = page.locator('aside').filter({ has: page.getByRole('heading', { name: 'Audio player' }) });
-  let drawerBox = await drawer.boundingBox();
-  expect(drawerBox?.width).toBeLessThanOrEqual(1080);
-  await expect(drawer.getByRole('button', { name: 'Close details' })).toBeVisible();
+  const detailRegion = page.getByTestId('task-center-detail');
+  const inspectorRegion = page.getByTestId('task-center-inspector');
+  await expect(page.getByTestId('task-center-list')).toBeVisible();
+  await expect(detailRegion).toBeVisible();
+  await expect(inspectorRegion).toBeVisible();
+  let detailBox = await detailRegion.boundingBox();
+  expect(detailBox?.width).toBeLessThanOrEqual(1080);
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  drawerBox = await drawer.boundingBox();
-  expect(drawerBox?.width).toBeLessThanOrEqual(1080);
+  await expect(detailRegion).toBeVisible();
+  await expect(inspectorRegion).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  drawerBox = await drawer.boundingBox();
-  expect(Math.round(drawerBox?.width ?? 0)).toBe(390);
+  await expect(detailRegion.getByRole('button', { name: 'Close details' })).toBeVisible();
+  detailBox = await detailRegion.boundingBox();
+  expect(detailBox?.width).toBeLessThanOrEqual(390);
   const pageWidth = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(pageWidth.scroll).toBeLessThanOrEqual(pageWidth.client);
 

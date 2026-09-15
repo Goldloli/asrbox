@@ -10,6 +10,7 @@ import { formatDuration, formatPercent } from '../lib/format';
 import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
+import { cn } from '../lib/cn';
 import { toastErrorMessage, useToast } from './Toast';
 import { countTextMatches, drawAudioWaveform, formatSubtitlePreview, renderHighlightedText, replaceTextMatches } from './transcript/transcriptUtils';
 
@@ -42,6 +43,8 @@ export function TranscriptViewer({
   const [replaceQuery, setReplaceQuery] = useState('');
   const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const segmentListRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id;
   const fullText = task?.text ?? '';
@@ -67,6 +70,22 @@ export function TranscriptViewer({
     () => mode === 'detail' ? formatSubtitlePreview(displaySegments, subtitleFormat) : '',
     [displaySegments, mode, subtitleFormat],
   );
+  const activeSegmentId = useMemo(() => {
+    if (mode !== 'detail') return null;
+    const active = displaySegments.find((segment) => playbackTime >= segment.start && playbackTime < segment.end);
+    return active?.id ?? null;
+  }, [displaySegments, mode, playbackTime]);
+
+  // Keep the active segment visible while playback advances, but never steal
+  // focus from in-progress transcript editing.
+  useEffect(() => {
+    if (activeSegmentId == null || !segmentListRef.current) return;
+    const container = segmentListRef.current;
+    if (container.contains(document.activeElement)) return;
+    container
+      .querySelector(`[data-segment-id="${activeSegmentId}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeSegmentId]);
 
   useEffect(() => {
     setDraftEdits({});
@@ -181,6 +200,7 @@ export function TranscriptViewer({
       sourceKind={task.source_kind}
       seekTarget={seekTarget}
       onSeekHandled={() => setSeekTarget(null)}
+      onCurrentTimeChange={mode === 'detail' ? setPlaybackTime : undefined}
     />
   );
   const renderedAudioPlayer = audioPlayerHost === undefined || audioPlayerHost === null
@@ -272,10 +292,19 @@ export function TranscriptViewer({
             </div>
           )}
         </div>
-        <div className="max-h-[min(42vh,24rem)] overflow-auto rounded-lg border app-border">
+        <div ref={segmentListRef} data-testid="transcript-segments" className="max-h-[min(42vh,24rem)] overflow-auto rounded-lg border app-border">
           {displaySegments.length > 0 ? (
             displaySegments.map((segment) => (
-              <div key={segment.id} className="grid grid-cols-[clamp(112px,18vw,148px)_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
+              <div
+                key={segment.id}
+                data-testid="segment-row"
+                data-segment-id={segment.id}
+                data-active={activeSegmentId === segment.id ? 'true' : undefined}
+                className={cn(
+                  'grid grid-cols-[clamp(112px,18vw,148px)_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0 transition-colors',
+                  activeSegmentId === segment.id && 'bg-[var(--app-accent-soft)]',
+                )}
+              >
                 <div className="grid content-start gap-2">
                   <button
                     type="button"
@@ -382,12 +411,14 @@ function WaveformAudioPlayer({
   sourceKind,
   seekTarget,
   onSeekHandled,
+  onCurrentTimeChange,
 }: {
   taskId: string;
   title: string;
   sourceKind?: TranscriptionTask['source_kind'];
   seekTarget: number | null;
   onSeekHandled: () => void;
+  onCurrentTimeChange?: (seconds: number) => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -533,7 +564,11 @@ function WaveformAudioPlayer({
           preload="metadata"
           src={audioUrl ?? undefined}
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onTimeUpdate={(event) => {
+            setCurrentTime(event.currentTarget.currentTime);
+            onCurrentTimeChange?.(event.currentTarget.currentTime);
+          }}
+          onSeeked={(event) => onCurrentTimeChange?.(event.currentTarget.currentTime)}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}

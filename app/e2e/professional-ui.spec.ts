@@ -35,6 +35,9 @@ const task = (overrides: Record<string, unknown> = {}) => ({
 
 const stubTasks = (page: Page, items: unknown[]) =>
   page.route('**/tasks', (route) => {
+    // Only intercept API calls — the /tasks document navigation must pass through.
+    const type = route.request().resourceType();
+    if (type !== 'fetch' && type !== 'xhr') return route.fallback();
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ json: { items, total: items.length } });
   });

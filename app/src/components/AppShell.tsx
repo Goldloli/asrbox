@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, CheckCircle2, CloudOff, Cpu, DownloadCloud, PackageCheck, PlugZap, Radio } from 'lucide-react';
+import { Activity, AlertTriangle, CloudOff, Cpu, DownloadCloud, PackageCheck, PlugZap } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
@@ -48,66 +48,56 @@ function TopStatusBar() {
   const runtime = runtimeQuery.data;
 
   return (
-    <header className="app-shell-surface flex h-14 shrink-0 items-center justify-between border-b app-border px-4 backdrop-blur">
-      <div className="flex items-center gap-3">
-        <div className="grid size-8 place-items-center rounded-lg border app-control">
-          <Radio className="size-4 text-app-accent" />
+    <header className="app-shell-surface flex h-14 shrink-0 items-center gap-4 border-b app-border px-4">
+      <div className="mx-auto flex w-full max-w-[1680px] min-w-0 items-center gap-4 px-1 xl:px-2">
+        <div className="min-w-0 flex-1">
+          <GlobalSearch />
         </div>
-        <div>
-          <p className="text-sm font-semibold text-app">ASRbox</p>
-          <p className="text-xs text-app-muted">{t('app.subtitle')}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <GlobalSearch />
-        <div className="hidden items-center gap-2 md:flex">
-          {connected ? (
-            <Badge tone="success">
-              <CheckCircle2 className="mr-1 size-3" />
-              {t('status.backendOnline')}
-            </Badge>
-          ) : desktopServer.isDesktop && desktopServer.isStarting ? (
-            <Badge tone="warning">
-              <PlugZap className="mr-1 size-3" />
-              {t('status.startingBackend')}
-            </Badge>
-          ) : (
-            <>
-              <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
-                <Badge tone="danger">
-                  <CloudOff className="mr-1 size-3" />
-                  {t('status.backendOffline')}
-                </Badge>
-              </Link>
-              {desktopServer.isDesktop && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => desktopServer.startServer()}
-                  disabled={desktopServer.isStarting}
-                  title={t('status.startBackend')}
-                >
-                  <PlugZap className="size-3.5" />
-                  {desktopServer.isStarting ? t('status.startingBackend') : t('status.startBackend')}
-                </Button>
-              )}
-            </>
+        <div className="flex shrink-0 items-center gap-2">
+          {connected && (
+            <span className="hidden items-center gap-1.5 text-xs font-medium text-app-soft md:flex">
+              <span className="size-1.5 rounded-full bg-[var(--app-success)]" />
+              {t('status.localProcessing')}
+            </span>
           )}
-          {runtime && (
-            <>
-              <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
-                <Badge tone={runtime.ffmpeg_available && runtime.ffprobe_available ? 'success' : 'warning'}>
-                  {runtime.ffmpeg_available && runtime.ffprobe_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
+          <div className="hidden items-center gap-2 lg:flex">
+            {!connected && (
+              <>
+                <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+                  <Badge tone="danger">
+                    <CloudOff className="mr-1 size-3" />
+                    {t('status.backendOffline')}
+                  </Badge>
+                </Link>
+                {desktopServer.isDesktop && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => desktopServer.startServer()}
+                    disabled={desktopServer.isStarting}
+                    title={t('status.startBackend')}
+                  >
+                    <PlugZap className="size-3.5" />
+                    {desktopServer.isStarting ? t('status.startingBackend') : t('status.startBackend')}
+                  </Button>
+                )}
+              </>
+            )}
+            {runtime && (
+              <>
+                <Link to="/settings" search={{ tab: 'storage' }} aria-label={t('status.openDiagnostics')} className="transition hover:opacity-80">
+                  <Badge tone={runtime.ffmpeg_available && runtime.ffprobe_available ? 'success' : 'warning'}>
+                    {runtime.ffmpeg_available && runtime.ffprobe_available ? t('status.ffmpegReady') : t('status.ffmpegMissing')}
+                  </Badge>
+                </Link>
+                <Badge tone={runtime.torch_cuda_available || runtime.torch_mps_available ? 'accent' : 'neutral'}>
+                  <Cpu className="mr-1 size-3" />
+                  {runtime.torch_cuda_available ? 'CUDA' : runtime.torch_mps_available ? 'MPS' : 'CPU'}
                 </Badge>
-              </Link>
-              <Badge tone={runtime.torch_cuda_available || runtime.torch_mps_available ? 'accent' : 'neutral'}>
-                <Cpu className="mr-1 size-3" />
-                {runtime.torch_cuda_available ? 'CUDA' : runtime.torch_mps_available ? 'MPS' : 'CPU'}
-              </Badge>
-              {runtime.free_disk_bytes != null && <Badge tone="neutral">{t('status.freeDisk')} {formatBytes(runtime.free_disk_bytes)}</Badge>}
-            </>
-          )}
+                {runtime.free_disk_bytes != null && <Badge tone="neutral">{t('status.freeDisk')} {formatBytes(runtime.free_disk_bytes)}</Badge>}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>

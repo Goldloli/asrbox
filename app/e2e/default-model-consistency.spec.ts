@@ -75,6 +75,8 @@ const refetchSettingsViaWindowFocus = async (page: Page) => {
   });
 };
 
+const field = (page: Page, label: string) => page.locator('label').filter({ has: page.getByText(label, { exact: true }) }).first();
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((url) => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
@@ -108,9 +110,8 @@ test('model management set-as-default writes the authoritative setting and home 
   });
 
   await page.goto('/');
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(0)).toContainText('Local model');
-  await expect(combos.nth(1)).toContainText('Qwen3 ASR 0.6B');
+  await expect(field(page, 'Backend').getByRole('combobox')).toContainText('Local model');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Qwen3 ASR 0.6B');
 });
 
 test('home keeps a manually selected model when the saved default changes in the background', async ({ page }) => {
@@ -123,18 +124,18 @@ test('home keeps a manually selected model when the saved default changes in the
     route.fulfill({ json: { models: [baseModel, qwen3Model, largeModel] } }));
 
   await page.goto('/');
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(1)).toContainText('Whisper Base');
+  const modelCombo = field(page, 'Model').getByRole('combobox');
+  await expect(modelCombo).toContainText('Whisper Base');
 
-  await combos.nth(1).click();
+  await modelCombo.click();
   await page.getByRole('option', { name: /Qwen3 ASR 0\.6B/ }).click();
-  await expect(combos.nth(1)).toContainText('Qwen3 ASR 0.6B');
+  await expect(modelCombo).toContainText('Qwen3 ASR 0.6B');
 
   current = asrSettings({ default_model_name: 'whisper-large-v3-turbo' });
   await refetchSettingsViaWindowFocus(page);
 
-  await expect(combos.nth(1)).toContainText('Qwen3 ASR 0.6B');
-  await expect(combos.nth(1)).not.toContainText('Whisper Large v3 Turbo');
+  await expect(modelCombo).toContainText('Qwen3 ASR 0.6B');
+  await expect(modelCombo).not.toContainText('Whisper Large v3 Turbo');
 });
 
 test('a fresh home draft adopts the default saved while the page was closed', async ({ page }) => {
@@ -147,9 +148,9 @@ test('a fresh home draft adopts the default saved while the page was closed', as
     route.fulfill({ json: { models: [baseModel, qwen3Model, largeModel] } }));
 
   await page.goto('/');
-  await expect(page.getByRole('combobox').nth(1)).toContainText('Whisper Base');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Whisper Base');
 
   current = asrSettings({ default_model_name: 'whisper-large-v3-turbo' });
   await page.reload();
-  await expect(page.getByRole('combobox').nth(1)).toContainText('Whisper Large v3 Turbo');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Whisper Large v3 Turbo');
 });

@@ -5,7 +5,7 @@ import { ArchiveX, BrainCircuit, CheckSquare, ChevronDown, Clipboard, Download, 
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../components/weiui';
+import { Badge, Button, DataRow, EmptyState, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -313,8 +313,8 @@ export function TasksPage() {
   };
 
   return (
-    <section className="mx-auto grid max-w-5xl gap-4 pb-28 xl:pb-0">
-      <Panel className="overflow-hidden">
+    <section className="mx-auto grid w-full max-w-[1680px] min-h-0 gap-4 pb-28 xl:h-[calc(100dvh-7.5rem)] xl:grid-cols-[320px_minmax(0,1fr)] xl:pb-0">
+      <Panel data-testid="task-center-list" className="flex min-h-0 flex-col overflow-hidden">
         <PanelHeader
           eyebrow={t('tasks.eyebrow')}
           title={t('tasks.title')}
@@ -343,7 +343,7 @@ export function TasksPage() {
             </div>
           }
         />
-        <div className="grid gap-3 p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
             <div className="relative">
@@ -501,7 +501,7 @@ export function TasksPage() {
             </div>
           )}
 
-          <div className="grid max-h-[calc(100dvh-260px)] min-h-80 gap-2 overflow-auto pr-1">
+          <div className="grid min-h-0 flex-1 content-start gap-2 overflow-auto pr-1">
             {filteredTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -535,18 +535,21 @@ export function TasksPage() {
         </div>
       </Panel>
 
-      {selectedTask && (
-        <div className="fixed inset-0 z-50">
+      {selectedTask ? (
+        <div className="grid min-h-0 gap-4 max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:bg-[var(--app-overlay)] max-xl:p-3 xl:grid-cols-[minmax(0,1fr)_340px]">
           <button
             type="button"
-            className="absolute inset-0 bg-[var(--app-overlay)]"
+            className="max-xl:fixed max-xl:inset-0 max-xl:-z-10 xl:hidden"
             aria-label={t('tasks.closeDetails')}
             onClick={() => setSelectedTaskId(null)}
           />
-          <aside className="absolute inset-y-0 right-0 grid w-full max-w-[min(1080px,calc(100vw-96px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-l app-border bg-[var(--app-panel-solid)] text-app shadow-2xl shadow-[var(--app-shadow)] max-[640px]:max-w-none">
-            <header className="z-10 flex items-start justify-between gap-4 border-b app-border bg-[var(--app-panel-solid)] px-4 py-3 sm:px-5 sm:py-4">
+          <aside
+            data-testid="task-center-detail"
+            className="app-panel flex min-h-0 flex-col overflow-hidden border app-border rounded-xl max-xl:min-h-[70vh]"
+          >
+            <header className="z-10 flex items-start justify-between gap-4 border-b app-border px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase text-app-accent">{t('tasks.inspector')}</p>
+                <p className="text-xs font-semibold uppercase text-app-accent">{t('tasks.currentTask')}</p>
                 <h2 className="mt-1 truncate text-lg font-semibold text-app">{selectedTask.filename}</h2>
                 <p className="mt-1 text-xs text-app-muted">{selectedTask.id} · {formatDate(selectedTask.updated_at)}</p>
               </div>
@@ -557,98 +560,27 @@ export function TasksPage() {
                 </Button>
               </div>
             </header>
-            <div className="grid content-start gap-5 overflow-auto p-4 pb-24 sm:p-5 sm:pb-8">
+            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4 sm:p-5">
               <Progress value={selectedTask.progress} />
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               <TranscriptViewer task={selectedTask} mode="detail" />
-              <details className="group rounded-xl border app-control">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
-                  <span>{t('tasks.detailsAndActions')}</span>
-                  <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="grid gap-4 border-t app-border p-4">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Metric label={t('tasks.engine')} value={selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source} />
-                <Metric label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
-                <Metric label={t('tasks.created')} value={formatDate(selectedTask.created_at)} />
-                <Metric label={t('tasks.progress')} value={formatPercent(selectedTask.progress)} />
+            </div>
+          </aside>
+          <aside
+            data-testid="task-center-inspector"
+            className="app-panel flex min-h-0 flex-col overflow-hidden border app-border rounded-xl max-xl:min-h-[40vh]"
+          >
+            <div className="flex items-center justify-between gap-3 border-b app-border px-4 py-3">
+              <h2 className="text-sm font-semibold text-app">{t('tasks.inspector')}</h2>
+              <StatusPill status={selectedTask.status} />
+            </div>
+            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4">
+              <div className="grid gap-1">
+                <DataRow label={t('tasks.created')} value={formatDate(selectedTask.created_at)} />
+                <DataRow label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
+                <DataRow label={t('tasks.progress')} value={formatPercent(selectedTask.progress)} />
+                <DataRow label={t('tasks.engine')} value={selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source} />
               </div>
-              <div className="grid gap-2 rounded-xl border app-control p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-app">{t('tasks.tags')}</h3>
-                  <span className="text-xs text-app-muted">{t('tasks.tagsHint')}</span>
-                </div>
-                <Input
-                  value={(taskTagsById[selectedTask.id] ?? []).join(', ')}
-                  onChange={(event) => setTaskTags(selectedTask.id, event.target.value)}
-                  placeholder={t('tasks.tagsPlaceholder')}
-                />
-                <div className="flex min-h-6 flex-wrap gap-2">
-                  {(taskTagsById[selectedTask.id] ?? []).length > 0 ? (
-                    taskTagsById[selectedTask.id].map((tag) => <Badge key={tag} tone="accent">{tag}</Badge>)
-                  ) : (
-                    <span className="text-xs text-app-muted">{t('tasks.noTags')}</span>
-                  )}
-                </div>
-              </div>
-              <div className="grid gap-2 rounded-xl border app-control p-3">
-                <h3 className="text-sm font-semibold text-app">{t('tasks.notes')}</h3>
-                <Textarea
-                  value={taskNotesById[selectedTask.id] ?? ''}
-                  onChange={(event) => setTaskNotesById((current) => ({ ...current, [selectedTask.id]: event.target.value }))}
-                  placeholder={t('tasks.notesPlaceholder')}
-                  className="min-h-24"
-                />
-              </div>
-              <div className="grid gap-3 rounded-xl border app-control p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-app">{t('tasks.collection')}</h3>
-                  <span className="text-xs text-app-muted">{t('tasks.collectionHint')}</span>
-                </div>
-                <Select
-                  value={taskCollectionsById[selectedTask.id] ?? 'none'}
-                  onValueChange={(value) => assignTaskCollection(selectedTask.id, value)}
-                  options={[
-                    { value: 'none', label: t('tasks.noCollection') },
-                    ...collections.map((collection) => ({ value: collection, label: collection })),
-                  ]}
-                />
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <Input
-                    value={newCollectionName}
-                    onChange={(event) => setNewCollectionName(event.target.value)}
-                    placeholder={t('tasks.collectionPlaceholder')}
-                  />
-                  <Button size="sm" variant="secondary" onClick={() => createCollectionForTask(selectedTask.id)}>
-                    <Folder className="size-4" />
-                    {t('tasks.createCollection')}
-                  </Button>
-                </div>
-              </div>
-              {(selectedTask.error || selectedTask.status === 'failed' || selectedTask.status === 'failed_resumable') && (
-                <ErrorDiagnosticsPanel
-                  task={selectedTask}
-                  diagnostics={diagnosticsQuery.data ?? []}
-                  logs={logsQuery.data ?? []}
-                  onRetry={() => retry.mutate(selectedTask.id)}
-                  onRetryChunks={() => retryChunks.mutate(selectedTask.id)}
-                />
-              )}
-              {selectedTask.status === 'completed' && selectedTask.segments.length > 0 && (
-                <Button asChild variant="secondary" className="w-fit">
-                  <Link to="/ai" search={{ task: selectedTask.id }}>
-                    <BrainCircuit className="size-4" />
-                    {t('tasks.aiProofreading')}
-                  </Link>
-                </Button>
-              )}
-              {selectedTask.status === 'completed' && selectedTask.segments.length > 0 && (
-                <Button asChild variant="secondary" className="w-fit">
-                  <Link to="/ai" search={{ task: selectedTask.id, mode: 'translation' }}>
-                    <BrainCircuit className="size-4" />{t('translation.title')}
-                  </Link>
-                </Button>
-              )}
               {selectedTask.status === 'completed' && (
                 <div className="grid gap-3 rounded-xl border app-control p-3">
                   <div className="flex items-center justify-between gap-3">
@@ -695,22 +627,108 @@ export function TasksPage() {
                   </div>
                 </div>
               )}
-              <div className="grid gap-2 rounded-xl border app-control p-3">
-                <h3 className="text-sm font-semibold text-app">{t('tasks.recentExports')}</h3>
-                {selectedRecentExports.length > 0 ? (
+              {selectedTask.status === 'completed' && selectedTask.segments.length > 0 && (
+                <div className="grid gap-2">
+                  <Button asChild variant="secondary" className="w-fit">
+                    <Link to="/ai" search={{ task: selectedTask.id }}>
+                      <BrainCircuit className="size-4" />
+                      {t('tasks.aiProofreading')}
+                    </Link>
+                  </Button>
+                  <Button asChild variant="secondary" className="w-fit">
+                    <Link to="/ai" search={{ task: selectedTask.id, mode: 'translation' }}>
+                      <BrainCircuit className="size-4" />{t('translation.title')}
+                    </Link>
+                  </Button>
+                </div>
+              )}
+              <details className="group rounded-xl border app-control">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
+                  <span>{t('tasks.tagsAndNotes')}</span>
+                  <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="grid gap-3 border-t app-border p-3">
                   <div className="grid gap-2">
-                    {selectedRecentExports.map((item, index) => (
-                      <div key={`${item.taskId}-${item.format}-${item.createdAt}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border app-border px-3 py-2 text-xs">
-                        <span className="truncate text-app">{item.filename}.{item.format}</span>
-                        <span className="shrink-0 text-app-muted">{formatDate(item.createdAt)}</span>
-                      </div>
-                    ))}
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-app">{t('tasks.tags')}</h3>
+                      <span className="text-xs text-app-muted">{t('tasks.tagsHint')}</span>
+                    </div>
+                    <Input
+                      value={(taskTagsById[selectedTask.id] ?? []).join(', ')}
+                      onChange={(event) => setTaskTags(selectedTask.id, event.target.value)}
+                      placeholder={t('tasks.tagsPlaceholder')}
+                    />
+                    <div className="flex min-h-6 flex-wrap gap-2">
+                      {(taskTagsById[selectedTask.id] ?? []).length > 0 ? (
+                        taskTagsById[selectedTask.id].map((tag) => <Badge key={tag} tone="accent">{tag}</Badge>)
+                      ) : (
+                        <span className="text-xs text-app-muted">{t('tasks.noTags')}</span>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-app-muted">{t('tasks.noRecentExports')}</p>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 rounded-xl border app-control p-3">
+                  <div className="grid gap-2">
+                    <h3 className="text-sm font-semibold text-app">{t('tasks.notes')}</h3>
+                    <Textarea
+                      value={taskNotesById[selectedTask.id] ?? ''}
+                      onChange={(event) => setTaskNotesById((current) => ({ ...current, [selectedTask.id]: event.target.value }))}
+                      placeholder={t('tasks.notesPlaceholder')}
+                      className="min-h-24"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-app">{t('tasks.collection')}</h3>
+                      <span className="text-xs text-app-muted">{t('tasks.collectionHint')}</span>
+                    </div>
+                    <Select
+                      value={taskCollectionsById[selectedTask.id] ?? 'none'}
+                      onValueChange={(value) => assignTaskCollection(selectedTask.id, value)}
+                      options={[
+                        { value: 'none', label: t('tasks.noCollection') },
+                        ...collections.map((collection) => ({ value: collection, label: collection })),
+                      ]}
+                    />
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <Input
+                        value={newCollectionName}
+                        onChange={(event) => setNewCollectionName(event.target.value)}
+                        placeholder={t('tasks.collectionPlaceholder')}
+                      />
+                      <Button size="sm" variant="secondary" onClick={() => createCollectionForTask(selectedTask.id)}>
+                        <Folder className="size-4" />
+                        {t('tasks.createCollection')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+              <details className="group rounded-xl border app-control" open={Boolean(selectedTask.error)}>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
+                  <span>{t('tasks.timeline')}</span>
+                  <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="grid gap-3 border-t app-border p-3">
+                  {(selectedTask.error || selectedTask.status === 'failed' || selectedTask.status === 'failed_resumable') && (
+                    <ErrorDiagnosticsPanel
+                      task={selectedTask}
+                      diagnostics={diagnosticsQuery.data ?? []}
+                      logs={logsQuery.data ?? []}
+                      onRetry={() => retry.mutate(selectedTask.id)}
+                      onRetryChunks={() => retryChunks.mutate(selectedTask.id)}
+                    />
+                  )}
+                  <TaskTimeline
+                    diagnostics={diagnosticsQuery.data}
+                    logs={logsQuery.data}
+                    versions={versionsQuery.data}
+                    quality={qualityQuery.data}
+                    currentText={selectedTask.text}
+                    value={timelineTab}
+                    onValueChange={setTimelineTab}
+                  />
+                </div>
+              </details>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant={favoriteTaskIds.includes(selectedTask.id) ? 'primary' : 'secondary'}
@@ -781,23 +799,32 @@ export function TasksPage() {
                   </Button>
                 </ConfirmAction>
               </div>
-              <section className="grid gap-3 rounded-xl border app-control p-3">
-                <h3 className="text-sm font-semibold text-app">{t('tasks.timeline')}</h3>
-                <TaskTimeline
-                  diagnostics={diagnosticsQuery.data}
-                  logs={logsQuery.data}
-                  versions={versionsQuery.data}
-                  quality={qualityQuery.data}
-                  currentText={selectedTask.text}
-                  value={timelineTab}
-                  onValueChange={setTimelineTab}
-                />
-              </section>
-                </div>
-              </details>
+              <div className="grid gap-2">
+                <h3 className="text-sm font-semibold text-app">{t('tasks.recentExports')}</h3>
+                {selectedRecentExports.length > 0 ? (
+                  <div className="grid gap-2">
+                    {selectedRecentExports.map((item, index) => (
+                      <div key={`${item.taskId}-${item.format}-${item.createdAt}-${index}`} className="flex items-center justify-between gap-3 rounded-lg border app-border px-3 py-2 text-xs">
+                        <span className="truncate text-app">{item.filename}.{item.format}</span>
+                        <span className="shrink-0 text-app-muted">{formatDate(item.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-app-muted">{t('tasks.noRecentExports')}</p>
+                )}
+              </div>
             </div>
           </aside>
         </div>
+      ) : (
+        <Panel className="hidden xl:grid place-items-center">
+          <EmptyState
+            title={t('tasks.inspectorEmptyTitle')}
+            body={t('tasks.inspectorEmptyBody')}
+            icon={<FileAudio className="size-5" />}
+          />
+        </Panel>
       )}
     </section>
   );

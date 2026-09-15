@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { friendlyErrorMessage } from '../../lib/errorMessages';
 
-export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn('app-panel rounded-xl border', className)}>{children}</section>;
+export function Panel({ className, children, ...rest }: React.ComponentPropsWithoutRef<'section'>) {
+  return <section className={cn('app-panel rounded-xl border', className)} {...rest}>{children}</section>;
 }
 
 export function PanelHeader({

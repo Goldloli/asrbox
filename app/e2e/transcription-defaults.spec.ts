@@ -66,6 +66,8 @@ const stubSettings = (page: import('@playwright/test').Page, settings: Record<st
     return route.fulfill({ json: settings });
   });
 
+const field = (scope: import('@playwright/test').Page, label: string) => scope.locator('label').filter({ has: scope.getByText(label, { exact: true }) }).first();
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((url) => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
@@ -79,10 +81,9 @@ test('transcribe page preselects saved default local model and language', async 
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(0)).toContainText('Local model');
-  await expect(combos.nth(1)).toContainText('Qwen3 ASR 0.6B');
-  await expect(combos.nth(2)).toContainText('Auto detect');
+  await expect(field(page, 'Backend').getByRole('combobox')).toContainText('Local model');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Qwen3 ASR 0.6B');
+  await expect(field(page, 'Language').getByRole('combobox')).toContainText('Auto detect');
 });
 
 test('transcribe page preselects saved default provider', async ({ page }) => {
@@ -103,9 +104,7 @@ test('transcribe page preselects saved default provider', async ({ page }) => {
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(0)).toContainText('Provider');
-  await expect(combos.nth(1)).toContainText('Test Online');
+  await expect(field(page, 'Provider').getByRole('combobox')).toContainText('Test Online');
 });
 
 test('transcribe page falls back when the saved default model is unavailable', async ({ page }) => {
@@ -115,9 +114,8 @@ test('transcribe page falls back when the saved default model is unavailable', a
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(1)).toContainText('Whisper Base');
-  await expect(combos.nth(2)).toContainText('Chinese Simplified');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Whisper Base');
+  await expect(field(page, 'Language').getByRole('combobox')).toContainText('Chinese Simplified');
 });
 
 test('settings page saves default model with linked backend and clears via auto', async ({ page }) => {

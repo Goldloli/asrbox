@@ -5,7 +5,7 @@ import { CheckCircle2, Circle, DownloadCloud, FileAudio, Files, Loader2, Play, P
 import { apiClient, type TranscriptionPreflight } from '../lib/api';
 import { queryKeys, useModelsQuery, useProvidersQuery, useReadinessQuery, useSettingsQuery, useTasksQuery } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, ErrorState, Field, Panel, PanelHeader, Progress, Select, Tooltip, TooltipContent, TooltipTrigger } from '../components/weiui';
+import { Badge, Button, ContentSection, ErrorState, Field, PageTitle, Panel, Progress, RowItem, RowList, Select, Tooltip, TooltipContent, TooltipTrigger } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { TranscriptViewer } from '../components/TranscriptViewer';
 import { StatusPill } from '../components/StatusPill';
@@ -285,19 +285,18 @@ export function TranscribePage() {
   ];
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_340px]">
-      <Panel className="flex flex-col overflow-hidden">
-        <PanelHeader
-          eyebrow="Input"
-          title={t('transcribe.title')}
-          description={t('transcribe.description')}
-          action={
-            <Button variant="ghost" size="icon" onClick={() => tasksQuery.refetch()} title={t('common.refresh')} aria-label={t('common.refresh')}>
-              <RefreshCw className="size-4" />
-            </Button>
-          }
-        />
-        <div className="flex flex-1 flex-col gap-3 p-4 sm:gap-4 sm:p-5">
+    <section className="grid gap-5">
+      <PageTitle
+        title={t('transcribe.title')}
+        description={t('transcribe.description')}
+        action={
+          <Button variant="ghost" size="icon" onClick={() => tasksQuery.refetch()} title={t('common.refresh')} aria-label={t('common.refresh')}>
+            <RefreshCw className="size-4" />
+          </Button>
+        }
+      />
+      <Panel className="overflow-hidden">
+        <div className="flex flex-col gap-4 p-4 sm:p-5">
           <label
             className={cn(
               'grid min-h-28 cursor-pointer place-items-center rounded-xl border border-dashed app-control px-4 py-4 text-center transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)] sm:min-h-36 sm:py-6',
@@ -358,28 +357,84 @@ export function TranscribePage() {
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    variant="secondary"
-                    onClick={() => preflightMutation.mutate()}
-                    disabled={selectedFileCount === 0 || preflightMutation.isPending}
-                    className="w-full"
-                    title={selectedFileCount === 0 ? t('transcribe.preflightDisabled') : t('transcribe.preflightHelp')}
-                  >
-                    <ShieldAlert className="size-4" />
-                    {t('transcribe.preflight')}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>{selectedFileCount > 0 ? t('transcribe.preflightHelp') : t('transcribe.preflightDisabled')}</TooltipContent>
-            </Tooltip>
-            <Button onClick={() => createMutation.mutate()} disabled={selectedFileCount === 0 || createMutation.isPending || selectedModelIncompatible}>
-              <Play className="size-4" />
-              {createMutation.isPending ? t('transcribe.starting') : selectedFileCount > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
-            </Button>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+            {backend === 'local' ? (
+              <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
+                <Select
+                  value={modelName}
+                  onValueChange={(value) => {
+                    defaultsDirtyRef.current.model = true;
+                    setModelName(value);
+                  }}
+                  options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
+                    value: model.model_name,
+                    label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
+                    disabled: 'compatible' in model && model.compatible === false,
+                  }))}
+                />
+              </Field>
+            ) : (
+              <Field label={t('transcribe.provider')}>
+                <Select
+                  value={providerId || 'none'}
+                  onValueChange={(value) => {
+                    defaultsDirtyRef.current.provider = true;
+                    setProviderId(value === 'none' ? '' : value);
+                  }}
+                  options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
+                    value: provider.id,
+                    label: provider.name,
+                    disabled: provider.id === 'none',
+                  }))}
+                />
+              </Field>
+            )}
+            <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
+              <Select
+                value={language}
+                onValueChange={(value) => {
+                  defaultsDirtyRef.current.language = true;
+                  setLanguage(normalizeLanguageValue(value));
+                }}
+                options={languageOptions(locale)}
+              />
+            </Field>
+            <Field label={t('transcribe.backend')}>
+              <Select
+                value={backend}
+                onValueChange={(value) => {
+                  defaultsDirtyRef.current.backend = true;
+                  setBackend(value);
+                }}
+                options={[
+                  { value: 'local', label: t('transcribe.localModel') },
+                  { value: 'provider', label: t('transcribe.providerBackend') },
+                ]}
+              />
+            </Field>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => preflightMutation.mutate()}
+                      disabled={selectedFileCount === 0 || preflightMutation.isPending}
+                      title={selectedFileCount === 0 ? t('transcribe.preflightDisabled') : t('transcribe.preflightHelp')}
+                      aria-label={t('transcribe.preflight')}
+                    >
+                      <ShieldAlert className="size-4" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{selectedFileCount > 0 ? t('transcribe.preflightHelp') : t('transcribe.preflightDisabled')}</TooltipContent>
+              </Tooltip>
+              <Button onClick={() => createMutation.mutate()} disabled={selectedFileCount === 0 || createMutation.isPending || selectedModelIncompatible} className="h-10 flex-1 px-6 lg:flex-none">
+                <Play className="size-4" />
+                {createMutation.isPending ? t('transcribe.starting') : selectedFileCount > 1 ? t('transcribe.startBatch') : t('transcribe.start')}
+              </Button>
+            </div>
           </div>
 
           {uploadProgress !== null && (
@@ -449,9 +504,10 @@ export function TranscribePage() {
             </div>
           )}
 
-          {tasks.length > 0 && <div className="flex min-h-0 flex-1 flex-col gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-app">{t('transcribe.recentTasks')}</h2>
+          {tasks.length > 0 && <ContentSection
+            className="min-h-0 flex-1"
+            title={t('transcribe.recentTasks')}
+            action={
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {tasks.length > recentTasks.length && (
                   <Button asChild variant="ghost" size="sm">
@@ -483,27 +539,30 @@ export function TranscribePage() {
                   </Button>
                 </ConfirmAction>
               </div>
+            }
+          >
+            <div className="max-h-[36vh] overflow-auto pr-1 xl:max-h-[46vh]">
+              <RowList>
+                {recentTasks.map((task) => (
+                  <RowItem key={task.id} active={selectedTask?.id === task.id} className="w-full items-start sm:items-center">
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setSelectedTaskId(task.id)}
+                    >
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="truncate text-sm font-medium text-app">{task.filename}</span>
+                        <StatusPill status={task.status} />
+                      </div>
+                      <span className="mt-1 block truncate text-xs text-app-muted">
+                        {task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}
+                      </span>
+                      {activeTaskStatuses.has(task.status) && <Progress className="mt-2" value={task.progress} />}
+                    </button>
+                  </RowItem>
+                ))}
+              </RowList>
             </div>
-            <div className="grid max-h-[36vh] min-h-0 flex-1 gap-2 overflow-auto pr-1 xl:max-h-none">
-              {recentTasks.map((task) => (
-                <button
-                  key={task.id}
-                  className={cn(
-                    'grid gap-2 rounded-xl border px-3 py-3 text-left transition hover:border-[color:var(--app-accent)] hover:bg-[var(--app-accent-soft)]',
-                    selectedTask?.id === task.id ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
-                  )}
-                  onClick={() => setSelectedTaskId(task.id)}
-                >
-                  <div className="flex min-w-0 items-center justify-between gap-3">
-                    <span className="truncate text-sm font-medium text-app">{task.filename}</span>
-                    <StatusPill status={task.status} />
-                  </div>
-                  <Progress value={task.progress} />
-                  <span className="text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatPercent(task.progress)}</span>
-                </button>
-              ))}
-            </div>
-          </div>}
+          </ContentSection>}
         </div>
       </Panel>
 
@@ -514,68 +573,7 @@ export function TranscribePage() {
         onDownloadFormat={(format) => void downloadQuickResult(format)}
       />
 
-      <div className="grid content-start gap-4">
-        <Panel className="overflow-hidden">
-          <PanelHeader eyebrow={t('transcribe.engine')} title={t('transcribe.runOptions')} description={t('transcribe.runDescription')} />
-          <div className="grid gap-4 p-5">
-            <Field label={t('transcribe.backend')}>
-              <Select
-                value={backend}
-                onValueChange={(value) => {
-                  defaultsDirtyRef.current.backend = true;
-                  setBackend(value);
-                }}
-                options={[
-                  { value: 'local', label: t('transcribe.localModel') },
-                  { value: 'provider', label: t('transcribe.providerBackend') },
-                ]}
-              />
-            </Field>
-            {backend === 'local' ? (
-              <Field label={t('transcribe.model')} hint={t('models.deviceSupportHint')}>
-                <Select
-                  value={modelName}
-                  onValueChange={(value) => {
-                    defaultsDirtyRef.current.model = true;
-                    setModelName(value);
-                  }}
-                  options={(models.length ? models : [{ model_name: modelName, display_name: modelName, supported_devices: [] }]).map((model) => ({
-                    value: model.model_name,
-                    label: `${model.display_name} · ${t(modelDeviceSummaryKey(model.supported_devices))}${'downloaded' in model && model.downloaded === false ? ` · ${t('transcribe.notDownloaded')}` : ''}${'compatible' in model && model.compatible === false ? ` · ${t('common.incompatible')}` : ''}`,
-                    disabled: 'compatible' in model && model.compatible === false,
-                  }))}
-                />
-              </Field>
-            ) : (
-              <Field label={t('transcribe.provider')}>
-                <Select
-                  value={providerId || 'none'}
-                  onValueChange={(value) => {
-                    defaultsDirtyRef.current.provider = true;
-                    setProviderId(value === 'none' ? '' : value);
-                  }}
-                  options={(providers.length ? providers : [{ id: 'none', name: t('transcribe.noProviders'), enabled: false }]).map((provider) => ({
-                    value: provider.id,
-                    label: provider.name,
-                    disabled: provider.id === 'none',
-                  }))}
-                />
-              </Field>
-            )}
-            <Field label={t('transcribe.language')} hint={t('transcribe.languageHint')}>
-              <Select
-                value={language}
-                onValueChange={(value) => {
-                  defaultsDirtyRef.current.language = true;
-                  setLanguage(normalizeLanguageValue(value));
-                }}
-                options={languageOptions(locale)}
-              />
-            </Field>
-          </div>
-        </Panel>
-        <div ref={setAudioPlayerHost} className="app-panel sticky top-4 rounded-xl border p-5 empty:hidden" />
-      </div>
+      <div ref={setAudioPlayerHost} className="app-panel sticky top-4 rounded-xl border p-5 empty:hidden" />
     </section>
   );
 }

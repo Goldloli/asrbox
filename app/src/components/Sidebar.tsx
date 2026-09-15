@@ -1,5 +1,5 @@
 import { Link, useMatchRoute, useNavigate } from '@tanstack/react-router';
-import { BrainCircuit, DownloadCloud, ListChecks, Mic2, Settings } from 'lucide-react';
+import { BrainCircuit, DownloadCloud, LayoutGrid, ListChecks, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
@@ -9,7 +9,7 @@ import { useUiStore } from '../stores/uiStore';
 import { useAppUpdateStore } from '../stores/appUpdateStore';
 
 const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: LucideIcon }> = [
-  { to: '/', labelKey: 'nav.transcribe', icon: Mic2 },
+  { to: '/', labelKey: 'nav.transcribe', icon: LayoutGrid },
   { to: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
   { to: '/ai', labelKey: 'nav.ai', icon: BrainCircuit },
   { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
@@ -30,29 +30,33 @@ export function Sidebar() {
   const appVersion = `v${version}`;
 
   return (
-    <aside className={cn(
-      'app-shell-surface hidden h-dvh shrink-0 flex-col border-r app-border px-3 py-4 md:flex',
-      expanded ? 'w-52 items-stretch' : 'w-20 items-center',
-    )}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Link
-            to="/"
-            aria-label={t('nav.home')}
-            className="grid size-12 place-items-center overflow-hidden rounded-[14px] shadow-lg shadow-[var(--app-shadow)] ring-1 ring-[var(--app-border)] transition hover:scale-[1.02] hover:ring-[var(--app-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]"
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              navigate({ to: '/' });
-            }}
-          >
-            <img src={asrboxIcon} alt="" className="size-full object-cover" />
-          </Link>
-        </TooltipTrigger>
-        <TooltipContent>{t('nav.home')}</TooltipContent>
-      </Tooltip>
-      {expanded && <p className="mt-3 px-1 text-sm font-semibold text-app">ASRbox</p>}
-      <nav className={cn('mt-8 flex flex-1 flex-col gap-2', expanded ? 'items-stretch' : 'items-center')}>
+    <aside
+      data-testid="app-sidebar"
+      data-mode={sidebarMode}
+      className={cn(
+        'app-shell-surface hidden h-dvh shrink-0 flex-col border-r app-border px-3 py-4 md:flex',
+        expanded ? 'w-60 items-stretch' : 'w-16 items-center',
+      )}
+    >
+      <Link
+        to="/"
+        aria-label={t('nav.home')}
+        className={cn('flex items-center gap-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30', expanded ? 'px-1 py-1' : 'justify-center')}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          navigate({ to: '/' });
+        }}
+      >
+        <img src={asrboxIcon} alt="" className="size-10 shrink-0 rounded-xl shadow-sm ring-1 ring-[var(--app-border)]" />
+        {expanded && (
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-app">ASRbox</span>
+            <span className="block truncate text-xs text-app-muted">{t('app.subtitle')}</span>
+          </span>
+        )}
+      </Link>
+      <nav className={cn('mt-6 flex flex-1 flex-col gap-1', expanded ? 'items-stretch' : 'items-center')}>
         {nav.map((item) => {
           const Icon = item.icon;
           const active =
@@ -64,18 +68,18 @@ export function Sidebar() {
               <TooltipTrigger asChild>
                 <Link
                   to={item.to}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'relative rounded-xl border text-app-muted transition hover:border-[var(--app-border-strong)] hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[var(--app-accent)]/30',
-                    expanded ? 'flex h-11 items-center gap-3 px-3' : 'grid size-11 place-items-center',
-                    active
-                      ? 'border-[var(--app-accent)] bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] shadow-inner shadow-[var(--app-shadow)]'
-                      : 'border-transparent',
+                    'relative rounded-lg text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30',
+                    expanded ? 'flex h-10 items-center gap-3 px-3' : 'grid size-10 place-items-center',
+                    active && 'bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] hover:bg-[var(--app-accent-soft)]',
                   )}
                 >
-                  <Icon size={20} strokeWidth={1.8} />
+                  {active && <span aria-hidden className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--app-accent)]" />}
+                  <Icon size={18} strokeWidth={1.8} />
                   {expanded && <span className="text-sm font-medium">{t(item.labelKey)}</span>}
                   {item.to === '/settings' && hasUpdate && (
-                    <span className={cn('absolute size-2 rounded-full bg-[var(--app-accent)]', expanded ? 'right-3 top-2.5' : 'right-1.5 top-1.5')} aria-label={t('about.newVersion')} />
+                    <span className={cn('absolute size-2 rounded-full bg-[var(--app-accent)]', expanded ? 'right-3 top-2' : 'right-1.5 top-1.5')} aria-label={t('about.newVersion')} />
                   )}
                 </Link>
               </TooltipTrigger>
@@ -84,17 +88,12 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={cn(
-            'mb-1 whitespace-nowrap rounded-lg border app-control px-2 py-1.5 text-[10px] font-semibold uppercase text-app-muted',
-            expanded ? 'text-center tracking-[0.04em]' : 'min-w-11 text-center tracking-[0.08em]',
-          )}>
-            {expanded ? `${appVersion} · Local` : appVersion}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>{`ASRbox ${appVersion}`}</TooltipContent>
-      </Tooltip>
+      <div className={cn('grid gap-1', expanded ? 'px-1' : 'justify-items-center')}>
+        <span className={cn('whitespace-nowrap rounded-md border app-control px-2 py-1 text-[10px] font-semibold text-app-muted', expanded ? 'text-left tracking-[0.04em]' : 'text-center')}>
+          {expanded ? `${appVersion} · Local` : appVersion}
+        </span>
+        {expanded && <p className="whitespace-nowrap text-[11px] text-app-faint">{t('app.tagline')}</p>}
+      </div>
     </aside>
   );
 }
