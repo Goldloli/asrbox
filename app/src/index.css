@@ -11,30 +11,36 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  --app-bg: #f3f4f6;
-  --app-bg-soft: #e5e7eb;
-  --app-shell: #f8fafc;
-  --app-panel: rgba(255, 255, 255, 0.86);
+  /* Canvas and surfaces: one continuous canvas, solid layered surfaces. */
+  --app-bg: #f4f4f5;
+  --app-bg-soft: #ebebed;
+  --app-shell: #fafafa;
+  --app-panel: #ffffff;
   --app-panel-solid: #ffffff;
   --app-control: rgba(15, 23, 42, 0.04);
   --app-control-strong: rgba(15, 23, 42, 0.08);
-  --app-border: rgba(15, 23, 42, 0.12);
-  --app-border-strong: rgba(15, 23, 42, 0.2);
-  --app-text: #111827;
-  --app-text-soft: #374151;
-  --app-text-muted: #374151;
-  --app-text-faint: #4b5563;
-  --app-accent: #facc15;
-  --app-accent-soft: rgba(250, 204, 21, 0.14);
-  --app-accent-text: #713f12;
-  --app-accent-contrast: #111827;
-  --app-shadow: rgba(15, 23, 42, 0.1);
-  --app-overlay: rgba(15, 23, 42, 0.44);
+  /* Text and borders. */
+  --app-border: rgba(15, 23, 42, 0.1);
+  --app-border-strong: rgba(15, 23, 42, 0.18);
+  --app-text: #18181b;
+  --app-text-soft: #3f3f46;
+  --app-text-muted: #71717a;
+  --app-text-faint: #a1a1aa;
+  /* Accent (default orange) and fixed semantic states. */
+  --app-accent: #f59e0b;
+  --app-accent-hover: #d97706;
+  --app-accent-soft: rgba(245, 158, 11, 0.15);
+  --app-accent-text: #b45309;
+  --app-accent-contrast: #231a07;
+  --app-shadow: rgba(15, 23, 42, 0.08);
+  --app-overlay: rgba(24, 24, 27, 0.44);
   --app-switch-thumb: #ffffff;
   --app-danger: #dc2626;
   --app-danger-soft: rgba(220, 38, 38, 0.1);
   --app-success: #047857;
   --app-success-soft: rgba(4, 120, 87, 0.1);
+  --app-warning: #b45309;
+  --app-warning-soft: rgba(180, 83, 9, 0.1);
   color-scheme: light;
   background: var(--app-bg);
   color: var(--app-text);
@@ -45,31 +51,148 @@
 }
 
 [data-theme="dark"] {
-  --app-bg: #09090b;
-  --app-bg-soft: #050506;
-  --app-shell: #09090b;
-  --app-panel: rgba(24, 24, 27, 0.72);
-  --app-panel-solid: #09090b;
-  --app-control: rgba(255, 255, 255, 0.06);
-  --app-control-strong: rgba(255, 255, 255, 0.1);
-  --app-border: rgba(255, 255, 255, 0.1);
-  --app-border-strong: rgba(255, 255, 255, 0.18);
+  --app-bg: #14171a;
+  --app-bg-soft: #0e1013;
+  --app-shell: #0e1013;
+  --app-panel: #1a1d24;
+  --app-panel-solid: #1a1d24;
+  --app-control: rgba(255, 255, 255, 0.05);
+  --app-control-strong: rgba(255, 255, 255, 0.09);
+  --app-border: rgba(255, 255, 255, 0.09);
+  --app-border-strong: rgba(255, 255, 255, 0.16);
   --app-text: #f4f4f5;
   --app-text-soft: #d4d4d8;
   --app-text-muted: #a1a1aa;
-  --app-text-faint: #52525b;
-  --app-accent: #fcd34d;
-  --app-accent-soft: rgba(252, 211, 77, 0.14);
-  --app-accent-text: #fef3c7;
-  --app-accent-contrast: #18181b;
-  --app-shadow: rgba(0, 0, 0, 0.28);
+  --app-text-faint: #6b6f76;
+  --app-accent: #fbbf24;
+  --app-accent-hover: #f59e0b;
+  --app-accent-soft: rgba(251, 191, 36, 0.16);
+  --app-accent-text: #fcd34d;
+  --app-accent-contrast: #231a07;
+  --app-shadow: rgba(0, 0, 0, 0.36);
   --app-overlay: rgba(0, 0, 0, 0.7);
   --app-switch-thumb: #e4e4e7;
   --app-danger: #fca5a5;
   --app-danger-soft: rgba(239, 68, 68, 0.12);
   --app-success: #6ee7b7;
   --app-success-soft: rgba(52, 211, 153, 0.12);
+  --app-warning: #fcd34d;
+  --app-warning-soft: rgba(251, 191, 36, 0.12);
   color-scheme: dark;
+}
+
+/* Accent palettes: only brand-interaction colors change; success, warning,
+   danger and offline states keep their fixed semantic meaning. */
+:root[data-accent="blue"] {
+  --app-accent: #2563eb;
+  --app-accent-hover: #1d4ed8;
+  --app-accent-soft: rgba(37, 99, 235, 0.12);
+  --app-accent-text: #1d4ed8;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="blue"] {
+  --app-accent: #60a5fa;
+  --app-accent-hover: #3b82f6;
+  --app-accent-soft: rgba(96, 165, 250, 0.16);
+  --app-accent-text: #93c5fd;
+  --app-accent-contrast: #0b1220;
+}
+
+:root[data-accent="purple"] {
+  --app-accent: #7c3aed;
+  --app-accent-hover: #6d28d9;
+  --app-accent-soft: rgba(124, 58, 237, 0.12);
+  --app-accent-text: #6d28d9;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="purple"] {
+  --app-accent: #a78bfa;
+  --app-accent-hover: #8b5cf6;
+  --app-accent-soft: rgba(167, 139, 250, 0.16);
+  --app-accent-text: #c4b5fd;
+  --app-accent-contrast: #1f1147;
+}
+
+:root[data-accent="pink"] {
+  --app-accent: #db2777;
+  --app-accent-hover: #be185d;
+  --app-accent-soft: rgba(219, 39, 119, 0.12);
+  --app-accent-text: #be185d;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="pink"] {
+  --app-accent: #f472b6;
+  --app-accent-hover: #ec4899;
+  --app-accent-soft: rgba(244, 114, 182, 0.16);
+  --app-accent-text: #f9a8d4;
+  --app-accent-contrast: #3d0a24;
+}
+
+:root[data-accent="red"] {
+  --app-accent: #dc2626;
+  --app-accent-hover: #b91c1c;
+  --app-accent-soft: rgba(220, 38, 38, 0.12);
+  --app-accent-text: #b91c1c;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="red"] {
+  --app-accent: #f87171;
+  --app-accent-hover: #ef4444;
+  --app-accent-soft: rgba(248, 113, 113, 0.16);
+  --app-accent-text: #fca5a5;
+  --app-accent-contrast: #400a0a;
+}
+
+:root[data-accent="green"] {
+  --app-accent: #16a34a;
+  --app-accent-hover: #15803d;
+  --app-accent-soft: rgba(22, 163, 74, 0.13);
+  --app-accent-text: #15803d;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="green"] {
+  --app-accent: #4ade80;
+  --app-accent-hover: #22c55e;
+  --app-accent-soft: rgba(74, 222, 128, 0.15);
+  --app-accent-text: #86efac;
+  --app-accent-contrast: #052e12;
+}
+
+:root[data-accent="cyan"] {
+  --app-accent: #0891b2;
+  --app-accent-hover: #0e7490;
+  --app-accent-soft: rgba(8, 145, 178, 0.13);
+  --app-accent-text: #0e7490;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="cyan"] {
+  --app-accent: #22d3ee;
+  --app-accent-hover: #06b6d4;
+  --app-accent-soft: rgba(34, 211, 238, 0.15);
+  --app-accent-text: #67e8f9;
+  --app-accent-contrast: #062a33;
+}
+
+:root[data-accent="gray"] {
+  --app-accent: #52525b;
+  --app-accent-hover: #3f3f46;
+  --app-accent-soft: rgba(82, 82, 91, 0.12);
+  --app-accent-text: #3f3f46;
+  --app-accent-contrast: #ffffff;
+}
+
+[data-theme="dark"][data-accent="gray"] {
+  --app-accent: #a1a1aa;
+  --app-accent-hover: #71717a;
+  --app-accent-soft: rgba(161, 161, 170, 0.16);
+  --app-accent-text: #d4d4d8;
+  --app-accent-contrast: #18181b;
 }
 
 * {
@@ -82,9 +205,7 @@ body,
   min-width: 320px;
   min-height: 100%;
   margin: 0;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--app-accent) 12%, transparent), transparent 34rem),
-    linear-gradient(180deg, var(--app-shell) 0%, var(--app-bg) 55%, var(--app-bg-soft) 100%);
+  background: var(--app-bg);
 }
 
 .app-bg {
@@ -93,13 +214,13 @@ body,
 }
 
 .app-shell-surface {
-  background: color-mix(in srgb, var(--app-shell) 95%, transparent);
+  background: var(--app-shell);
 }
 
 .app-panel {
   border-color: var(--app-border);
   background: var(--app-panel);
-  box-shadow: 0 24px 80px var(--app-shadow);
+  box-shadow: 0 1px 2px var(--app-shadow);
 }
 
 .app-border {
@@ -187,7 +308,7 @@ a {
 }
 
 ::selection {
-  background: rgba(252, 211, 77, 0.32);
+  background: color-mix(in srgb, var(--app-accent) 30%, transparent);
 }
 
 ::-webkit-scrollbar {

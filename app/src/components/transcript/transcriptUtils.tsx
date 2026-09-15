@@ -98,7 +98,7 @@ export function drawAudioWaveform(canvas: HTMLCanvasElement, buffer: AudioBuffer
   context.clearRect(0, 0, width, height);
 
   const styles = getComputedStyle(document.documentElement);
-  context.strokeStyle = styles.getPropertyValue('--app-accent').trim() || '#facc15';
+  context.strokeStyle = styles.getPropertyValue('--app-accent').trim() || '#f59e0b';
   context.lineWidth = Math.max(1, pixelRatio);
   context.beginPath();
 

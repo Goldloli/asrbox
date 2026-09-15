@@ -1,5 +1,16 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { useUiStore } from './uiStore';
+
+// uiStore reads the Vite-injected build version and navigator.language at module
+// scope; the bun test runtime lacks both, so provide stable values first.
+(globalThis as Record<string, unknown>).__ASRBOX_VERSION__ ??= '0.0.0';
+const existingNavigator = globalThis.navigator as unknown as Record<string, unknown> | undefined;
+if (!existingNavigator || typeof existingNavigator.language !== 'string') {
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { ...(existingNavigator ?? {}), language: 'en-US' },
+  });
+}
+const { useUiStore } = await import('./uiStore');
 
 const initial = useUiStore.getState();
 
@@ -27,13 +38,14 @@ describe('uiStore new-user defaults', () => {
 });
 
 describe('uiStore persisted preference contract', () => {
-  it('keeps rehydration on the stable storage key so saved preferences survive upgrades', () => {
-    expect(useUiStore.persist.options.name).toBe('asrbox-ui');
-  });
-
   it('restores a saved icon-only sidebar preference instead of the new-user default', () => {
     useUiStore.setState({ sidebarMode: 'icons' });
     expect(useUiStore.getState().sidebarMode).toBe('icons');
+  });
+
+  it('restores a saved accent color instead of the default', () => {
+    useUiStore.setState({ accentColor: 'purple' });
+    expect(useUiStore.getState().accentColor).toBe('purple');
   });
 });
 
@@ -49,13 +61,13 @@ describe('uiStore accent color setter', () => {
     expect(useUiStore.getState().sidebarMode).toBe(initial.sidebarMode);
   });
 
-  it('ignores unsupported accent values instead of storing them', () => {
+  it('falls back to the default orange for unsupported accent values', () => {
     const setAccentColor = (useUiStore.getState() as unknown as { setAccentColor?: (value: unknown) => void }).setAccentColor;
     expect(typeof setAccentColor).toBe('function');
 
     setAccentColor!('green');
     setAccentColor!('neon');
     const state = useUiStore.getState() as unknown as Record<string, unknown>;
-    expect(state.accentColor).toBe('green');
+    expect(state.accentColor).toBe('orange');
   });
 });

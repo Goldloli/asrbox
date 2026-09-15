@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { normalizeAccentColor, type AccentColor } from '../lib/appearance';
 
 export type Locale = 'zh' | 'en';
 export type ThemeMode = 'system' | 'dark' | 'light';
@@ -25,6 +26,7 @@ interface UiStore {
   sidebarMode: SidebarMode;
   fontScale: FontScale;
   reducedMotion: ReducedMotionMode;
+  accentColor: AccentColor;
   exportDirectory: string | null;
   lastLLMProviderId: string | null;
   updateChannel: UpdateChannel;
@@ -36,6 +38,7 @@ interface UiStore {
   setSidebarMode: (sidebarMode: SidebarMode) => void;
   setFontScale: (fontScale: FontScale) => void;
   setReducedMotion: (reducedMotion: ReducedMotionMode) => void;
+  setAccentColor: (accent: AccentColor) => void;
   setExportDirectory: (exportDirectory: string | null) => void;
   setLastLLMProviderId: (providerId: string | null) => void;
   setUpdateChannel: (channel: UpdateChannel) => void;
@@ -49,9 +52,10 @@ export const useUiStore = create<UiStore>()(
       locale: detectLocale(),
       theme: 'system',
       density: 'comfortable',
-      sidebarMode: 'icons',
+      sidebarMode: 'expanded',
       fontScale: 'standard',
       reducedMotion: 'system',
+      accentColor: 'orange',
       exportDirectory: null,
       lastLLMProviderId: null,
       updateChannel: defaultUpdateChannel,
@@ -63,6 +67,7 @@ export const useUiStore = create<UiStore>()(
       setSidebarMode: (sidebarMode) => set({ sidebarMode }),
       setFontScale: (fontScale) => set({ fontScale }),
       setReducedMotion: (reducedMotion) => set({ reducedMotion }),
+      setAccentColor: (accentColor) => set({ accentColor: normalizeAccentColor(accentColor) }),
       setExportDirectory: (exportDirectory) => set({ exportDirectory }),
       setLastLLMProviderId: (lastLLMProviderId) => set({ lastLLMProviderId }),
       setUpdateChannel: (updateChannel) => set({ updateChannel }),
