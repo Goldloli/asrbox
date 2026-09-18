@@ -16,6 +16,7 @@ import os
 import sys
 
 _PRELOAD_COMPLETE = False
+_INSPECT_PATCHED = False
 
 
 def _preload_funasr_submodules() -> None:
@@ -47,6 +48,9 @@ def _patch_inspect_for_frozen_registry() -> None:
     """funasr's register decorator calls inspect.getsourcelines for metadata;
     frozen modules have no source files, so stub the fallback instead of
     letting the decorator abort every model-class import."""
+    global _INSPECT_PATCHED
+    if _INSPECT_PATCHED:
+        return
     import inspect
 
     original = inspect.getsourcelines
@@ -58,9 +62,16 @@ def _patch_inspect_for_frozen_registry() -> None:
             return (["# frozen module\n"], 0)
 
     inspect.getsourcelines = safe_getsourcelines
+    _INSPECT_PATCHED = True
 
 
 # Importing every FunASR registration module can take minutes in a frozen
 # build. Expose the loader to the application and run it only when a FunASR
 # model is actually selected, so the desktop health endpoint starts promptly.
 setattr(builtins, "_asrbox_preload_funasr_submodules", _preload_funasr_submodules)
+
+if getattr(sys, "_MEIPASS", None):
+    # The inspect shim is cheap and must be active before any plain
+    # `import funasr` (runtime capability probe, backend selection); only the
+    # heavy submodule preload above stays lazy.
+    _patch_inspect_for_frozen_registry()
