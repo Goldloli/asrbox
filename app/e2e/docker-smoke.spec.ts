@@ -38,8 +38,8 @@ test('container UI uses its own origin and keeps the token session-only', async 
 test('container UI remains usable at a mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/ai');
-  await expect(page.getByRole('heading', { name: 'AI', exact: true }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { name: '还没有转写任务', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'AI 工作台', exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: '选择一份字幕', exact: true }).first()).toBeVisible();
 
   const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
   expect(bodyWidth).toBeLessThanOrEqual(390);
