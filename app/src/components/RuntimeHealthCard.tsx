@@ -3,9 +3,11 @@ import type { RuntimeStatus } from '../lib/api';
 import { formatBytes } from '../lib/format';
 import { Badge, Panel, PanelHeader } from './weiui';
 import { useI18n } from '../lib/i18n';
+import { LocalizedTechnicalMessage } from './LocalizedTechnicalMessage';
+import { localizeRuntimeWarning } from '../lib/userMessages';
 
 export function RuntimeHealthCard({ runtime }: { runtime?: RuntimeStatus }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const checks = runtime
     ? [
         ['ffmpeg', runtime.ffmpeg_available],
@@ -41,9 +43,11 @@ export function RuntimeHealthCard({ runtime }: { runtime?: RuntimeStatus }) {
             {runtime.warnings.length > 0 && (
               <div className="grid gap-2">
                 {runtime.warnings.map((warning) => (
-                  <p key={warning} className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-sm text-app-accent">
-                    {warning}
-                  </p>
+                  <LocalizedTechnicalMessage
+                    key={warning}
+                    message={localizeRuntimeWarning(warning, locale)}
+                    className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-app-accent"
+                  />
                 ))}
               </div>
             )}

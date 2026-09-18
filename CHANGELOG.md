@@ -4,6 +4,47 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
+### Changed
+
+- Unified professional visual system across all pages: continuous light/dark surfaces replace translucent panels and full-screen gradients; dark theme is isomorphic to the light base layout.
+- The home page is a single creation workspace (file drop, model/language/backend row, one start action) above a divided recent-task list, with aligned parameter controls and full-width safe spacing.
+- The task center is a persistent three-region workspace on desktop (task list, player/transcript detail, task status inspector) with working recent/active/completed filters; narrow widths keep an overlay drawer.
+- Model management is now a compact row-based list with category filters, search, refresh, an expandable comparison ladder, details, download controls, and default-model linkage.
+- Settings tabs share consistent selected states and density; all switches keep a compact fixed size with accent-on/neutral-off tracks.
+- All user-visible messages — health center, runtime warnings, errors, validation, empty/loading/queued states, toasts, and confirm dialogs — render in the current interface language; stable error codes and warnings map to maintained Chinese/English copy, and unknown dynamic errors show a localized summary with the original text kept under technical details.
+- The AI workbench keeps proofreading, translation, and chat in one frame where each column scrolls inside its own region; the page itself never grows without bound.
+- The desktop sidebar shows text labels by default for new users; saved sidebar preferences are unchanged.
+- The release pipeline now assembles all platform assets first and generates one unified, basename-only `SHA256SUMS.txt` in the publish job, verified against the desktop updater's exact-name parsing contract — restoring in-app update downloads for installed v0.2.x clients (v0.2.1's per-platform manifests carried `./` prefixes the updater rejects).
+
+### Added
+
+- Edit subtitles mode in the task center: the transcript header gains an "Edit subtitles" view that keeps the read-only row layout (play-from-segment, time range, speaker badge) but makes every segment's text editable; saving submits one batch update and creates exactly one immutable `edit` version, while discard restores the saved text. Saving is disabled until something actually changed.
+- Segment playback padding under Settings → General: "play this sentence" previews can be padded by 0.5–3 seconds before and after the segment (default: strict timeline). The preference is persisted locally and included in frontend settings export/import.
+- Player bar takeover: pausing/resuming from the persistent player bar or scrubbing its progress control releases the segment bounds, so previewed audio keeps playing continuously until manually paused.
+- Per-suggestion audio preview in AI proofreading: each suggestion can play its source segment from its start and stops automatically at its end.
+- Proofreading runs persist the interface language they were created with, and all modification reasons — including split retries — stay in that language.
+- Configurable accent color (orange default; blue, purple, pink, red, green, cyan, gray) applied to primary actions, selection and focus; success/warning/danger states stay fixed. Included in frontend settings export/import.
+- "Set as default" on model rows writes the authoritative ASR setting and syncs the settings page and home preselection; a manually chosen model on an open home draft is not overwritten.
+- Correct brand icons for Ollama, Qwen and OpenAI providers/models with a generic fallback for unknown entries.
+- Global search gains a Cmd/Ctrl+K shortcut.
+- Release tooling gains a dependency-free `SHA256SUMS.txt` format validator (wired into `verify-release-assets.sh`) and version-agnostic fixtures proving the previous maintained client's parsing contract can consume the next Release.
+
+### Fixed
+
+- Home page result window is fixed-height with internal scrolling again; only SRT/TXT downloads are offered there.
+- Task center header buttons without behavior (search, duplicate play, more, close) are gone; long IDs and filenames no longer clip primary actions.
+- Player load/play/pause/seek/volume stay in sync with transcript segments, including frozen-backend Range playback of media on external volumes.
+- Model storage summaries and status scans of large model/cache directories run in the thread pool, so health checks and other requests stay responsive while a scan is in progress.
+- Local Ollama proofreading of long subtitles no longer stalls at zero progress or fails whole runs: bounded local batches with compact triple responses and a single-request deadline, deterministic halving retries on timeout, truncation, context overflow, or invalid structure, and visibly distinct queued vs. inferring states.
+- Long-subtitle translation sends fewer requests (64-segment / 6000-character safe first batch, compact ordered responses) while still verifying every target segment exists exactly once and auto-splitting abnormal batches instead of persisting incomplete results.
+- Chat sessions support binding one subtitle task or explicitly no binding, with the basis panel reflecting the choice.
+
+### Removed
+
+- The legacy segment editor in the task center (subtitle preview toggle, per-segment time/speaker forms, per-segment copy, find & replace, and full-text tools) is replaced by the new Edit subtitles mode; immutable transcript versioning underneath is unchanged.
+
 ## [0.2.1] - 2026-09-13
 ### Added
 
@@ -269,7 +310,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Goldloli/asrbox/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Goldloli/asrbox/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Goldloli/asrbox/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/Goldloli/asrbox/compare/v0.1.8...v0.1.9

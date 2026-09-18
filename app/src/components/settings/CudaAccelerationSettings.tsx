@@ -20,9 +20,11 @@ import { toastErrorMessage, useToast } from '../Toast';
 import { ConfirmAction } from '../ConfirmAction';
 import { Badge, Button, ErrorState, Panel, PanelHeader, Progress, Switch } from '../weiui';
 import { PathRow } from './SettingsHealth';
+import { localizedErrorPresentation } from '../../lib/errorMessages';
+import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
 
 export function CudaAccelerationSettings() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
   const query = useCudaAccelerationQuery();
@@ -224,7 +226,11 @@ export function CudaAccelerationSettings() {
 
           {!jobRunning && job?.status === 'failed' ? (
             <div className="grid gap-2 rounded-xl border app-control p-4">
-              <p className="break-words text-sm text-[var(--app-danger)]">{job.error ?? t('toast.actionFailed')}</p>
+              {job.error ? (
+                <LocalizedTechnicalMessage message={localizedErrorPresentation(new Error(job.error), locale)} className="text-sm text-[var(--app-danger)]" />
+              ) : (
+                <p className="text-sm text-[var(--app-danger)]">{t('toast.actionFailed')}</p>
+              )}
               <div>
                 <Button size="sm" onClick={startDownload} disabled={!supported || downloadMutation.isPending}>
                   <Download className="size-4" />

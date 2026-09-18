@@ -115,6 +115,9 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - 新增 Tauri 网络或文件系统能力时，不得让 WebView 向特权 command 传入并决定任意 URL、仓库或目标路径；应由 Rust 侧解析并校验可信来源、资源名称和文件目标，同时覆盖允许与拒绝路径测试，并保持 Web runtime 显式降级。
 - Windows 桌面端全程不得弹出控制台窗口：发布壳保持 `windows_subsystem = "windows"`（GUI 子系统）；后端新增子进程（runtime probe、转写 worker、ffmpeg/ffprobe、GPU 探测等）一律经 `backend/services/process_utils.py` 以 `CREATE_NO_WINDOW` 创建，不得直接裸调 `subprocess`/`Popen`。
 - 除非使用经过批准且许可合规的 fixture，否则用户媒体、字幕、模型、数据库、备份和诊断不得进入仓库或发布包。
+- 所有"播放这句话"类句段试听统一走 `audioStore.openSegmentAudio()`（自动读取 uiStore 的句段播放冗余偏好扩展起止）；底部播放条的用户主动操作（暂停后恢复、拖动进度）即调用 `releaseAudioClip()` 解除片段边界转为自由播放，组件不得各自实现试听起止逻辑。
+- uiStore 本地偏好新增字段的固定模式：固定档位常量数组 + `normalize*` 归一化非法取值回默认 + `mergePersistedUiState` 同步归一化 + 设置导出/导入枚举同步；取值集合变更时四处一起改。
+- 任务中心字幕编辑只经"编辑字幕"模式（只读/编辑共用同一行布局），保存走既有 `PUT /tasks/{id}/segments` 批量提交并创建恰好一个不可变 `edit` 版本；不得恢复逐段时间/说话人表单、查找替换或全文工具。
 
 对于可选或容易失败的功能，应优先采用增量、隔离的行为。除非已经批准的 spec 明确修改了相关 contract，否则新的后处理能力不得让成功转写依赖外部服务。
 

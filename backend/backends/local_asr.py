@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 import math
 from pathlib import Path
@@ -18,12 +19,9 @@ try:
 except Exception:  # pragma: no cover - optional runtime dependency
     WhisperModel = None
 
-try:
-    from funasr import AutoModel
-    FUNASR_IMPORT_ERROR = None
-except Exception as exc:  # pragma: no cover - optional runtime dependency
-    AutoModel = None
-    FUNASR_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
+AutoModel = None
+FUNASR_IMPORT_ERROR = None
+_FUNASR_IMPORT_ATTEMPTED = False
 
 try:
     import mlx_whisper
@@ -37,6 +35,26 @@ class LocalASRBackend(Protocol):
     def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult: ...
     def is_loaded(self, model_name: str) -> bool: ...
     def unload(self, model_name: str) -> bool: ...
+
+
+def _ensure_funasr_auto_model() -> None:
+    """Load FunASR and its frozen registry on first use, not app startup."""
+    global AutoModel, FUNASR_IMPORT_ERROR, _FUNASR_IMPORT_ATTEMPTED
+    if AutoModel is not None or _FUNASR_IMPORT_ATTEMPTED:
+        return
+    _FUNASR_IMPORT_ATTEMPTED = True
+    try:
+        preload = getattr(builtins, "_asrbox_preload_funasr_submodules", None)
+        if callable(preload):
+            preload()
+        if AutoModel is None:
+            from funasr import AutoModel as FunASRAutoModel
+
+            AutoModel = FunASRAutoModel
+        FUNASR_IMPORT_ERROR = None
+    except Exception as exc:  # pragma: no cover - optional runtime dependency
+        AutoModel = None
+        FUNASR_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 
 def _seconds(value) -> float:
@@ -271,6 +289,7 @@ class FunASRBackend:
         self._models: dict[str, object] = {}
 
     def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        _ensure_funasr_auto_model()
         if AutoModel is None:
             detail = FUNASR_IMPORT_ERROR or "funasr is not installed"
             raise RuntimeError(f"funasr runtime unavailable: {detail}")

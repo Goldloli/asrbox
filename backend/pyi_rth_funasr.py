@@ -10,12 +10,18 @@ build time) so the registration decorators run here as well.
 from __future__ import annotations
 
 import importlib
+import builtins
 import json
 import os
 import sys
 
+_PRELOAD_COMPLETE = False
+
 
 def _preload_funasr_submodules() -> None:
+    global _PRELOAD_COMPLETE
+    if _PRELOAD_COMPLETE:
+        return
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
         return
@@ -34,6 +40,7 @@ def _preload_funasr_submodules() -> None:
             if debug:
                 print(f"funasr preload failed: {name}: {exc.__class__.__name__}: {exc}", file=sys.stderr)
             continue
+    _PRELOAD_COMPLETE = True
 
 
 def _patch_inspect_for_frozen_registry() -> None:
@@ -53,4 +60,7 @@ def _patch_inspect_for_frozen_registry() -> None:
     inspect.getsourcelines = safe_getsourcelines
 
 
-_preload_funasr_submodules()
+# Importing every FunASR registration module can take minutes in a frozen
+# build. Expose the loader to the application and run it only when a FunASR
+# model is actually selected, so the desktop health endpoint starts promptly.
+setattr(builtins, "_asrbox_preload_funasr_submodules", _preload_funasr_submodules)

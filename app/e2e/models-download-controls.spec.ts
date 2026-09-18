@@ -238,5 +238,5 @@ test('transcription model selector shows compact CPU and GPU support', async ({ 
   await modelField.getByRole('combobox').click();
   await expect(page.getByRole('option', { name: /Whisper Base · CPU \/ GPU/ })).toBeVisible();
   await expect(page.getByRole('option', { name: /MLX Whisper Turbo · GPU only/ })).toBeVisible();
-  await expect(modelField.getByText('The device actually used depends on this computer and the available runtime.')).toBeVisible();
+  await expect(modelField.getByText('The device actually used depends on this computer and the available runtime.')).toHaveCount(0);
 });

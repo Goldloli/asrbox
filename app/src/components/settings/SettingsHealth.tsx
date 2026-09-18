@@ -6,6 +6,8 @@ import { useI18n } from '../../lib/i18n';
 import { Badge, Button, Panel, PanelHeader, Switch } from '../weiui';
 import { downloadResponse, responseFilename } from '../../lib/downloads';
 import { toastErrorMessage, useToast } from '../Toast';
+import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
+import { localizeRuntimeWarning, localizeTechnicalError } from '../../lib/userMessages';
 
 export function DiagnosticsHealthCenter({
   connected,
@@ -24,7 +26,7 @@ export function DiagnosticsHealthCenter({
   recentError?: string | null;
   onRefresh: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const runtimeChecks = runtime
     ? [
@@ -75,9 +77,10 @@ export function DiagnosticsHealthCenter({
           <HealthMetric
             icon={<AlertTriangle className="size-4" />}
             title={t('settings.recentErrors')}
-            value={recentError || t('settings.noRecentErrors')}
+            value={recentError
+              ? <LocalizedTechnicalMessage message={localizeTechnicalError(recentError, locale)} />
+              : t('settings.noRecentErrors')}
             tone={recentError ? 'danger' : 'neutral'}
-            clamp
           />
         </div>
 
@@ -104,9 +107,11 @@ export function DiagnosticsHealthCenter({
         {runtime?.warnings?.length ? (
           <div className="grid gap-2">
             {runtime.warnings.map((warning) => (
-              <p key={warning} className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-sm text-app-accent">
-                {warning}
-              </p>
+              <LocalizedTechnicalMessage
+                key={warning}
+                message={localizeRuntimeWarning(warning, locale)}
+                className="rounded-lg border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-3 py-2 text-app-accent"
+              />
             ))}
           </div>
         ) : null}
@@ -135,13 +140,11 @@ function HealthMetric({
   title,
   value,
   tone,
-  clamp = false,
 }: {
   icon: ReactNode;
   title: string;
-  value: string;
+  value: ReactNode;
   tone: 'neutral' | 'success' | 'warning' | 'danger';
-  clamp?: boolean;
 }) {
   return (
     <div className="grid gap-2 rounded-lg border app-control px-3 py-3">
@@ -149,7 +152,7 @@ function HealthMetric({
         <span className="text-xs font-medium text-app-muted">{title}</span>
         <Badge tone={tone}>{icon}</Badge>
       </div>
-      <p className={clamp ? 'line-clamp-3 break-words text-sm font-medium text-app' : 'break-words text-sm font-medium text-app'} title={clamp ? value : undefined}>{value}</p>
+      <div className="min-w-0 break-words text-sm font-medium text-app">{value}</div>
     </div>
   );
 }

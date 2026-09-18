@@ -77,6 +77,10 @@ export async function checkVersions(root) {
       "docs/release.md#current",
       matchVersion(releaseGuide ?? "", /releases\/tag\/v([^)\s]+)/),
     );
+    versions.set(
+      "docs/release.md#current-label",
+      matchVersion(releaseGuide ?? "", /Current release:\s*\[`v([^`]+)`\]/i),
+    );
     const expectedTag = `v${expected}`;
     const expectedDmg = `ASRbox_${expected}_aarch64.dmg`;
     const expectedNsis = `ASRbox_${expected}_x64-setup.exe`;

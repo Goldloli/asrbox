@@ -8,9 +8,12 @@ import { useI18n } from '../../lib/i18n';
 import { queryKeys, useModelStorageQuery, useModelStorageRelocationQuery } from '../../lib/queries';
 import { toastErrorMessage, useToast } from '../Toast';
 import { Badge, Button, Dialog, DialogContent, Field, Input, Panel, PanelHeader, Progress, Select, Switch } from '../weiui';
+import { localizedErrorPresentation } from '../../lib/errorMessages';
+import { localizeSystemNotice } from '../../lib/userMessages';
+import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
 
 export function ModelStorageSettings() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
   const storage = useModelStorageQuery();
@@ -154,7 +157,7 @@ export function ModelStorageSettings() {
               <span className="break-all">{job.current_item}</span>
               <span>{formatBytes(job.copied_bytes)} / {formatBytes(job.total_bytes)}</span>
             </div>
-            {job.error ? <p className="text-sm text-[var(--app-danger)]">{job.error}</p> : null}
+            {job.error ? <LocalizedTechnicalMessage message={localizedErrorPresentation(new Error(job.error), locale)} className="text-sm text-[var(--app-danger)]" /> : null}
             {job.cleanup_required ? <p className="text-sm text-[var(--app-accent-text)]">{t('settings.modelStorageCleanupRequired')}: {job.cleanup_paths.join(', ')}</p> : null}
             {jobActive ? (
               <Button size="sm" variant="secondary" onClick={() => cancelMutation.mutate()} disabled={cancelMutation.isPending}>
@@ -215,15 +218,15 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 }
 
 function PlanSummary({ plan }: { plan: ModelStorageCandidate }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   return (
     <div className="grid gap-2 border-y app-border py-3 text-sm">
       <div className="flex justify-between gap-3"><span className="text-app-muted">{t('settings.requiredSpace')}</span><span>{formatBytes(plan.required_bytes + plan.required_headroom_bytes)}</span></div>
       <div className="flex justify-between gap-3"><span className="text-app-muted">{t('settings.freeDisk')}</span><span>{formatBytes(plan.free_bytes)}</span></div>
       <div className="flex justify-between gap-3"><span className="text-app-muted">{t('settings.validTargetModels')}</span><span>{plan.valid_models.length}</span></div>
-      {plan.errors.map((error) => <p key={error} className="break-all text-[var(--app-danger)]">{error}</p>)}
+      {plan.errors.map((error) => <LocalizedTechnicalMessage key={error} message={localizedErrorPresentation(new Error(error), locale)} className="text-[var(--app-danger)]" />)}
       {plan.conflicts.map((conflict) => <p key={conflict} className="break-all text-[var(--app-danger)]">{t('settings.targetConflict')}: {conflict}</p>)}
-      {plan.warnings.map((warning) => <p key={warning} className="break-all text-[var(--app-accent-text)]">{warning}</p>)}
+      {plan.warnings.map((warning) => <LocalizedTechnicalMessage key={warning} message={localizeSystemNotice(warning, locale)} className="text-[var(--app-accent-text)]" />)}
       {plan.caches.filter((cache) => cache.shared).map((cache) => <p key={cache.path} className="break-all text-app-muted">{cache.name}: {formatBytes(cache.size_bytes)} · {cache.path}</p>)}
     </div>
   );

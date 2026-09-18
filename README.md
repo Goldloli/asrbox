@@ -1,4 +1,4 @@
-![ASRbox 演示](assets/asrbox-demo.gif)
+![ASRbox 任务中心](assets/asrbox-task-center.png)
 
 # ASRbox
 
@@ -8,7 +8,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 ## 当前状态
 
-当前源码版本为 `0.2.1`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.3.0`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -25,29 +25,49 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 
 - 拖入单个或多个音频、视频，预检音轨、格式、时长和分段策略。
 - 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Qwen3-ASR，或在线 ASR Provider 转写。
-- 暂停、继续、停止、重试和删除模型下载，查看运行时兼容性与磁盘占用。
-- 在“设置 → 关于”查看版本、作者与支持入口，选择稳定版或预发布版，并检查和下载桌面更新。
-- 查看、搜索、替换、编辑、播放和复制转写结果。
+- 三栏任务中心：任务列表、波形播放器与转写结果、状态与导出同屏联动。
+- 在"编辑字幕"模式中直接修改分段文字，批量保存为一个新的不可变版本。
 - 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本。
 - 导出 TXT、SRT、VTT、ASS、JSON 和 Markdown。
+- 模型管理行式列表：暂停、继续、停止、重试和删除下载，查看兼容性、天梯对比与磁盘占用。
 - 配置 Ollama、MiniMax、Kimi、DeepSeek、Qwen、GLM 或其他 OpenAI 兼容 LLM。
-- 在独立的“AI → 字幕核对”工作区审阅建议，明确勾选后才生成新字幕版本。
-- 在“AI → 对话”中提问软件用法或绑定字幕内容，流式回答，历史会话本地持久化。
-- 在“设置 → 转写默认值”把常用本地模型或线上接口设为默认模型，并选定默认转写语言（含自动识别），新建转写时自动套用。
+- AI 工作台整合字幕核对、字幕翻译与对话，逐句试听、逐条审阅后才生成新版本。
+- 句段试听默认严格按时间轴播放，可在设置中为前后各增加 0.5–3 秒冗余；播放条可随时接管为连续自由播放。
+- 界面个性化：亮色/暗色主题、强调色、界面密度、侧边栏模式、中文/英文界面。
+- 在"设置 → 关于"查看版本、作者与支持入口，选择稳定版或预发布版，并检查和下载桌面更新。
+- 在"设置 → 转写默认值"把常用本地模型或线上接口设为默认模型，并选定默认转写语言（含自动识别），新建转写时自动套用。
 
-**0.1.9 新增：** Windows x64 桌面端——与 macOS 版同一套 Tauri 2 + 内置 FastAPI sidecar 架构，NSIS 安装包发布；后端测试套件在 Windows 全绿，应用内更新检查与校验下载同样适用于 Windows 安装包。NVIDIA 显卡用户可在"设置 → 显卡加速"开启可选的 CUDA 加速套件（按需下载约 2.6GB），本地转写最高提速约 10 倍；不开则保持 CPU。转写默认值新增默认模型设置：把常用本地模型或线上接口设为默认后，新建转写页会自动选中它，默认转写语言（含自动识别）同样自动套用。
+### 任务中心与字幕编辑
 
-### LLM 核验校对
+任务中心把任务列表、波形播放器、转写结果和任务状态放在同一个三栏工作台中；点击分段左侧的播放按钮即可从该句起点试听。切换到"编辑字幕"后，每一行文字都可直接修改，确认无误后点击右上角"保存更改"，一次保存为一个新的字幕版本：
 
-接入 Ollama 或任意 OpenAI 兼容 LLM，自动核对转写字幕中的错字、漏字和明显识别错误，并给出可直接套用的修改建议：
+![任务中心](assets/asrbox-task-center.png)
 
-![LLM 核验校对演示](assets/asrbox-llm-proofread.gif)
+![编辑字幕模式](assets/asrbox-edit-subtitles.png)
 
-### AI 对话与字幕翻译
+### AI 字幕核对
 
-在“AI → 对话”中直接用已配置的 LLM 提问：询问软件用法（内置离线答疑知识库），或绑定一个字幕任务后让它总结内容、查找某句话及其时间位置；回答流式呈现，会话本地保存。“AI → 字幕翻译”支持多语言翻译与双语导出：
+接入 Ollama 或任意 OpenAI 兼容 LLM，自动核对转写字幕中的错字、漏字和明显识别错误。每条建议都给出原文、修改后文本和修改原因，并可点击"播放这句话"试听对应片段；明确勾选后才会生成新字幕版本：
 
-![AI 对话与字幕翻译演示](assets/asrbox-ai-chat.gif)
+![AI 字幕核对](assets/asrbox-ai-proofreading.png)
+
+### AI 字幕翻译
+
+保留原字幕，支持多语言互译，并以原文/译文对照展示；可导出译文或双语字幕：
+
+![AI 字幕翻译](assets/asrbox-ai-translation.png)
+
+### AI 对话
+
+在"AI → 对话"中直接用已配置的 LLM 提问：询问软件用法（内置离线答疑知识库），或绑定一个字幕任务后让它总结内容、查找某句话及其时间位置；回答流式呈现，引用片段可逐条试听，会话本地保存：
+
+![AI 对话](assets/asrbox-ai-chat.png)
+
+### 模型管理
+
+行式列表集中管理本地 ASR 模型：筛选、搜索、下载控制、默认模型联动，并附速度/准确率/能力天梯对比：
+
+![模型管理](assets/asrbox-models.png)
 
 ## Docker 部署
 
@@ -69,7 +89,7 @@ docker compose logs -f asrbox
 
 数据库、媒体、字幕、设置、模型和缓存都在名为 `asrbox-data` 的 Docker volume 中。`docker compose down` 不会删除它；`docker compose down -v` 会永久删除数据。
 
-模型与 Hugging Face、ModelScope、Torch 缓存可在“设置 → 存储与诊断”中迁移到统一存储根。桌面版可选择本地或已挂载外接磁盘；Docker 版必须先在 `compose.yaml` 中挂载宿主机目录并通过 `ASRBOX_MODEL_STORAGE_ROOTS` 声明允许的容器挂载点，Web 页面只显示容器路径。完整配置与恢复步骤见 [Docker 部署指南](docs/docker.md)。
+模型与 Hugging Face、ModelScope、Torch 缓存可在"设置 → 存储与诊断"中迁移到统一存储根。桌面版可选择本地或已挂载外接磁盘；Docker 版必须先在 `compose.yaml` 中挂载宿主机目录并通过 `ASRBOX_MODEL_STORAGE_ROOTS` 声明允许的容器挂载点，Web 页面只显示容器路径。完整配置与恢复步骤见 [Docker 部署指南](docs/docker.md)。
 
 默认配置只绑定 `127.0.0.1`。手机或其他局域网设备访问时，在 `.env` 中设置：
 
@@ -78,60 +98,60 @@ ASRBOX_BIND_ADDRESS=0.0.0.0
 ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 ```
 
-重启后用 `http://主机局域网IP:17494` 打开，在“设置 → 通用 → API 令牌”输入同一令牌。ASRbox 没有内置 TLS、多用户账号或权限系统；局域网以外请使用可信 VPN，或带 HTTPS 和认证的反向代理。
+重启后用 `http://主机局域网IP:17494` 打开，在"设置 → 通用 → API 令牌"输入同一令牌。ASRbox 没有内置 TLS、多用户账号或权限系统；局域网以外请使用可信 VPN，或带 HTTPS 和认证的反向代理。
 
 完整升级、备份、Ollama 连接、卸载和排障步骤见 [Docker 部署指南](docs/docker.md)。
 
 ## 桌面端
 
-从 [`v0.2.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.2.1) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
+从 [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.0) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
 
-桌面端也可在“设置 → 关于”中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把安装包下载到系统“下载”目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
+桌面端也可在"设置 → 关于"中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把安装包下载到系统"下载"目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 
 下载完成不等于自动安装。请先完成转写和模型下载等任务，正常退出 ASRbox，再打开安装包手动替换旧应用。Web 版只显示构建版本和 GitHub Releases 入口，不会把桌面安装包下载到服务器。
 
 ### macOS
 
-当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **“ASRbox.app”已损坏，无法打开**：
+当前包未签名、未公证（未购买 Apple Developer Program 证书），macOS 可能直接提示 **"ASRbox.app"已损坏，无法打开**：
 
-![macOS 提示“ASRbox.app 已损坏，无法打开”](assets/macos-app-damaged.png)
+![macOS 提示"ASRbox.app 已损坏，无法打开"](assets/macos-app-damaged.png)
 
-这是 Gatekeeper 对未签名应用的常见提示，并非文件真的损坏。把应用拖入“应用程序”后，在终端执行一次以下命令，清除下载文件的隔离属性即可正常打开：
+这是 Gatekeeper 对未签名应用的常见提示，并非文件真的损坏。把应用拖入"应用程序"后，在终端执行一次以下命令，清除下载文件的隔离属性即可正常打开：
 
 ```bash
 xattr -cr /Applications/ASRbox.app
 ```
 
-也可以在首次打开时右键应用选择“打开”，或在“系统设置 → 隐私与安全性”中允许打开。
+也可以在首次打开时右键应用选择"打开"，或在"系统设置 → 隐私与安全性"中允许打开。
 
 ### Windows
 
-Windows 安装包未进行代码签名，运行时 SmartScreen 可能提示“Windows 已保护你的电脑”：点击“更多信息”→“仍要运行”即可。安装为当前用户安装，不需要管理员权限。
+Windows 安装包未进行代码签名，运行时 SmartScreen 可能提示"Windows 已保护你的电脑"：点击"更多信息"→"仍要运行"即可。安装为当前用户安装，不需要管理员权限。
 
-**CUDA 加速（可选，仅 NVIDIA 显卡）：** 在“设置 → 显卡加速”页打开开关，应用会从当前版本对应的 GitHub Release 一次性下载约 2.6GB 的加速套件（torch 2.11.0+cu128），逐卷与逐文件 SHA-256 校验通过后自动安装并重启后端；之后本地模型转写使用 GPU，关闭开关即回退 CPU。套件安装后约占 4GB 磁盘，启用失败（如驱动过旧）会保持 CPU 并在设置页显示原因；应用升级后若套件与新版后端不匹配会标记“已失效”，按提示重新下载即可。macOS 版无此开关，继续使用既有的 Apple Silicon 加速路径。
+**CUDA 加速（可选，仅 NVIDIA 显卡）：** 在"设置 → 显卡加速"页打开开关，应用会从当前版本对应的 GitHub Release 一次性下载约 2.6GB 的加速套件（torch 2.11.0+cu128），逐卷与逐文件 SHA-256 校验通过后自动安装并重启后端；之后本地模型转写使用 GPU，关闭开关即回退 CPU。套件安装后约占 4GB 磁盘，启用失败（如驱动过旧）会保持 CPU 并在设置页显示原因；应用升级后若套件与新版后端不匹配会标记"已失效"，按提示重新下载即可。macOS 版无此开关，继续使用既有的 Apple Silicon 加速路径。
 
 桌面端在 `127.0.0.1:17494` 启动内置后端，每次启动生成仅在内存中的 API token；退出应用会停止 sidecar。删除应用不会删除任务、模型或备份。
 
 ## 第一次转写
 
-1. 在“模型”页下载模型。桌面 Apple Silicon 可先试 `mlx-whisper-turbo`；Docker 建议先试 `faster-whisper-base` 或 `faster-whisper-small`。
-2. 在“新建转写”选择音频或视频。
+1. 在"模型"页下载模型。桌面 Apple Silicon 可先试 `mlx-whisper-turbo`；Docker 建议先试 `faster-whisper-base` 或 `faster-whisper-small`。
+2. 在"新建转写"选择音频或视频。
 3. 选择本地模型或在线平台，设置语言、时间戳和分段选项。
-4. 提交后在“任务”查看进度、日志和转写结果。
-5. 编辑字幕或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
+4. 提交后在"任务中心"查看进度、日志和转写结果。
+5. 在"编辑字幕"中修改文字，或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
 
-ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和“模型”页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
+ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和"模型"页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
 
 ## AI 字幕核对
 
-1. 打开“设置 → AI LLM 提供商”，新增并测试一个提供商。
+1. 打开"设置 → AI LLM 提供商"，新增并测试一个提供商。
 2. Ollama 不需要接口密钥；Docker 连接宿主机 Ollama 时使用 `http://host.docker.internal:11434/v1`。
-3. 打开左侧“AI”，选择一个已完成且有字幕版本的任务。
-4. 选择提供商并开始“字幕核对”。
+3. 打开左侧"AI 工作台"，选择一个已完成且有字幕版本的任务。
+4. 选择提供商并开始"字幕核对"。
 5. 页面默认只展开 LLM 发现的建议；正确段落按相邻区间分别折叠，可逐段展开。
 6. 勾选要采纳的建议后点击应用。未勾选的建议不会改字幕，应用结果会创建新版本。
 
-连接失败、鉴权失败、服务端错误、上下文过长和返回格式错误会分别提示；只有 LLM 正常完成且没有建议时，才显示“没有发现需要修改的内容”。LLM 失败不会影响已经成功的转写。详见 [AI 字幕核对指南](docs/ai-proofreading.md)。
+连接失败、鉴权失败、服务端错误、上下文过长和返回格式错误会分别提示；只有 LLM 正常完成且没有建议时，才显示"没有发现需要修改的内容"。LLM 失败不会影响已经成功的转写。详见 [AI 字幕核对指南](docs/ai-proofreading.md)。
 
 ## 数据与隐私
 

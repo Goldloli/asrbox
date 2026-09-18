@@ -8,6 +8,7 @@ import { useAppEvents } from './lib/useAppEvents';
 import { useDesktopServerControl } from './lib/useDesktopServerControl';
 import { useUiStore } from './stores/uiStore';
 import { useI18n } from './lib/i18n';
+import { resolveTheme } from './lib/appearance';
 import asrboxIcon from './assets/asrbox-icon.png';
 import { AppUpdateRuntime } from './components/AppUpdateRuntime';
 
@@ -102,11 +103,12 @@ function ThemeRuntime() {
   const density = useUiStore((state) => state.density);
   const fontScale = useUiStore((state) => state.fontScale);
   const reducedMotion = useUiStore((state) => state.reducedMotion);
+  const accentColor = useUiStore((state) => state.accentColor);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const applyTheme = () => {
-      const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+      const resolved = resolveTheme(theme, media.matches);
       document.documentElement.setAttribute('data-theme', resolved);
       document.documentElement.style.colorScheme = resolved;
     };
@@ -115,6 +117,10 @@ function ThemeRuntime() {
     media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-accent', accentColor);
+  }, [accentColor]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);

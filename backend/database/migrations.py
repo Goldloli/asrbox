@@ -117,6 +117,15 @@ def run_migrations(engine, session_factory) -> None:
             [("llm_providers", "compatibility_json", "TEXT NOT NULL DEFAULT '{}'" )],
         )),
         ("20260909_001_ai_chatbot", lambda: _create_chat_tables(engine)),
+        (
+            "20260917_001_proofreading_reason_language",
+            lambda: _add_columns(
+                engine,
+                inspect(engine),
+                set(inspect(engine).get_table_names()),
+                [("proofreading_runs", "reason_language", "TEXT NOT NULL DEFAULT 'en'")],
+            ),
+        ),
     ]
 
     db = session_factory()

@@ -15,12 +15,12 @@ test('public beta shell reaches the local backend and core routes', async ({ pag
   expect(await health.json()).toMatchObject({ status: 'healthy', version: appVersion });
 
   await page.goto('/');
-  await expect(page.getByText('Backend online', { exact: true })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { name: 'Transcribe', exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Local processing', { exact: false }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'New transcription', exact: true }).first()).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveCount(1);
 
   for (const [route, heading] of [
-    ['/tasks', 'Tasks'],
+    ['/tasks', 'Task center'],
     ['/models', 'Models'],
     ['/settings', 'Settings'],
   ] as const) {

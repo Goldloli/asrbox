@@ -1,24 +1,20 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, ChevronDown, Clipboard, Download, FileText, FolderOpen, Pause, Play, Replace, Save, Search, Volume2, X } from 'lucide-react';
+import { Activity, Download, FileText, FolderOpen, Pause, Play, Save, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SegmentBulkUpdateItem, type TranscriptionTask } from '../lib/api';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { queryKeys } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
+import { Badge, Button, EmptyState, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
+import { cn } from '../lib/cn';
 import { toastErrorMessage, useToast } from './Toast';
-import { countTextMatches, drawAudioWaveform, formatSubtitlePreview, renderHighlightedText, replaceTextMatches } from './transcript/transcriptUtils';
-
-type SegmentDraft = {
-  text?: string;
-  speaker?: string;
-  start?: number;
-  end?: number;
-};
+import { drawAudioWaveform } from './transcript/transcriptUtils';
+import { localizedErrorPresentation } from '../lib/errorMessages';
+import { LocalizedTechnicalMessage } from './LocalizedTechnicalMessage';
 
 type TranscriptViewerMode = 'summary' | 'detail';
 type QuickDownloadFormat = 'srt' | 'txt';
@@ -34,43 +30,45 @@ export function TranscriptViewer({
   mode?: TranscriptViewerMode;
   onDownloadFormat?: (format: QuickDownloadFormat) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const [draftEdits, setDraftEdits] = useState<Record<number, SegmentDraft>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-  const [replaceQuery, setReplaceQuery] = useState('');
-  const [subtitleFormat, setSubtitleFormat] = useState<'srt' | 'vtt'>('srt');
+  const [draftEdits, setDraftEdits] = useState<Record<number, string>>({});
+  const [detailView, setDetailView] = useState<'transcript' | 'edit'>('transcript');
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const segmentListRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id;
   const fullText = task?.text ?? '';
   const displaySegments = useMemo(() => {
     if (!task) return [];
     return task.segments.map((segment) => {
-      const draft = draftEdits[segment.id];
-      if (!draft) return segment;
-      return {
-        ...segment,
-        text: draft.text ?? segment.text,
-        speaker: draft.speaker ?? segment.speaker,
-        start: draft.start ?? segment.start,
-        end: draft.end ?? segment.end,
-      };
+      const draftText = draftEdits[segment.id];
+      return draftText === undefined ? segment : { ...segment, text: draftText };
     });
   }, [draftEdits, task]);
-  const matchCount = useMemo(
-    () => displaySegments.reduce((total, segment) => total + countTextMatches(segment.text, searchQuery), 0),
-    [displaySegments, searchQuery],
-  );
-  const subtitlePreview = useMemo(
-    () => mode === 'detail' ? formatSubtitlePreview(displaySegments, subtitleFormat) : '',
-    [displaySegments, mode, subtitleFormat],
-  );
+  const activeSegmentId = useMemo(() => {
+    if (mode !== 'detail') return null;
+    const active = displaySegments.find((segment) => playbackTime >= segment.start && playbackTime < segment.end);
+    return active?.id ?? null;
+  }, [displaySegments, mode, playbackTime]);
+
+  // Keep the active segment visible while playback advances, but never steal
+  // focus from in-progress transcript editing.
+  useEffect(() => {
+    if (activeSegmentId == null || !segmentListRef.current) return;
+    const container = segmentListRef.current;
+    if (container.contains(document.activeElement)) return;
+    container
+      .querySelector(`[data-segment-id="${activeSegmentId}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeSegmentId]);
 
   useEffect(() => {
     setDraftEdits({});
     setSeekTarget(null);
+    setDetailView('transcript');
   }, [taskId]);
 
   const saveEdits = useMutation({
@@ -103,30 +101,19 @@ export function TranscriptViewer({
   }
 
   const hasDraftEdits = Object.keys(draftEdits).length > 0;
-  const setSegmentDraft = (segmentId: number, patch: SegmentDraft) => {
+  const setSegmentTextDraft = (segmentId: number, text: string) => {
     const segment = task.segments.find((item) => item.id === segmentId);
     if (!segment) return;
 
     setDraftEdits((current) => {
-      const merged = { ...(current[segmentId] ?? {}), ...patch };
-      const isDirty =
-        (merged.text !== undefined && merged.text !== segment.text) ||
-        (merged.speaker !== undefined && merged.speaker !== (segment.speaker ?? '')) ||
-        (merged.start !== undefined && merged.start !== segment.start) ||
-        (merged.end !== undefined && merged.end !== segment.end);
       const next = { ...current };
-      if (isDirty) {
-        next[segmentId] = merged;
+      if (text !== segment.text) {
+        next[segmentId] = text;
       } else {
         delete next[segmentId];
       }
       return next;
     });
-  };
-  const setSegmentTime = (segmentId: number, field: 'start' | 'end', value: string) => {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue)) return;
-    setSegmentDraft(segmentId, { [field]: Math.max(0, numericValue) });
   };
   const saveDraftEdits = () => {
     if (!hasDraftEdits || saveEdits.isPending) return;
@@ -142,35 +129,6 @@ export function TranscriptViewer({
     });
   };
   const discardDraftEdits = () => setDraftEdits({});
-  const replaceAllMatches = () => {
-    if (!searchQuery.trim()) return;
-    if (matchCount === 0) {
-      toast.info(t('transcript.noMatches'));
-      return;
-    }
-
-    setDraftEdits((current) => {
-      const next = { ...current };
-      for (const segment of displaySegments) {
-        const replacedText = replaceTextMatches(segment.text, searchQuery, replaceQuery);
-        if (replacedText !== segment.text) {
-          next[segment.id] = { ...(next[segment.id] ?? {}), text: replacedText };
-        }
-      }
-      return next;
-    });
-    setSearchQuery('');
-    setReplaceQuery('');
-    toast.success(t('transcript.replaceApplied'), `${matchCount} ${t('transcript.matches')}`);
-  };
-  const copyText = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(t('toast.copied'));
-    } catch (error) {
-      toast.error(t('toast.actionFailed'), toastErrorMessage(error));
-    }
-  };
   const seekToSegment = (seconds: number) => {
     setSeekTarget(Math.max(0, seconds));
   };
@@ -181,6 +139,7 @@ export function TranscriptViewer({
       sourceKind={task.source_kind}
       seekTarget={seekTarget}
       onSeekHandled={() => setSeekTarget(null)}
+      onCurrentTimeChange={mode === 'detail' ? setPlaybackTime : undefined}
     />
   );
   const renderedAudioPlayer = audioPlayerHost === undefined || audioPlayerHost === null
@@ -189,41 +148,50 @@ export function TranscriptViewer({
 
   if (mode === 'summary') {
     return (
-      <Panel className="min-h-[32rem] overflow-hidden">
+      <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('transcript.title')}
           title={task.filename}
           description={`${formatPercent(task.progress)} · ${formatDuration(task.duration_ms)}`}
           action={<StatusPill status={task.status} />}
         />
-        <div className="grid gap-5 p-5">
-          <Progress value={task.progress} />
+        <div className="grid gap-4 p-5">
+          {renderedAudioPlayer}
           {task.error && (
             <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
-              {task.error_code && <p className="mb-1 font-medium">{task.error_code}</p>}
-              <p>{task.error}</p>
+              <LocalizedTechnicalMessage
+                message={localizedErrorPresentation(
+                  new Error(JSON.stringify({ error_code: task.error_code, message: task.error })),
+                  locale,
+                )}
+              />
             </div>
           )}
-          <section className="grid gap-3">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.text')}</h2>
-            <div className="min-h-56 max-h-[min(42vh,24rem)] overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
-              {fullText || <span className="text-app-faint">{t('transcript.placeholder')}</span>}
-            </div>
-          </section>
-          {renderedAudioPlayer}
+          {task.status === 'completed' && fullText ? (
+            <p className="max-h-56 overflow-auto whitespace-pre-wrap rounded-xl border app-border bg-[var(--app-control)] px-4 py-3 text-sm leading-7 text-app-soft">
+              {fullText}
+            </p>
+          ) : null}
           {task.status === 'completed' && onDownloadFormat && (
-            <section className="grid gap-3" aria-labelledby="quick-downloads-title">
-              <h2 id="quick-downloads-title" className="text-sm font-semibold text-app">{t('transcript.quickDownloads')}</h2>
-              <div className="grid grid-cols-2 gap-2 sm:flex">
+            <section className="grid gap-3">
+              <h2 className="text-sm font-semibold text-app">{t('transcript.quickDownloads')}</h2>
+              <div className="grid grid-cols-2 gap-3">
                 {(['srt', 'txt'] as const).map((format) => (
-                  <Button key={format} variant="secondary" onClick={() => onDownloadFormat(format)}>
+                  <Button
+                    key={format}
+                    aria-label={format.toUpperCase()}
+                    variant={format === 'srt' ? 'primary' : 'secondary'}
+                    className="h-12"
+                    onClick={() => onDownloadFormat(format)}
+                  >
                     <Download className="size-4" />
-                    {format.toUpperCase()}
+                    {t('transcript.downloadFormat', { format: format.toUpperCase() })}
                   </Button>
                 ))}
               </div>
             </section>
           )}
+          {task.status !== 'completed' && !task.error ? <Progress value={task.progress} /> : null}
         </div>
       </Panel>
     );
@@ -232,146 +200,72 @@ export function TranscriptViewer({
   return (
     <div className="grid gap-5" data-testid="transcript-detail-workspace">
       {audioPlayer}
-      <section className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-app">{t('transcript.subtitlePreview')}</h2>
-          <div className="flex rounded-lg border app-control p-1">
-            {(['srt', 'vtt'] as const).map((format) => (
-              <Button
-                key={format}
-                variant={subtitleFormat === format ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => setSubtitleFormat(format)}
-                className="h-7"
-              >
-                {format.toUpperCase()}
-              </Button>
-            ))}
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b app-border pt-1">
+        <div className="flex items-center gap-7">
+          {(['transcript', 'edit'] as const).map((view) => (
+            <button
+              key={view}
+              type="button"
+              aria-pressed={detailView === view}
+              className={cn(
+                'border-b-2 px-1 pb-3.5 text-base font-semibold transition',
+                detailView === view ? 'border-[var(--app-accent)] text-app' : 'border-transparent text-app-muted hover:text-app',
+              )}
+              onClick={() => setDetailView(view)}
+            >
+              {view === 'transcript' ? t('transcript.text') : t('transcript.editSubtitles')}
+            </button>
+          ))}
         </div>
-        <pre className="max-h-48 overflow-auto rounded-lg border app-control p-3 font-mono text-xs leading-5 text-app-soft">
-          {subtitlePreview || t('transcript.noSegments')}
-        </pre>
-      </section>
-      <section className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-sm font-semibold text-app">{t('transcript.segments')}</h2>
-            {hasDraftEdits && <Badge tone="warning">{t('transcript.unsavedChanges')}</Badge>}
-          </div>
-          {hasDraftEdits && (
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={discardDraftEdits} disabled={saveEdits.isPending}>
-                <X className="size-4" />
-                {t('transcript.discardChanges')}
-              </Button>
-              <Button size="sm" onClick={saveDraftEdits} disabled={saveEdits.isPending}>
-                <Save className="size-4" />
-                {saveEdits.isPending ? t('transcript.savingChanges') : t('transcript.saveChanges')}
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="max-h-[min(42vh,24rem)] overflow-auto rounded-lg border app-border">
-          {displaySegments.length > 0 ? (
-            displaySegments.map((segment) => (
-              <div key={segment.id} className="grid grid-cols-[clamp(112px,18vw,148px)_minmax(0,1fr)] gap-3 border-b app-border px-3 py-3 last:border-b-0">
-                <div className="grid content-start gap-2">
-                  <button
-                    type="button"
-                    className="rounded-md px-1 text-left font-mono text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
-                    onClick={() => seekToSegment(segment.start)}
-                    aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
-                    title={t('transcript.jumpToSegment')}
-                  >
-                    {segment.start.toFixed(2)} - {segment.end.toFixed(2)}
-                  </button>
-                  <div className="grid grid-cols-2 gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={segment.start}
-                      onChange={(event) => setSegmentTime(segment.id, 'start', event.target.value)}
-                      aria-label={t('transcript.timestampStart')}
-                      className="h-8 min-w-0 px-1.5 text-[11px]"
-                    />
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={segment.end}
-                      onChange={(event) => setSegmentTime(segment.id, 'end', event.target.value)}
-                      aria-label={t('transcript.timestampEnd')}
-                      className="h-8 min-w-0 px-1.5 text-[11px]"
-                    />
-                  </div>
-                </div>
-                <div className="flex min-w-0 items-start gap-2">
-                  <div className="grid min-w-0 flex-1 gap-2">
-                    <Input
-                      value={segment.speaker ?? ''}
-                      onChange={(event) => setSegmentDraft(segment.id, { speaker: event.target.value })}
-                      placeholder={t('transcript.speakerPlaceholder')}
-                      className="h-8 max-w-48 text-xs"
-                      aria-label={t('transcript.speakerLabel')}
-                    />
-                    <Textarea
-                      value={segment.text}
-                      onChange={(event) => setSegmentDraft(segment.id, { text: event.target.value })}
-                      aria-label={t('transcript.segmentText')}
-                      rows={2}
-                      className="min-h-16 resize-y text-xs"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 shrink-0"
-                    onClick={() => copyText(segment.text)}
-                    aria-label={t('transcript.copySegment')}
-                    title={t('transcript.copySegment')}
-                  >
-                    <Clipboard className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="px-3 py-8 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>
-          )}
-        </div>
-      </section>
-      <details className="group rounded-xl border app-control">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-app focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[color:var(--app-accent)]/25">
-          <span>{t('transcript.fullTextTools')}</span>
-          <ChevronDown className="size-4 shrink-0 text-app-muted transition-transform group-open:rotate-180" />
-        </summary>
-        <section className="grid gap-3 border-t app-border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <div className="relative min-w-0 flex-1 sm:min-w-64">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
-                <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('transcript.searchPlaceholder')} className="pl-9" />
-              </div>
-              <Input value={replaceQuery} onChange={(event) => setReplaceQuery(event.target.value)} placeholder={t('transcript.replacePlaceholder')} className="min-w-0 flex-1 sm:min-w-48" />
-              <Button variant="secondary" size="sm" onClick={replaceAllMatches} disabled={!searchQuery.trim() || matchCount === 0}>
-                <Replace className="size-4" />
-                {t('transcript.replaceAll')}
-              </Button>
-              {searchQuery.trim() && <Badge tone={matchCount > 0 ? 'accent' : 'neutral'}>{matchCount} {t('transcript.matches')}</Badge>}
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => copyText(fullText)} disabled={!fullText}>
-              <Clipboard className="size-4" />
-              {t('tasks.copyFullText')}
+        {detailView === 'edit' && hasDraftEdits ? (
+          <div className="flex shrink-0 flex-wrap gap-2 pb-2">
+            <Button variant="secondary" size="sm" onClick={discardDraftEdits} disabled={saveEdits.isPending}>
+              <X className="size-4" />
+              {t('transcript.discardChanges')}
+            </Button>
+            <Button size="sm" onClick={saveDraftEdits} disabled={saveEdits.isPending}>
+              <Save className="size-4" />
+              {saveEdits.isPending ? t('transcript.savingChanges') : t('transcript.saveChanges')}
             </Button>
           </div>
-          <div className="max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border app-control px-3 py-2 font-mono text-[13px] leading-6 text-app-soft">
-            {fullText ? renderHighlightedText(fullText, searchQuery) : <span className="text-app-faint">{t('transcript.placeholder')}</span>}
+        ) : null}
+      </div>
+      <section ref={segmentListRef} data-testid="transcript-segments" className="max-h-[min(42vh,30rem)] overflow-auto rounded-xl border app-border bg-[var(--app-panel)]">
+        {displaySegments.length > 0 ? displaySegments.map((segment) => (
+          <div
+            key={segment.id}
+            data-testid="segment-row"
+            data-segment-id={segment.id}
+            data-active={activeSegmentId === segment.id ? 'true' : undefined}
+            className={cn(
+              'grid min-h-[72px] w-full grid-cols-[28px_112px_84px_minmax(0,1fr)] items-center gap-3 border-b app-border px-3 py-3 text-left last:border-b-0 transition hover:bg-[var(--app-control)] min-[1500px]:grid-cols-[32px_150px_96px_minmax(0,1fr)] min-[1500px]:gap-4 min-[1500px]:px-4',
+              activeSegmentId === segment.id && 'bg-[var(--app-accent-soft)]',
+            )}
+          >
+            <button
+              type="button"
+              className="col-span-2 grid grid-cols-[28px_112px] items-center gap-3 rounded-lg text-left transition hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30 min-[1500px]:grid-cols-[32px_150px] min-[1500px]:gap-4"
+              onClick={() => seekToSegment(segment.start)}
+              aria-label={`${t('transcript.jumpToSegment')} ${segment.start.toFixed(2)}`}
+            >
+              <Play className="size-4 fill-current text-app-muted" />
+              <span className="font-mono text-[13px] text-app-muted">{formatAudioTime(segment.start)} – {formatAudioTime(segment.end)}</span>
+            </button>
+            <Badge tone={Number(segment.speaker) % 2 === 0 ? 'warning' : 'accent'}>{segment.speaker ? `${t('transcript.speakerLabel')} ${segment.speaker}` : t('transcript.speakerPlaceholder')}</Badge>
+            {detailView === 'edit' ? (
+              <Textarea
+                value={segment.text}
+                onChange={(event) => setSegmentTextDraft(segment.id, event.target.value)}
+                aria-label={t('transcript.segmentText')}
+                rows={2}
+                className="min-h-11 resize-y text-[15px] leading-7"
+              />
+            ) : (
+              <span className="text-[15px] leading-7 text-app-soft">{segment.text}</span>
+            )}
           </div>
-          <p className="text-xs text-app-muted">{t('transcript.fullTextReadOnly')}</p>
-        </section>
-      </details>
+        )) : <p className="px-3 py-10 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>}
+      </section>
     </div>
   );
 }
@@ -382,12 +276,14 @@ function WaveformAudioPlayer({
   sourceKind,
   seekTarget,
   onSeekHandled,
+  onCurrentTimeChange,
 }: {
   taskId: string;
   title: string;
   sourceKind?: TranscriptionTask['source_kind'];
   seekTarget: number | null;
   onSeekHandled: () => void;
+  onCurrentTimeChange?: (seconds: number) => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -449,6 +345,7 @@ function WaveformAudioPlayer({
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
+      audio.load();
     }
   }, [audioUrl]);
 
@@ -509,6 +406,7 @@ function WaveformAudioPlayer({
     const nextTime = Math.max(0, Math.min(duration, duration * ratio));
     audio.currentTime = nextTime;
     setCurrentTime(nextTime);
+    onCurrentTimeChange?.(nextTime);
   };
 
   const handleWaveformClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -517,23 +415,27 @@ function WaveformAudioPlayer({
   };
 
   return (
-    <section className="grid gap-3">
+    <section className="grid gap-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-app">{t('transcript.audioPlayer')}</h2>
-          <p className="mt-1 text-xs text-app-muted">{title}</p>
+          <h2 className="text-base font-semibold text-app">{t('transcript.audioPlayer')}</h2>
+          <p className="mt-1 text-sm text-app-muted">{title}</p>
         </div>
         <Badge tone={waveformStatus === 'error' ? 'danger' : waveformStatus === 'ready' ? 'success' : 'neutral'}>
           {waveformStatus === 'loading' ? t('transcript.waveformLoading') : waveformStatus === 'error' ? t('transcript.waveformUnavailable') : t('transcript.waveform')}
         </Badge>
       </div>
-      <div className="grid gap-3 rounded-xl border app-control p-3">
+      <div className="grid gap-3 rounded-2xl border app-control p-3.5">
         <audio
           ref={audioRef}
           preload="metadata"
           src={audioUrl ?? undefined}
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onTimeUpdate={(event) => {
+            setCurrentTime(event.currentTarget.currentTime);
+            onCurrentTimeChange?.(event.currentTarget.currentTime);
+          }}
+          onSeeked={(event) => onCurrentTimeChange?.(event.currentTarget.currentTime)}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
@@ -541,10 +443,10 @@ function WaveformAudioPlayer({
           {t('transcript.audioUnsupported')}
         </audio>
         <div className="flex items-center gap-3">
-          <Button type="button" size="icon" variant="secondary" onClick={togglePlayback} aria-label={isPlaying ? t('audio.pause') : t('audio.play')}>
-            {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+          <Button type="button" size="icon" variant="primary" className="size-11 rounded-full" onClick={togglePlayback} aria-label={isPlaying ? t('audio.pause') : t('audio.play')}>
+            {isPlaying ? <Pause className="size-5" /> : <Play className="size-5 fill-current" />}
           </Button>
-          <div className="w-24 shrink-0 font-mono text-xs text-app-muted">
+          <div className="w-28 shrink-0 font-mono text-sm font-medium text-app-muted">
             {formatAudioTime(currentTime)} / {formatAudioTime(duration)}
           </div>
           <div className="hidden min-w-0 flex-1 items-center gap-2 sm:flex">
@@ -567,11 +469,11 @@ function WaveformAudioPlayer({
         </div>
         <button
           type="button"
-          className="relative min-h-24 overflow-hidden rounded-lg border app-border bg-[var(--app-panel)] text-left focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+          className="relative order-first min-h-28 overflow-hidden rounded-xl border app-border bg-[var(--app-panel)] text-left focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
           onClick={handleWaveformClick}
           aria-label={t('transcript.waveformSeek')}
         >
-          <canvas ref={waveformCanvasRef} className="h-24 w-full opacity-90" aria-hidden="true" />
+          <canvas ref={waveformCanvasRef} className="h-28 w-full opacity-90" aria-hidden="true" />
           {duration > 0 && (
             <div
               className="pointer-events-none absolute inset-y-0 left-0 border-r border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]/50"

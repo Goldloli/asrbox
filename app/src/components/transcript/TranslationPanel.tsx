@@ -8,7 +8,7 @@ import { queryKeys, useLLMProvidersQuery } from '../../lib/queries';
 import { languageLabel, sameTranslationLanguage, translationLanguages, validTranslationLanguage } from '../../lib/translationLanguages';
 import { downloadResponse, responseFilename } from '../../lib/downloads';
 import { formatDate } from '../../lib/format';
-import { useAudioStore } from '../../stores/audioStore';
+import { openSegmentAudio, useAudioStore } from '../../stores/audioStore';
 import { useUiStore } from '../../stores/uiStore';
 import { toastErrorMessage, useToast } from '../Toast';
 import { Badge, Button, ErrorState, Input, Panel, PanelHeader, Progress, Select, Textarea } from '../weiui';
@@ -27,17 +27,28 @@ function LanguageSelect({ value, onChange, target = false }: {
   value: TranslationLanguage; onChange: (value: TranslationLanguage) => void; target?: boolean;
 }) {
   const { t, locale } = useI18n();
-  const [search, setSearch] = useState('');
-  const normalized = search.toLocaleLowerCase();
+  const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const languageOptions = translationLanguages
+    .map(([code, zh, en]) => ({ value: code, label: locale === 'zh' ? zh : en }))
+    .filter((option) => !normalizedQuery || option.label.toLocaleLowerCase().includes(normalizedQuery));
   return <div className="grid min-w-0 gap-2">
-    <Input aria-label={`${t(target ? 'translation.targetLanguage' : 'translation.sourceLanguage')} · ${t('translation.languageSearch')}`} placeholder={t('translation.languageSearch')} value={search} onChange={e => setSearch(e.target.value)} />
+    <Input
+      aria-label={`${t(target ? 'translation.targetLanguage' : 'translation.sourceLanguage')} · ${t('translation.languageSearch')}`}
+      placeholder={t('translation.languageSearch')}
+      value={query}
+      onChange={(event) => setQuery(event.target.value)}
+      className="h-9"
+    />
     <Select aria-label={t(target ? 'translation.targetLanguage' : 'translation.sourceLanguage')}
       value={value.kind === 'preset' ? value.code : value.kind}
-      onValueChange={code => onChange(code === 'auto' ? { kind: 'auto' } : code === 'custom' ? { kind: 'custom', name: '' } : { kind: 'preset', code })}
+      onValueChange={code => {
+        onChange(code === 'auto' ? { kind: 'auto' } : code === 'custom' ? { kind: 'custom', name: '' } : { kind: 'preset', code });
+        setQuery('');
+      }}
       options={[
         ...(!target ? [{ value: 'auto', label: t('translation.auto') }] : []),
-        ...translationLanguages.filter(item => item[0] === (value.kind === 'preset' ? value.code : '') || item.join(' ').toLocaleLowerCase().includes(normalized))
-          .map(([code, zh, en]) => ({ value: code, label: locale === 'zh' ? zh : en })),
+        ...languageOptions,
         { value: 'custom', label: t('translation.custom') },
       ]} />
     {value.kind === 'custom' && <Input aria-label={`${t(target ? 'translation.targetLanguage' : 'translation.sourceLanguage')} · ${t('translation.customName')}`} placeholder={t('translation.customName')} value={value.name} onChange={e => onChange({ kind: 'custom', name: e.target.value })} />}
@@ -70,6 +81,7 @@ export function TranslationPanel({ task, runId }: { task: TranscriptionTask; run
   const validLanguages = validTranslationLanguage(sourceLanguage) && validTranslationLanguage(targetLanguage, true) && !sameTranslationLanguage(sourceLanguage, targetLanguage);
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.translationRuns(task.id) });
   const selectRun = (id: string) => navigate({ to: '/ai', search: { task: task.id, mode: 'translation', run: id }, replace: true });
+
   const start = useMutation({
     mutationFn: () => apiClient.createTranslationRun(task.id, { provider_id: provider!.id, source_version_id: Number(sourceVersionId), source_language: sourceLanguage, target_language: targetLanguage }),
     onSuccess: async run => {
@@ -81,43 +93,51 @@ export function TranslationPanel({ task, runId }: { task: TranscriptionTask; run
   const action = useMutation({ mutationFn: (kind: 'cancel' | 'retry') => apiClient.translationAction(task.id, current!.id, kind), onSuccess: refresh });
   const error = sources.error ?? runs.error ?? providers.error ?? start.error ?? action.error;
 
-  return <Panel className="min-w-0 overflow-hidden">
+  return <Panel className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
     <PanelHeader title={t('translation.title')} description={task.filename} />
-    <div className="grid min-w-0 gap-4 p-4 sm:p-5">
-      <p className="text-sm text-app-muted">{t('translation.description')}</p>
-      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        <label className="grid min-w-0 gap-2 text-sm">{t('translation.sourceVersion')}
-          <Select aria-label={t('translation.sourceVersion')} value={sourceVersionId} onValueChange={setSourceId}
-            options={(sources.data ?? []).map(s => ({ value: String(s.id), label: `#${s.id} · ${s.version_type ?? ''} · ${formatDate(s.created_at)}` }))} />
-        </label>
+    <div className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto p-4 sm:p-5">
+      <div className="grid min-w-0 gap-3 min-[1500px]:grid-cols-[minmax(190px,1.2fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto] min-[1500px]:items-end">
         <label className="grid min-w-0 gap-2 text-sm">{t('translation.provider')}
           <Select aria-label={t('translation.provider')} value={provider?.id ?? ''} onValueChange={setProviderId}
             options={available.map(p => ({ value: p.id, label: `${p.name} · ${p.default_model ?? ''}` }))} />
         </label>
         <div className="grid min-w-0 gap-2 text-sm"><span>{t('translation.sourceLanguage')}</span><LanguageSelect value={sourceLanguage} onChange={setSourceLanguage} /></div>
         <div className="grid min-w-0 gap-2 text-sm"><span>{t('translation.targetLanguage')}</span><LanguageSelect target value={targetLanguage} onChange={setTargetLanguage} /></div>
+        <Button className="h-11 w-full whitespace-nowrap px-6 min-[1500px]:w-auto" disabled={!provider?.default_model || !sourceVersionId || !validLanguages || task.status !== 'completed' || active || start.isPending || dirty} onClick={() => start.mutate()}><Languages className="size-4" />{t('translation.start')}</Button>
       </div>
       {!validLanguages && <p role="alert" className="text-sm text-app-muted">{t('translation.invalidLanguage')}</p>}
       {task.status !== 'completed' && <p role="status" className="text-sm text-app-muted">{t('translation.notReady')}</p>}
-      <p className="rounded-lg border app-border p-3 text-xs leading-5 text-app-muted">{t(provider?.is_local ? 'translation.local' : 'translation.remote')}</p>
-      <p className="text-xs leading-5 text-app-muted">{t('translation.quality')}</p>
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={!provider?.default_model || !sourceVersionId || !validLanguages || task.status !== 'completed' || active || start.isPending || dirty} onClick={() => start.mutate()}><Languages className="size-4" />{t('translation.start')}</Button>
-        <Button asChild variant="secondary"><Link to="/settings" search={{ tab: 'llm' }}>{t('proofreading.configureProvider')}</Link></Button>
-      </div>
+      <details open className="group rounded-xl border app-border">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-app">{t('translation.advancedSettings')}</summary>
+        <div className="grid gap-3 border-t app-border p-3">
+          <label className="grid min-w-0 gap-2 text-sm">{t('translation.sourceVersion')}
+            <Select aria-label={t('translation.sourceVersion')} value={sourceVersionId} onValueChange={setSourceId}
+              options={(sources.data ?? []).map(s => ({ value: String(s.id), label: `#${s.id} · ${s.version_type ?? ''} · ${formatDate(s.created_at)}` }))} />
+          </label>
+          <p className="text-xs leading-5 text-app-muted">{t(provider?.is_local ? 'translation.local' : 'translation.remote')} {t('translation.quality')}</p>
+          <Button asChild variant="secondary" className="w-fit"><Link to="/settings" search={{ tab: 'llm' }}>{t('proofreading.configureProvider')}</Link></Button>
+        </div>
+      </details>
       {error && <ErrorState error={error} />}
       {runId && runs.isSuccess && !current && <p role="alert">{t('translation.missingRun')}</p>}
-      {!!runs.data?.items.length && <label className="grid min-w-0 gap-2 text-sm">{t('translation.history')}
-        <Select aria-label={t('translation.history')} value={current?.id ?? ''} onValueChange={id => { void selectRun(id); }} options={runs.data.items.map(run => ({ value: run.id,
-          label: `${languageLabel(run.source_language, locale)} → ${languageLabel(run.target_language, locale)} · ${formatDate(run.created_at)} · ${run.status === 'running' ? t('translation.running') : statusLabel(run.status)}` }))} />
-      </label>}
       {!current && !runId && <p className="text-sm text-app-muted">{t('translation.empty')}</p>}
+      {(current || !!runs.data?.items.length) && <details open className="group rounded-xl border app-border">
+        <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-app">{t('translation.runDetails')}</summary>
+        <div className="grid gap-3 border-t app-border p-3">
+          {!!runs.data?.items.length && <label className="grid min-w-0 gap-2 text-sm">{t('translation.history')}
+            <Select aria-label={t('translation.history')} value={current?.id ?? ''} onValueChange={id => { void selectRun(id); }} options={runs.data.items.map(run => ({ value: run.id,
+              label: `${languageLabel(run.source_language, locale)} → ${languageLabel(run.target_language, locale)} · ${formatDate(run.created_at)} · ${run.status === 'running' ? t('translation.running') : statusLabel(run.status)}` }))} />
+          </label>}
+          {current && <>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-app-muted"><Badge>{current.status === 'running' ? t('translation.running') : statusLabel(current.status)}</Badge><span>{current.provider_name} · {current.model_name} · #{current.source_version_id}</span></div>
+            {!current.source_is_current && <p role="status" className="rounded-lg border app-border p-3 text-sm">{t('translation.sourceUpdated')}</p>}
+            <Progress value={current.total_segments ? current.completed_segments / current.total_segments * 100 : 0} />
+            <p className="text-xs text-app-muted" role="status">{t('translation.progress', { completed: current.completed_segments, total: current.total_segments, batches: current.completed_batches, totalBatches: current.total_batches })}</p>
+            {current.status === 'running' && <TranslationWait key={`${current.id}:${current.attempt}:${current.updated_at}`} since={current.updated_at} limit={requestLimit} />}
+          </>}
+        </div>
+      </details>}
       {current && <>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-app-muted"><Badge>{current.status === 'running' ? t('translation.running') : statusLabel(current.status)}</Badge><span>{current.provider_name} · {current.model_name} · #{current.source_version_id}</span></div>
-        {!current.source_is_current && <p role="status" className="rounded-lg border app-border p-3 text-sm">{t('translation.sourceUpdated')}</p>}
-        <Progress value={current.total_segments ? current.completed_segments / current.total_segments * 100 : 0} />
-        <p className="text-xs text-app-muted" role="status">{t('translation.progress', { completed: current.completed_segments, total: current.total_segments, batches: current.completed_batches, totalBatches: current.total_batches })}</p>
-        {current.status === 'running' && <TranslationWait key={`${current.id}:${current.attempt}:${current.updated_at}`} since={current.updated_at} limit={requestLimit} />}
         {isActive(current) ? <>
           <Button className="w-fit" variant="secondary" disabled={action.isPending} onClick={() => action.mutate('cancel')}>{t('translation.cancel')}</Button>
           <p className="text-xs text-app-muted">{t('translation.cancelNote')}</p>
@@ -204,26 +224,25 @@ function TranslationEditor({ task, run, version, onDirty, onSaved, onError }: {
     const response = await apiClient.exportTranslation(task.id, run.id, version.id, format, mode, order);
     return downloadResponse(response, responseFilename(response, `translation-v${version.id}-${mode}.${format}`), { saveAsText: true });
   }, onError });
-  const play = useMutation({ mutationFn: async (startAt: number) => {
+  const play = useMutation({ mutationFn: async ({ startAt, endAt }: { startAt: number; endAt: number }) => {
     const url = await apiClient.taskAudioUrl(task.id);
-    useAudioStore.getState().openAudio({ taskId: task.id, url, title: task.filename, startAt });
+    openSegmentAudio({ taskId: task.id, url, title: task.filename, start: startAt, end: endAt });
   }, onError });
   const query = search.trim().toLocaleLowerCase();
   const segments = version.segments.filter(s => `${s.source_text}\n${draft[s.id] ?? s.text}`.toLocaleLowerCase().includes(query));
   return <div className="grid min-w-0 gap-3">
     <Input aria-label={t('translation.search')} placeholder={t('translation.search')} value={search} onChange={e => setSearch(e.target.value)} />
     {(!task.audio_path || mediaUnavailable) && <p className="text-xs text-app-muted">{t('translation.noMedia')}</p>}
-    <div className="grid min-w-0 gap-3" data-testid="translation-segments">
-      {segments.map(s => <div key={s.id} className="grid min-w-0 gap-2 rounded-lg border app-border p-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-app-muted"><span>{s.start.toFixed(2)}–{s.end.toFixed(2)}</span>{s.speaker && <bdi>{s.speaker}</bdi>}
-          <Button size="sm" variant="ghost" aria-label={t('translation.play', { id: s.id })} disabled={!task.audio_path || play.isPending} onClick={() => play.mutate(s.start)}><Play className="size-3" /></Button>
+    <div className="min-w-0 overflow-hidden rounded-xl border app-border" data-testid="translation-segments">
+      <div className="grid grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)] gap-3 bg-[var(--app-control-strong)] px-3 py-2.5 text-sm font-semibold text-app-muted">
+        <span>{t('tasks.duration')}</span><span>{t('translation.source')}</span><span>{t('translation.target')}</span>
+      </div>
+      {segments.map(s => <div key={s.id} className="grid min-h-[70px] min-w-0 grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-t app-border px-3 py-3">
+        <div className="flex flex-wrap items-start gap-2 text-xs text-app-muted"><span>{s.start.toFixed(2)}–{s.end.toFixed(2)}</span>{s.speaker && <bdi>{s.speaker}</bdi>}
+          <Button size="icon" variant="ghost" className="size-7" aria-label={t('translation.play', { id: s.id })} disabled={!task.audio_path || play.isPending} onClick={() => play.mutate({ startAt: s.start, endAt: s.end })}><Play className="size-3" /></Button>
         </div>
-        <div className="grid min-w-0 gap-3 md:grid-cols-2">
-          <div className="min-w-0"><p className="mb-1 text-xs text-app-muted">{t('translation.source')}</p><p dir="auto" className="whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{s.source_text}</p></div>
-          <label className="grid min-w-0 gap-1 text-xs text-app-muted">{t('translation.target')}
-            <Textarea dir="auto" aria-label={`${t('translation.target')} ${s.id}`} value={draft[s.id] ?? s.text} disabled={!run.can_edit || save.isPending} onChange={e => setDraft(old => ({ ...old, [s.id]: e.target.value }))} className="min-h-24 w-full min-w-0 text-sm [overflow-wrap:anywhere] [unicode-bidi:plaintext]" />
-          </label>
-        </div>
+        <p dir="auto" className="whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere] [unicode-bidi:plaintext]">{s.source_text}</p>
+        <Textarea dir="auto" aria-label={`${t('translation.target')} ${s.id}`} value={draft[s.id] ?? s.text} disabled={!run.can_edit || save.isPending} onChange={e => setDraft(old => ({ ...old, [s.id]: e.target.value }))} className="min-h-12 w-full min-w-0 border-0 bg-transparent p-0 text-sm leading-6 shadow-none [overflow-wrap:anywhere] [unicode-bidi:plaintext]" />
       </div>)}
       {!segments.length && <p>{t('translation.noMatches')}</p>}
     </div>

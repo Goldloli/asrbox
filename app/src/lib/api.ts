@@ -449,6 +449,7 @@ export interface ProofreadingRun {
   provider_name: string;
   provider_preset: string;
   model_name: string;
+  reason_language: 'zh' | 'en';
   status: ProofreadingRunStatus;
   total_batches: number;
   completed_batches: number;
@@ -1112,10 +1113,10 @@ class ApiClient {
     return this.request<ProofreadingRun>(`/tasks/${taskId}/proofreading-runs/${runId}`);
   }
 
-  createProofreadingRun(taskId: string, providerId: string) {
+  createProofreadingRun(taskId: string, providerId: string, reasonLanguage: 'zh' | 'en') {
     return this.request<ProofreadingRun>(`/tasks/${taskId}/proofreading-runs`, {
       method: 'POST',
-      body: JSON.stringify({ provider_id: providerId }),
+      body: JSON.stringify({ provider_id: providerId, reason_language: reasonLanguage }),
     });
   }
 

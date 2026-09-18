@@ -1,10 +1,10 @@
 import { Link } from '@tanstack/react-router';
 import { FileAudio, HardDriveDownload, Search, Server } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 import { useModelsQuery, useProvidersQuery, useTasksQuery } from '../lib/queries';
 import { formatDate } from '../lib/format';
-import { Button, Dialog, DialogContent, DialogTrigger, EmptyState, Input } from './weiui';
+import { Dialog, DialogContent, DialogTrigger, EmptyState, Input, KeyboardHint } from './weiui';
 import { ResultItemContent, resultItemClassName } from './ResultItem';
 
 type SearchResult = {
@@ -31,6 +31,17 @@ export function GlobalSearch() {
   const modelsQuery = useModelsQuery();
   const providersQuery = useProvidersQuery();
   const normalizedQuery = query.trim().toLowerCase();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setOpen((value) => !value);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const results = useMemo<SearchResult[]>(() => {
     const taskResults = (tasksQuery.data?.items ?? []).map((task) => ({
@@ -93,10 +104,15 @@ export function GlobalSearch() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={t('search.open')} className="shrink-0">
-          <Search className="size-4" />
-          <span className="hidden lg:inline">{t('search.trigger')}</span>
-        </Button>
+        <button
+          type="button"
+          aria-label={t('search.open')}
+          className="flex h-10 w-full max-w-3xl min-w-0 items-center gap-2 rounded-lg border app-border bg-[var(--app-control)] px-4 text-sm text-app-muted transition hover:bg-[var(--app-control-strong)] focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+        >
+          <Search className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">{t('search.placeholder')}</span>
+          <KeyboardHint className="hidden shrink-0 sm:inline">⌘ K</KeyboardHint>
+        </button>
       </DialogTrigger>
       <DialogContent title={t('search.title')}>
         <div className="grid gap-4">

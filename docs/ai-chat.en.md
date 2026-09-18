@@ -2,7 +2,7 @@
 
 [中文](ai-chat.md)
 
-Chat is the third tab on the AI page, next to Subtitle proofreading and Subtitle translation. It reuses the providers configured under Settings → AI LLM providers and supports two modes: without a bound task, it answers app-usage questions from a built-in documentation knowledge base; with a task bound, it injects the task's current-version subtitles as context so you can ask about the subtitle content. Sessions and messages are stored in the local database and remain available across restarts.
+Chat is the third tab on the AI workspace page, next to Subtitle proofreading and Subtitle translation. It reuses the providers configured under Settings → AI LLM providers and supports two modes: without a bound task, it answers app-usage questions from a built-in documentation knowledge base; with a task bound, it injects the task's current-version subtitles as context so you can ask about the subtitle content. Sessions and messages are stored in the local database and remain available across restarts.
 
 ## Asking questions
 

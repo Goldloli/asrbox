@@ -150,6 +150,7 @@ def test_llm_proofreading_models_store_auditable_source_snapshot(tmp_path: Path)
             status="completed",
             total_batches=1,
             completed_batches=1,
+            reason_language="zh",
         )
         db.add(run)
         db.flush()
@@ -168,9 +169,35 @@ def test_llm_proofreading_models_store_auditable_source_snapshot(tmp_path: Path)
         assert stored.source_version_id == version.id
         assert stored.provider_name == "Local Ollama"
         assert stored.model_name == "qwen3"
+        assert stored.reason_language == "zh"
         assert stored.suggestions[0].resolution == "pending"
     finally:
         db.close()
+
+
+def test_proofreading_reason_language_migration_is_additive_and_repeatable(tmp_path: Path) -> None:
+    from backend.database.migrations import run_migrations
+    from backend.database.models import Base
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'reason-language.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("ALTER TABLE proofreading_runs DROP COLUMN reason_language")
+
+    run_migrations(engine, factory)
+    run_migrations(engine, factory)
+
+    columns = {column["name"]: column for column in inspect(engine).get_columns("proofreading_runs")}
+    assert columns["reason_language"]["nullable"] is False
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version FROM schema_migrations WHERE version = '20260917_001_proofreading_reason_language'")
+        ).scalar_one() == "20260917_001_proofreading_reason_language"
+    engine.dispose()
 
 
 def test_llm_provider_presets_cover_supported_backends() -> None:

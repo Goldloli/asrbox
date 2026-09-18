@@ -12,7 +12,7 @@ export const TabsList = ({ className, ...props }: TabsPrimitive.TabsListProps) =
 );
 export const TabsTrigger = ({ className, ...props }: TabsPrimitive.TabsTriggerProps) => (
   <TabsPrimitive.Trigger
-    className={cn('rounded-md px-3 py-1.5 text-xs text-app-muted transition data-[state=active]:bg-[var(--app-control-strong)] data-[state=active]:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/25', className)}
+    className={cn('rounded-md px-3 py-1.5 text-xs text-app-muted transition data-[state=active]:bg-[var(--app-accent-soft)] data-[state=active]:text-[var(--app-accent-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-accent)]/25', className)}
     {...props}
   />
 );

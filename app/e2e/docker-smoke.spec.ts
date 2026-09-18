@@ -16,9 +16,15 @@ test('container UI uses its own origin and keeps the token session-only', async 
     if (request.resourceType() === 'fetch') apiOrigins.add(new URL(request.url()).origin);
   });
 
+  const healthResponsePromise = page.waitForResponse((response) => (
+    response.request().method() === 'GET'
+      && new URL(response.url()).pathname === '/health'
+      && response.ok()
+  ));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '转写', exact: true }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('后端在线', { exact: true })).toBeVisible();
+  const healthResponse = await healthResponsePromise;
+  await expect(page.getByRole('heading', { name: '新建转写', exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  expect((await healthResponse.json()).status).toBe('healthy');
   expect([...apiOrigins]).toEqual([new URL(page.url()).origin]);
 
   await page.goto('/settings');

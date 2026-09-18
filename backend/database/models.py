@@ -142,6 +142,7 @@ class ProofreadingRun(Base):
     provider_name = Column(String, nullable=False)
     provider_preset = Column(String, nullable=False)
     model_name = Column(String, nullable=False)
+    reason_language = Column(String, nullable=False, default="en")
     status = Column(String, nullable=False, default="queued")
     total_batches = Column(Integer, nullable=False, default=0)
     completed_batches = Column(Integer, nullable=False, default=0)

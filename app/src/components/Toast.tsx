@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { friendlyErrorMessage } from '../lib/errorMessages';
+import { useUiStore } from '../stores/uiStore';
+import { useI18n } from '../lib/i18n';
 
 type ToastTone = 'success' | 'error' | 'info';
 
@@ -22,7 +24,7 @@ type ToastApi = {
 const ToastContext = createContext<ToastApi | null>(null);
 
 export function toastErrorMessage(error: unknown) {
-  return friendlyErrorMessage(error);
+  return friendlyErrorMessage(error, useUiStore.getState().locale);
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -71,6 +73,7 @@ export function useToast() {
 }
 
 function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
+  const { locale } = useI18n();
   const Icon = item.tone === 'success' ? CheckCircle2 : item.tone === 'error' ? AlertCircle : Info;
   return (
     <div
@@ -98,7 +101,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         type="button"
         className="grid size-7 place-items-center rounded-lg text-app-muted transition hover:bg-[var(--app-control)] hover:text-app"
         onClick={onDismiss}
-        aria-label="Dismiss notification"
+        aria-label={locale === 'zh' ? '关闭通知' : 'Dismiss notification'}
       >
         <X className="size-4" />
       </button>

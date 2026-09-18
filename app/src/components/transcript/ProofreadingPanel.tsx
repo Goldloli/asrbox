@@ -12,6 +12,7 @@ import {
   HardDrive,
   History,
   Loader2,
+  Play,
   RotateCcw,
   Settings2,
   Sparkles,
@@ -28,6 +29,7 @@ import { formatDate } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
 import { queryKeys, useLLMProvidersQuery } from '../../lib/queries';
 import { useUiStore } from '../../stores/uiStore';
+import { openSegmentAudio } from '../../stores/audioStore';
 import { ConfirmAction } from '../ConfirmAction';
 import { toastErrorMessage, useToast } from '../Toast';
 import { Badge, Button, EmptyState, ErrorState, Panel, PanelHeader, Progress, Select } from '../weiui';
@@ -37,7 +39,7 @@ type ReviewItem =
   | { type: 'suggestion'; key: string; segment?: TranscriptSegment; suggestion: ProofreadingSuggestion };
 
 export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const queryClient = useQueryClient();
   const lastProviderId = useUiStore((state) => state.lastLLMProviderId);
@@ -101,7 +103,7 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
 
   const refreshRuns = () => queryClient.invalidateQueries({ queryKey: queryKeys.proofreadingRuns(task.id) });
   const start = useMutation({
-    mutationFn: () => apiClient.createProofreadingRun(task.id, providerId),
+    mutationFn: () => apiClient.createProofreadingRun(task.id, providerId, locale),
     onSuccess: (run) => {
       setLastProviderId(providerId);
       setSelectedRunId(run.id);
@@ -137,10 +139,24 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
     selected: selectedSuggestionIds.length,
     skipped: Math.max(pendingSuggestions.length - selectedSuggestionIds.length, 0),
   });
+  const playSegment = async (segment: TranscriptSegment) => {
+    try {
+      const url = await apiClient.taskAudioUrl(task.id);
+      openSegmentAudio({
+        taskId: task.id,
+        url,
+        title: task.filename,
+        start: segment.start,
+        end: segment.end,
+      });
+    } catch (error) {
+      toast.error(t('proofreading.playFailed'), toastErrorMessage(error));
+    }
+  };
 
   if (!providers.isLoading && enabledProviders.length === 0) {
     return (
-      <Panel className="min-w-0 overflow-hidden">
+      <Panel className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
         <PanelHeader eyebrow={t('proofreading.eyebrow')} title={t('proofreading.title')} description={task.filename} />
         {providers.error ? (
           <div className="p-4"><ErrorState error={providers.error} /></div>
@@ -157,15 +173,15 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
   }
 
   return (
-    <Panel className="min-w-0 overflow-hidden">
+    <Panel className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
       <PanelHeader
         eyebrow={t('proofreading.eyebrow')}
         title={t('proofreading.title')}
         description={task.filename}
         action={currentRun ? <RunStatus run={currentRun} /> : undefined}
       />
-      <div className="grid min-w-0 gap-4 p-4 sm:p-5">
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto p-4 sm:p-5">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <Select
             value={providerId}
             onValueChange={setProviderId}
@@ -178,10 +194,10 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
           <Button
             disabled={!providerId || start.isPending || Boolean(activeRun)}
             onClick={() => start.mutate()}
-            className="h-10"
+            className="h-11 px-6"
           >
             {start.isPending || activeRun ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-            {activeRun ? t('proofreading.running') : currentRun ? t('proofreading.rerun') : t('proofreading.start')}
+            {activeRun?.status === 'queued' ? t('proofreading.queued') : activeRun ? t('proofreading.running') : currentRun ? t('proofreading.rerun') : t('proofreading.start')}
           </Button>
         </div>
 
@@ -238,7 +254,13 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
               </div>
             )}
 
-            <div className="grid min-w-0 gap-2">
+            <div className="overflow-hidden rounded-xl border app-border">
+              <div className="grid grid-cols-[34px_92px_minmax(0,1fr)_minmax(0,1fr)] gap-3 bg-[var(--app-control-strong)] px-3 py-2.5 text-sm font-semibold text-app-muted">
+                <span aria-hidden="true" />
+                <span>{t('tasks.duration')}</span>
+                <span>{t('proofreading.original')}</span>
+                <span>{t('proofreading.suggestion')}</span>
+              </div>
               {reviewItems.map((item) => item.type === 'unchanged' ? (
                 <UnchangedRange
                   key={item.key}
@@ -253,6 +275,7 @@ export function ProofreadingPanel({ task }: { task: TranscriptionTask }) {
                   checked={selectedSuggestionIds.includes(item.suggestion.id)}
                   selectable={selectable && item.suggestion.resolution === 'pending'}
                   onToggle={() => toggleSuggestion(item.suggestion.id)}
+                  onPlay={item.segment && task.audio_path ? () => void playSegment(item.segment!) : undefined}
                 />
               ))}
             </div>
@@ -328,12 +351,12 @@ function UnchangedRange({ item, expanded, onToggle }: {
   const last = item.segments[item.segments.length - 1];
   const range = `${formatTimestamp(first.start)}–${formatTimestamp(last.end)}`;
   return (
-    <div className="overflow-hidden rounded-lg border app-border bg-[var(--app-control)]/45">
+    <div className="border-t app-border bg-[var(--app-control)]/30 first:border-t-0">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app-muted hover:text-app"
+        className="flex min-h-12 w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-app-muted hover:text-app"
       >
         {expanded ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
         <span>{expanded ? t('proofreading.hideUnchanged') : t('proofreading.showUnchanged', { count: item.segments.length })}</span>
@@ -353,17 +376,18 @@ function UnchangedRange({ item, expanded, onToggle }: {
   );
 }
 
-function SuggestionCard({ item, checked, selectable, onToggle }: {
+function SuggestionCard({ item, checked, selectable, onToggle, onPlay }: {
   item: Extract<ReviewItem, { type: 'suggestion' }>;
   checked: boolean;
   selectable: boolean;
   onToggle: () => void;
+  onPlay?: () => void;
 }) {
   const { t } = useI18n();
   const suggestion = item.suggestion;
   const time = item.segment ? `${formatTimestamp(item.segment.start)}–${formatTimestamp(item.segment.end)}` : `#${suggestion.segment_id}`;
   return (
-    <label className="grid min-w-0 cursor-pointer grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border app-border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[color:var(--app-accent)]">
+    <div className="grid min-h-[68px] min-w-0 grid-cols-[34px_92px_minmax(0,1fr)_minmax(0,1fr)] items-start gap-3 border-t app-border px-3 py-3.5 first:border-t-0 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-[color:var(--app-accent)] hover:bg-[var(--app-control)]/35">
       <input
         type="checkbox"
         className="mt-1 size-4 accent-[var(--app-accent)]"
@@ -372,26 +396,27 @@ function SuggestionCard({ item, checked, selectable, onToggle }: {
         disabled={!selectable}
         aria-label={t('proofreading.selectSuggestion', { time })}
       />
-      <div className="grid min-w-0 gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Badge><Clock3 className="mr-1 size-3" />{time}</Badge>
-          {suggestion.resolution !== 'pending' && <Badge tone={suggestion.resolution === 'applied' ? 'success' : 'neutral'}>{suggestion.resolution}</Badge>}
-        </div>
-        <div className="grid gap-2 lg:grid-cols-2">
-          <DiffBlock label={t('proofreading.original')} value={suggestion.original_text} comparison={suggestion.suggested_text} removed />
-          <DiffBlock label={t('proofreading.suggestion')} value={suggestion.suggested_text} comparison={suggestion.original_text} />
-        </div>
-        <p className="break-words text-xs leading-5 text-app-muted"><span className="font-semibold text-app-soft">{t('proofreading.reason')}:</span> {suggestion.reason}</p>
+      <span className="pt-0.5 font-mono text-xs text-app-muted">{time}</span>
+      <DiffBlock label={t('proofreading.original')} value={suggestion.original_text} comparison={suggestion.suggested_text} removed />
+      <div className="grid min-w-0 gap-1.5">
+        <DiffBlock label={t('proofreading.suggestion')} value={suggestion.suggested_text} comparison={suggestion.original_text} />
+        <p className="break-words text-[11px] leading-4 text-app-muted"><span className="font-semibold text-app-soft">{t('proofreading.reason')}:</span> {suggestion.reason}</p>
+        {onPlay && (
+          <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={onPlay} aria-label={t('proofreading.playSegment', { time })}>
+            <Play className="size-3.5 fill-current" />{t('proofreading.playSegmentShort')}
+          </Button>
+        )}
+        {suggestion.resolution !== 'pending' && <Badge tone={suggestion.resolution === 'applied' ? 'success' : 'neutral'} className="w-fit">{suggestion.resolution}</Badge>}
       </div>
-    </label>
+    </div>
   );
 }
 
 function DiffBlock({ label, value, comparison, removed = false }: { label: string; value: string; comparison: string; removed?: boolean }) {
   const parts = diffParts(value, comparison);
   return (
-    <div className="min-w-0 rounded-lg border app-control px-3 py-2">
-      <p className="mb-1 text-[11px] font-semibold text-app-muted">{label}</p>
+    <div className="min-w-0">
+      <p className="sr-only">{label}</p>
       <p className="break-words text-sm leading-6 text-app">
         {parts.prefix}
         {parts.changed && (

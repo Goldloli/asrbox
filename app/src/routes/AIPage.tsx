@@ -4,7 +4,7 @@ import { BrainCircuit, Clock3, FileAudio, Languages, MessagesSquare, Search } fr
 import { TranslationPanel } from '../components/transcript/TranslationPanel';
 import { ProofreadingPanel } from '../components/transcript/ProofreadingPanel';
 import { ChatPanel } from '../components/transcript/ChatPanel';
-import { Badge, Button, EmptyState, ErrorState, Input, Panel, PanelHeader } from '../components/weiui';
+import { Badge, Button, DataRow, EmptyState, ErrorState, Input, PageTitle, Panel, PanelHeader } from '../components/weiui';
 import { formatDate, formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useTasksQuery } from '../lib/queries';
@@ -40,28 +40,26 @@ export function AIPage() {
   };
 
   return (
-    <section className="grid gap-4">
-      <Panel className="overflow-hidden">
-        <PanelHeader
-          eyebrow={t('ai.eyebrow')}
-          title={chatMode ? t('chat.title') : t('ai.title')}
-          description={chatMode ? t('chat.description') : translationMode ? t('translation.description') : t('ai.description')}
-        />
-      </Panel>
+    <section data-testid="ai-workspace" className="ai-workspace-shell app-panel grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-2xl border">
+      <PageTitle
+        title={chatMode ? t('chat.title') : t('ai.title')}
+        description={chatMode ? t('chat.description') : translationMode ? t('translation.description') : t('ai.description')}
+        className="px-6 pt-5"
+      />
 
-      <nav className="flex flex-wrap gap-2" aria-label={t('ai.title')}>
-        <Button asChild variant={!translationMode && !chatMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode && !chatMode ? 'page' : undefined}>{t('translation.proofreading')}</Link></Button>
-        <Button asChild variant={translationMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ task: selectedTask?.id, mode: 'translation' }} replace aria-current={translationMode ? 'page' : undefined}>{t('translation.title')}</Link></Button>
-        <Button asChild variant={chatMode ? 'primary' : 'secondary'}><Link to="/ai" search={{ mode: 'chat' }} replace aria-current={chatMode ? 'page' : undefined}><MessagesSquare className="size-4" />{t('chat.tab')}</Link></Button>
+      <nav className="flex flex-wrap gap-7 border-b app-border px-6" aria-label={t('ai.title')}>
+        <Link className={cn('flex h-11 items-center border-b-2 px-1 text-sm font-semibold text-app-muted transition hover:text-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-accent)]/30', !translationMode && !chatMode ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} to="/ai" search={{ task: selectedTask?.id }} replace aria-current={!translationMode && !chatMode ? 'page' : undefined}>{t('translation.proofreading')}</Link>
+        <Link className={cn('flex h-11 items-center border-b-2 px-1 text-sm font-semibold text-app-muted transition hover:text-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-accent)]/30', translationMode ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} to="/ai" search={{ task: selectedTask?.id, mode: 'translation' }} replace aria-current={translationMode ? 'page' : undefined}>{t('translation.title')}</Link>
+        <Link className={cn('flex h-11 items-center gap-2 border-b-2 px-1 text-sm font-semibold text-app-muted transition hover:text-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--app-accent)]/30', chatMode ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} to="/ai" search={{ mode: 'chat' }} replace aria-current={chatMode ? 'page' : undefined}><MessagesSquare className="size-4" />{t('chat.tab')}</Link>
       </nav>
 
       {chatMode ? (
         <ChatPanel tasks={eligibleTasks} />
       ) : (
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Panel className="min-w-0 overflow-hidden lg:sticky lg:top-0 lg:max-h-[calc(100dvh-150px)]">
+      <div className="grid h-full min-h-0 min-w-0 lg:grid-cols-[220px_minmax(0,1fr)_220px]">
+        <Panel className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-none border-y-0 border-l-0 shadow-none">
           <PanelHeader title={t('ai.tasksTitle')} description={t('ai.tasksDescription')} />
-          <div className="grid gap-3 border-b app-border p-3">
+          <div className="grid gap-3 border-b app-border p-4">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
               <Input
@@ -95,7 +93,7 @@ export function AIPage() {
             <EmptyState title={t('ai.noSearchResults')} body={t('ai.noSearchResultsBody')} icon={<Search className="size-5" />} />
           )}
           {visibleTasks.length > 0 && (
-            <div className="grid max-h-[440px] gap-1 overflow-auto p-2 lg:max-h-[calc(100dvh-310px)]">
+            <div className="grid min-h-0 flex-1 content-start gap-1 overflow-auto p-2">
               {visibleTasks.map((task) => {
                 const active = task.id === selectedTask?.id;
                 return (
@@ -105,14 +103,14 @@ export function AIPage() {
                     onClick={() => selectTask(task.id)}
                     aria-pressed={active}
                     className={cn(
-                      'grid min-w-0 gap-2 rounded-lg border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/25',
+                      'grid min-w-0 gap-2 rounded-xl border px-3.5 py-3.5 text-left transition focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/25',
                       active
-                        ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]'
+                        ? 'border-transparent bg-[var(--app-accent-soft)] shadow-[inset_3px_0_0_var(--app-accent)]'
                         : 'border-transparent hover:border-[var(--app-border)] hover:bg-[var(--app-control)]',
                     )}
                   >
                     <div className="flex min-w-0 items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-app">{task.filename}</span>
+                      <span className="truncate text-[15px] font-semibold text-app">{task.filename}</span>
                       <Badge tone={active ? 'accent' : 'neutral'}>{task.segments.length}</Badge>
                     </div>
                     <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-app-muted">
@@ -127,7 +125,7 @@ export function AIPage() {
           )}
         </Panel>
 
-        <div className="min-w-0">
+        <div data-testid="ai-workspace-content" className="h-full min-h-0 min-w-0 overflow-hidden border-r app-border [&>.app-panel]:rounded-none [&>.app-panel]:border-y-0 [&>.app-panel]:border-l-0 [&>.app-panel]:shadow-none">
           {selectedTask ? (
             translationMode ? <TranslationPanel key={selectedTask.id} task={selectedTask} runId={search.run} /> : <ProofreadingPanel task={selectedTask} />
           ) : (
@@ -136,6 +134,22 @@ export function AIPage() {
             </Panel>
           )}
         </div>
+        <Panel className="h-full min-h-0 min-w-0 overflow-y-auto rounded-none border-y-0 border-x-0 shadow-none">
+          <PanelHeader title={t('tasks.inspector')} description={translationMode ? t('translation.title') : t('proofreading.title')} />
+          <div className="grid gap-5 p-5">
+            {selectedTask ? <>
+              <div className="grid gap-1">
+                <DataRow label={t('tasks.status')} value={<Badge tone="success">{t('common.completed')}</Badge>} />
+                <DataRow label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
+                <DataRow label={t('tasks.language')} value={selectedTask.language ?? '—'} />
+                <DataRow label={t('transcript.segments')} value={selectedTask.segments.length} />
+              </div>
+              <div className="rounded-lg border app-control p-3 text-xs leading-5 text-app-muted">
+                {selectedTask.filename}
+              </div>
+            </> : <EmptyState title={t('ai.chooseTask')} body={t('ai.chooseTaskBody')} />}
+          </div>
+        </Panel>
       </div>
       )}
     </section>

@@ -66,6 +66,8 @@ const stubSettings = (page: import('@playwright/test').Page, settings: Record<st
     return route.fulfill({ json: settings });
   });
 
+const field = (scope: import('@playwright/test').Page, label: string) => scope.locator('label').filter({ has: scope.getByText(label, { exact: true }) }).first();
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((url) => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
@@ -79,10 +81,9 @@ test('transcribe page preselects saved default local model and language', async 
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(0)).toContainText('Local model');
-  await expect(combos.nth(1)).toContainText('Qwen3 ASR 0.6B');
-  await expect(combos.nth(2)).toContainText('Auto detect');
+  await expect(field(page, 'Backend').getByRole('combobox')).toContainText('Local model');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Qwen3 ASR 0.6B');
+  await expect(field(page, 'Language').getByRole('combobox')).toContainText('Auto detect');
 });
 
 test('transcribe page preselects saved default provider', async ({ page }) => {
@@ -103,9 +104,7 @@ test('transcribe page preselects saved default provider', async ({ page }) => {
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(0)).toContainText('Provider');
-  await expect(combos.nth(1)).toContainText('Test Online');
+  await expect(field(page, 'Provider').getByRole('combobox')).toContainText('Test Online');
 });
 
 test('transcribe page falls back when the saved default model is unavailable', async ({ page }) => {
@@ -115,9 +114,57 @@ test('transcribe page falls back when the saved default model is unavailable', a
 
   await page.goto('/');
 
-  const combos = page.getByRole('combobox');
-  await expect(combos.nth(1)).toContainText('Whisper Base');
-  await expect(combos.nth(2)).toContainText('Chinese Simplified');
+  await expect(field(page, 'Model').getByRole('combobox')).toContainText('Whisper Base');
+  await expect(field(page, 'Language').getByRole('combobox')).toContainText('Chinese Simplified');
+});
+
+test('transcribe page primary panel keeps all four corners rounded', async ({ page }) => {
+  await stubSettings(page, asrSettings({}));
+  await stubModels(page, [modelStatus({})]);
+  await stubProviders(page, []);
+
+  await page.goto('/');
+
+  const panel = page.getByTestId('page-title').locator('xpath=ancestor::section[1]');
+  const radii = await panel.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      topLeft: style.borderTopLeftRadius,
+      topRight: style.borderTopRightRadius,
+      bottomLeft: style.borderBottomLeftRadius,
+      bottomRight: style.borderBottomRightRadius,
+    };
+  });
+  expect(radii.topLeft).toBe(radii.topRight);
+  expect(radii.bottomLeft).toBe(radii.bottomRight);
+  expect(radii.topLeft).not.toBe('0px');
+  expect(radii.bottomLeft).not.toBe('0px');
+});
+
+test('settings switches use the active accent color only while enabled', async ({ page }) => {
+  await stubSettings(page, asrSettings({}));
+  await stubModels(page, [modelStatus({})]);
+  await stubProviders(page, []);
+
+  await page.goto('/settings?tab=transcription');
+
+  const timestamps = page.getByRole('switch', { name: /^Timestamps(?:\s|$)/ });
+  const wordTimestamps = page.getByRole('switch', { name: /^Word timestamps(?:\s|$)/ });
+  const accentColor = 'rgb(255, 157, 0)';
+
+  await expect(timestamps).toBeChecked();
+  await expect(timestamps).toHaveCSS('background-color', accentColor);
+  await expect(wordTimestamps).not.toBeChecked();
+  expect(await wordTimestamps.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(accentColor);
+
+  await timestamps.click();
+  await expect(timestamps).not.toBeChecked();
+  await expect.poll(() => timestamps.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(accentColor);
+
+  await wordTimestamps.click();
+  await expect(wordTimestamps).toBeChecked();
+  await page.mouse.move(0, 0);
+  await expect(wordTimestamps).toHaveCSS('background-color', accentColor);
 });
 
 test('settings page saves default model with linked backend and clears via auto', async ({ page }) => {

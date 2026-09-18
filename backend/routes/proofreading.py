@@ -42,7 +42,12 @@ async def create_run(
     db: Session = Depends(get_db),
 ):
     try:
-        run = proofreading.create_run(db, task_id, payload.provider_id)
+        run = proofreading.create_run(
+            db,
+            task_id,
+            payload.provider_id,
+            reason_language=payload.reason_language,
+        )
     except proofreading.ProofreadingError as exc:
         _raise_proofreading_error(exc)
     return proofreading.to_response(db, run)

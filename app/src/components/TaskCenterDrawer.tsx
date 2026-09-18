@@ -10,6 +10,8 @@ import { ResultItemContent } from './ResultItem';
 import { cancelAppUpdateDownload, startAppUpdateDownload, useAppUpdateStore } from '../stores/appUpdateStore';
 import { useUiStore } from '../stores/uiStore';
 import { desktopCapabilities, type AppUpdateDownloadState } from '../lib/desktopCapabilities';
+import { localizedErrorPresentation } from '../lib/errorMessages';
+import { LocalizedTechnicalMessage } from './LocalizedTechnicalMessage';
 
 export function TaskCenterDrawer() {
   const { t, statusLabel } = useI18n();
@@ -76,7 +78,7 @@ function TaskCenterAppUpdate({
   download: AppUpdateDownloadState;
   channel: 'stable' | 'prerelease';
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const installerKind = useAppUpdateStore((state) => state.versionInfo.installerKind);
   const active = ['preparing', 'downloading', 'verifying', 'cancelling'].includes(download.status);
   const retry = () => {
@@ -93,7 +95,7 @@ function TaskCenterAppUpdate({
         tone={download.status === 'error' ? 'danger' : download.status === 'completed' ? 'success' : 'warning'}
       />
       {(active || download.progress != null) && <Progress value={download.progress} />}
-      {download.error && <p className="break-words text-xs text-[var(--app-danger)]">{download.error}</p>}
+      {download.error && <LocalizedTechnicalMessage message={localizedErrorPresentation(new Error(download.error), locale)} className="text-xs text-[var(--app-danger)]" />}
       <div className="flex flex-wrap gap-2">
         {active && (
           <Button size="sm" variant="secondary" onClick={() => void cancelAppUpdateDownload().catch(() => undefined)} disabled={download.status === 'cancelling'}>

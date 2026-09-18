@@ -108,7 +108,7 @@ def _has_managed_symlink(path: Path) -> bool:
     return False
 
 
-def inspect_storage() -> dict[str, Any]:
+def inspect_storage(*, include_usage: bool = True) -> dict[str, Any]:
     root = config.get_model_storage_root()
     models_dir = root / "models"
     cache_dirs = config.get_model_cache_dirs()
@@ -133,8 +133,9 @@ def inspect_storage() -> dict[str, Any]:
     except OSError as exc:
         status, reason, detail = "unavailable", "io_error", str(exc)
 
-    cache_usage = {name: directory_size(path) if status != "unavailable" else 0 for name, path in cache_dirs.items()}
-    model_bytes = directory_size(models_dir) if status != "unavailable" else 0
+    should_scan_usage = include_usage and status != "unavailable"
+    cache_usage = {name: directory_size(path) if should_scan_usage else 0 for name, path in cache_dirs.items()}
+    model_bytes = directory_size(models_dir) if should_scan_usage else 0
     filesystem_type = _filesystem_type(root) if status != "unavailable" else None
     return {
         "root": str(root),
