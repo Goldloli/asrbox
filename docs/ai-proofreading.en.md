@@ -28,21 +28,23 @@ Expand **Translation and proofreading compatibility** in the provider editor:
 | Response transport | Complete JSON or streaming SSE; some thinking models require streaming |
 | Context length | Ollama protocol only; overrides the local model context per request. Default 32768. Larger contexts use more VRAM—lower it on low-end GPUs |
 
-Translation and proofreading share these settings, a 90-second total request deadline and a 1 MiB response limit. Keep-alives cannot renew the deadline. Streaming collects content only, excluding reasoning; truncation, refusals and incomplete structures fail explicitly. Except for the deterministic halving retry when a batch fails on context capacity or truncated output, real subtitle failures never trigger speculative configuration changes or automatic resends. Capability testing also stops immediately on authentication, rate-limit, timeout, connection or other non-format errors.
+Translation and proofreading share these settings. Request deadlines differ by protocol: 300 seconds per request for the local Ollama protocol (covering cold model loads and large batches), 90 seconds for other protocols; all protocols have a 1 MiB response limit. Keep-alives cannot renew the deadline. Streaming collects content only, excluding reasoning; truncation, refusals and incomplete structures fail explicitly. Except for the deterministic halving retry when a batch fails on timeout, context capacity, truncated output or invalid structure, real subtitle failures never trigger speculative configuration changes or automatic resends. Capability testing also stops immediately on authentication, rate-limit, timeout, connection or other non-format errors.
 
 Passing fixed samples does not prove a platform obeys every parameter and does not guarantee long-task speed, availability, semantic segment alignment or translation quality. APIs outside OpenAI Chat Completions are unsupported. Existing configurations migrate without losing credentials. Compatibility options can be changed before explicitly resuming unfinished translation batches with the same preset, endpoint and model; saved batches are preserved.
 
 ## Workflow
 
-1. Open AI from the sidebar.
+1. Open the AI workspace from the sidebar.
 2. The left column lists only completed tasks that have a subtitle version.
 3. Select a task and LLM provider, then start Subtitle proofreading.
 4. Wait for completion. Returning to AI restores the current run.
 5. Results retain subtitle order. Suggested changes are expanded; adjacent correct ranges have individual “expand segments X-Y” controls.
-6. Review time, original text, suggestion, and reason, then select suggestions to accept.
+6. Review time, original text, suggestion, and reason; Play this sentence previews the source clip (strictly on the segment timeline by default — Settings → General → Segment playback padding can add 0.5–3 seconds on each side), then select suggestions to accept.
 7. Apply selected suggestions. ASRbox creates a new version and remains on the AI page.
 
 Suggestions start unselected. Applying is disabled with no selection, and unselected suggestions never change the transcript. Applied or stale suggestions cannot overwrite a newer version.
+
+Long transcripts are sent in batches: up to 500 segments / 30,000 characters per batch for remote providers, and up to 64 segments / 6,000 characters for local Ollama, paced for local inference; queued and inferring states are shown distinctly. A batch that times out, truncates, exceeds context or returns an invalid structure is halved and retried automatically (recursively down to a single segment) instead of failing outright. Modification reasons follow the interface language the run was created with.
 
 ## Results and failures
 
@@ -77,7 +79,7 @@ Version 0.1.6 adds AI → Subtitle translation using the same LLM providers. Sou
 
 Translations do not change the source transcript, its export or proofreading staleness. While the source task is being retranscribed, creation/resuming/editing is disabled, but saved history remains readable and exportable. Save conflicts preserve drafts so you can check newer revisions before deciding how to save.
 
-Batches contain at most 100 target segments and 6,000 Unicode characters including context. Context includes at most two neighboring segments on each side, totaling at most 1,000 characters. A segment over 6,000 characters is rejected before any request. Sources require unique segment IDs, nonempty text and exportable timestamps. These character limits are not token guarantees; when a batch still hits context or output capacity limits, it is halved and retried deterministically (recursively down to a single segment), and the run fails only if a single segment still fails.
+Batches contain at most 100 target segments (64 for local Ollama) and 6,000 Unicode characters including context. Context includes at most two neighboring segments on each side, totaling at most 1,000 characters. A segment over 6,000 characters is rejected before any request. Sources require unique segment IDs, nonempty text and exportable timestamps. These character limits are not token guarantees; when a batch still hits context or output capacity limits, it is halved and retried deterministically (recursively down to a single segment), and the run fails only if a single segment still fails.
 
 Only fully successful batches are checkpointed. A complete translation version is published only after every batch succeeds. Cancellation stops local progress and discards late responses, but an in-flight provider request may continue until timeout and incur charges. Failed, cancelled or restart-interrupted runs require explicit resumption. There are no automatic paid retries. Only unfinished batches are resent, but a remotely processed batch that was not saved locally may incur charges again.
 
@@ -85,6 +87,6 @@ Resuming requires the original provider endpoint, preset and model; changing the
 
 Language coverage, accuracy and terminology consistency depend on the model. Structural validation is not semantic quality verification. Review before sharing. Glossaries, dubbing, subtitle burn-in and automatic retiming are outside this first version. ASS fonts and complex-script rendering depend on the player; long bilingual text is not silently shortened.
 
-Each translation request has a 90-second total deadline, including provider keep-alives. A timeout preserves completed batches for explicit resumption. The UI shows time spent waiting for the current batch; saved progress changes only after complete results pass validation. The DeepSeek preset uses JSON output and disables thinking for V4 translation requests; proofreading shares the compatibility settings, while connectivity tests do not request subtitle structures. Models can still omit segments or return invalid data; incomplete results are rejected and manual review remains necessary.
+Each translation request deadline depends on the protocol: 300 seconds for the local Ollama protocol, 90 seconds for others, both including provider keep-alives. A timeout preserves completed batches for explicit resumption. The UI shows time spent waiting for the current batch; saved progress changes only after complete results pass validation. The DeepSeek preset uses JSON output and disables thinking for V4 translation requests; proofreading shares the compatibility settings, while connectivity tests do not request subtitle structures. Models can still omit segments or return invalid data; incomplete results are rejected and manual review remains necessary.
 
 Ollama translation uses the Ollama native API: requests carry a 32768-token context by default (adjustable in compatibility settings), disable thinking and use JSON Schema to constrain output fields, segment IDs and segment count. This avoids truncation under the small default context and reduces waiting and format errors from larger thinking models. Use a recent Ollama version with structured output support (≥ 0.5); larger contexts use more VRAM. If the endpoint is a gateway that only speaks the OpenAI-compatible API, set the parameter protocol explicitly to OpenAI. Proofreading shares the compatibility settings; connection tests share thinking and transport settings but do not request subtitle output structures.

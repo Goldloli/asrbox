@@ -1,4 +1,4 @@
-![ASRbox demo](assets/asrbox-demo.gif)
+![ASRbox task center](assets/asrbox-task-center.png)
 
 # ASRbox
 
@@ -25,29 +25,49 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 
 - Preflight and transcribe one or many audio/video files.
 - Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Qwen3-ASR, or an online ASR provider.
-- Pause, resume, stop, retry, and remove model downloads while inspecting compatibility and storage.
-- View version, author, and support links under Settings → About, select stable or prerelease updates, and check for desktop releases.
-- Search, replace, edit, play, and copy transcript content.
+- Three-column task center: task list, waveform player with linked transcript, and status/exports on one screen.
+- Edit segment text directly in the Edit subtitles mode; one save creates exactly one new immutable version.
 - Preserve transcription, retranscription, manual edit, restore, post-processing, and AI-applied versions.
 - Export TXT, SRT, VTT, ASS, JSON, and Markdown.
+- Row-based model management: pause, resume, stop, retry, and remove downloads, with compatibility, a comparison ladder, and storage insight.
 - Configure Ollama, MiniMax, Kimi, DeepSeek, Qwen, GLM, or another OpenAI-compatible LLM.
-- Review suggestions in the dedicated AI workspace; only explicitly selected suggestions create a new subtitle version.
-- Ask app-usage or bound-subtitle questions in AI → Chat, with streamed answers and locally persisted chat history.
+- One AI workspace for subtitle proofreading, subtitle translation, and chat; nothing is written back until you explicitly accept it.
+- Segment preview plays strictly on the timeline by default; Settings can add 0.5–3 s of padding before and after, and the player bar can take over into continuous free playback at any time.
+- Personalization: light/dark theme, accent colors, density, sidebar modes, and a Chinese/English interface.
+- View version, author, and support links under Settings → About, select stable or prerelease updates, and check for desktop releases.
 - Set a default model (local or an online provider) and a default language, including auto-detect, under Settings → Transcription defaults; new transcriptions start with them preselected.
 
-**New in 0.1.9:** a Windows x64 desktop edition — the same Tauri 2 + bundled FastAPI sidecar architecture as macOS, shipped as an NSIS installer. The backend test suite is fully green on Windows, and in-app update checks with verified downloads cover the Windows installer as well. NVIDIA GPU users can enable an optional CUDA acceleration kit under Settings → GPU acceleration (a one-time ~2.6GB download) for up to roughly 10x faster local transcription; otherwise everything stays on CPU. Transcription defaults gain a default-model setting: pick a preferred local model or online provider and a default language (including auto-detect), and the transcribe page preselects them on open.
+### Task center and subtitle editing
 
-### LLM proofreading
+The task center keeps the task list, waveform player, transcript, and task status in one three-column workbench; the play button on a segment previews it from its start. Switch to Edit subtitles to make every line editable, then use Save changes at the top right to store everything as one new subtitle version:
 
-Connect Ollama or any OpenAI-compatible LLM to automatically check subtitles for typos, omissions, and obvious recognition errors, with ready-to-apply fix suggestions:
+![Task center](assets/asrbox-task-center.png)
 
-![LLM proofreading demo](assets/asrbox-llm-proofread.gif)
+![Edit subtitles mode](assets/asrbox-edit-subtitles.png)
 
-### AI chat and subtitle translation
+### AI subtitle proofreading
 
-In “AI → Chat”, ask your configured LLM directly: app-usage questions (answered from a built-in offline knowledge base), or bind a transcript task and ask it to summarize, find a quote and where it appears; replies stream in and sessions persist locally. “AI → Translation” offers multilingual translation with bilingual export:
+Connect Ollama or any OpenAI-compatible LLM to automatically check subtitles for typos, omissions, and obvious recognition errors. Every suggestion shows the original, the fix, and its reason, and Play this sentence previews the exact clip; only explicitly selected suggestions create a new subtitle version:
 
-![AI chat and subtitle translation demo](assets/asrbox-ai-chat.gif)
+![AI subtitle proofreading](assets/asrbox-ai-proofreading.png)
+
+### AI subtitle translation
+
+Translate into many languages while keeping the original subtitles, review source and translation side by side, and export translated or bilingual subtitles:
+
+![AI subtitle translation](assets/asrbox-ai-translation.png)
+
+### AI chat
+
+In the AI workspace's Chat tab, ask your configured LLM directly: app-usage questions (answered from a built-in offline knowledge base), or bind a transcript task and ask it to summarize, find a quote and where it appears; replies stream in, cited clips can be played individually, and sessions persist locally:
+
+![AI chat](assets/asrbox-ai-chat.png)
+
+### Model management
+
+A compact row-based list manages local ASR models: filtering, search, download controls, default-model linkage, and a speed/accuracy/capability ladder:
+
+![Model management](assets/asrbox-models.png)
 
 ## Docker deployment
 
@@ -84,7 +104,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## Desktop
 
-Download the installer for your platform from the [`v0.2.1` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.0) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
+Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.0) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the installer to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 
@@ -92,9 +112,9 @@ A completed download is not an automatic installation. Finish active transcripti
 
 ### macOS
 
-The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **“ASRbox.app” is damaged and can't be opened**:
+The package is unsigned and unnotarized (no Apple Developer Program certificate), so macOS may report **"ASRbox.app" is damaged and can't be opened**:
 
-![macOS reporting “ASRbox.app is damaged and can't be opened”](assets/macos-app-damaged.png)
+![macOS reporting "ASRbox.app is damaged and can't be opened"](assets/macos-app-damaged.png)
 
 This is Gatekeeper's standard response to unsigned apps — the file is not actually damaged. After dragging the app into Applications, clear the download quarantine attribute once in Terminal:
 
@@ -117,21 +137,21 @@ Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-mem
 1. Download a model. Apple Silicon desktop users can start with `mlx-whisper-turbo`; Docker users should start with `faster-whisper-base` or `faster-whisper-small`.
 2. Select media under New Transcription.
 3. Choose a local model or online platform and configure language, timestamps, and chunking.
-4. Follow progress, logs, and results under Tasks.
-5. Edit or export SRT, VTT, ASS, TXT, JSON, or Markdown.
+4. Follow progress, logs, and results in the Task center.
+5. Edit text in Edit subtitles mode, or export SRT, VTT, ASS, TXT, JSON, or Markdown.
 
-ASRbox registers 15 local models, including MOSS-Transcribe-Diarize for end-to-end speaker diarization. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md).
+ASRbox registers 15 local models, including MOSS-Transcribe-Diarize for end-to-end speaker diarization. Model pickers and the Models page mark whether each model supports CPU, NVIDIA GPU, or Apple GPU; this is capability, and the device actually used still depends on the computer and available runtimes. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md) for selection, sizes, sources, and licensing.
 
 ## AI subtitle proofreading
 
 1. Add and test a provider under Settings → AI LLM providers.
 2. Ollama needs no API key. From Docker, connect to host Ollama at `http://host.docker.internal:11434/v1`.
-3. Open AI and select a completed task with a subtitle version.
+3. Open the AI workspace and select a completed task with a subtitle version.
 4. Select the provider and start Subtitle proofreading.
 5. Suggestions are expanded; correct neighboring ranges remain individually collapsible.
 6. Select the suggestions to apply. Applying creates a new version; unselected suggestions never change the transcript.
 
-Connection, authentication, server, context-length, and malformed-response failures have distinct feedback. “No changes needed” appears only after a successful LLM response with no suggestions. LLM failure never invalidates a completed transcription. See the [AI proofreading guide](docs/ai-proofreading.en.md).
+Connection, authentication, server, context-length, and malformed-response failures have distinct feedback. "No changes needed" appears only after a successful LLM response with no suggestions. LLM failure never invalidates a completed transcription. See the [AI proofreading guide](docs/ai-proofreading.en.md).
 
 ## Data and privacy
 
