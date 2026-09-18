@@ -53,9 +53,19 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
         assert runtime.status_code == 200
         runtime_data = runtime.json()
         assert runtime_data["data_dir"] == resolved_data_dir
-        assert runtime_data["qwen3_asr_available"] is True
-        assert runtime_data["funasr_available"] is True
-        assert runtime_data["moss_transcribe_diarize_available"] is True
+        capability_detail = json.dumps(
+            {
+                "qwen3_asr_available": runtime_data.get("qwen3_asr_available"),
+                "funasr_available": runtime_data.get("funasr_available"),
+                "moss_transcribe_diarize_available": runtime_data.get("moss_transcribe_diarize_available"),
+                "torchaudio_available": runtime_data.get("torchaudio_available"),
+                "warnings": runtime_data.get("warnings"),
+            },
+            ensure_ascii=False,
+        )
+        assert runtime_data["qwen3_asr_available"] is True, capability_detail
+        assert runtime_data["funasr_available"] is True, capability_detail
+        assert runtime_data["moss_transcribe_diarize_available"] is True, capability_detail
         assert time.time() - start < 180
 
         shutdown = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=30)
