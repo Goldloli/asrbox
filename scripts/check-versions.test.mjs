@@ -111,6 +111,13 @@ test("requires version-matched current release documentation", async () => {
   );
   await assert.rejects(checkVersions(staleRoot), /README\.md#source: 0\.0\.9/);
 
+  const staleReleaseLabelRoot = await fixture("0.1.0-beta.1");
+  await writeFile(
+    path.join(staleReleaseLabelRoot, "docs/release.md"),
+    "Current release: [`v0.0.9`](https://github.com/Goldloli/asrbox/releases/tag/v0.1.0-beta.1).\n",
+  );
+  await assert.rejects(checkVersions(staleReleaseLabelRoot), /docs\/release\.md#current-label: 0\.0\.9/);
+
   const missingNotesRoot = await fixture("0.1.0-beta.1");
   await rm(path.join(missingNotesRoot, "docs/releases/v0.1.0-beta.1.md"));
   await assert.rejects(checkVersions(missingNotesRoot), /release notes: missing/);

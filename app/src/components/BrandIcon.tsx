@@ -4,17 +4,29 @@ import ollamaIcon from '../assets/brands/ollama.svg';
 import openaiIcon from '../assets/brands/openai.svg';
 import qwenIcon from '../assets/brands/qwen.svg';
 
-const brands: Array<{ pattern: RegExp; src: string; label: string }> = [
-  { pattern: /ollama/i, src: ollamaIcon, label: 'Ollama' },
-  { pattern: /openai|chatgpt|\bgpt\b/i, src: openaiIcon, label: 'OpenAI' },
-  { pattern: /qwen|alibaba|aliyun/i, src: qwenIcon, label: 'Qwen' },
-];
+type BrandKey = 'ollama' | 'qwen' | 'openai';
+
+const brands: Record<BrandKey, { src: string; label: string }> = {
+  ollama: { src: ollamaIcon, label: 'Ollama' },
+  qwen: { src: qwenIcon, label: 'Qwen' },
+  openai: { src: openaiIcon, label: 'OpenAI' },
+};
+
+export function brandKeyForName(name: string): BrandKey | null {
+  // Provider types often include "openai-compatible". Match concrete product
+  // names first so the compatibility protocol never overrides the real brand.
+  if (/qwen|alibaba|aliyun/i.test(name)) return 'qwen';
+  if (/ollama/i.test(name)) return 'ollama';
+  if (/openai|chatgpt|\bgpt\b/i.test(name)) return 'openai';
+  return null;
+}
 
 export function BrandIcon({ name, className }: { name: string; className?: string }) {
-  const brand = brands.find((entry) => entry.pattern.test(name));
-  if (!brand) {
+  const brandKey = brandKeyForName(name);
+  if (!brandKey) {
     return <HardDrive className={cn('size-5 shrink-0 text-app-accent', className)} strokeWidth={1.6} aria-hidden />;
   }
+  const brand = brands[brandKey];
   return (
     <img
       src={brand.src}

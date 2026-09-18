@@ -10,6 +10,12 @@ export type FontScale = 'standard' | 'large';
 export type ReducedMotionMode = 'system' | 'reduce' | 'normal';
 export type UpdateChannel = 'stable' | 'prerelease';
 
+export const SEGMENT_PLAY_PADDING_OPTIONS = [0, 0.5, 1, 2, 3] as const;
+
+export function normalizeSegmentPlayPadding(value: unknown): number {
+  return typeof value === 'number' && (SEGMENT_PLAY_PADDING_OPTIONS as readonly number[]).includes(value) ? value : 0;
+}
+
 const defaultUpdateChannel: UpdateChannel = __ASRBOX_VERSION__.includes('-') ? 'prerelease' : 'stable';
 
 function detectLocale(): Locale {
@@ -27,6 +33,7 @@ interface UiStore {
   fontScale: FontScale;
   reducedMotion: ReducedMotionMode;
   accentColor: AccentColor;
+  segmentPlayPadding: number;
   exportDirectory: string | null;
   lastLLMProviderId: string | null;
   updateChannel: UpdateChannel;
@@ -39,11 +46,23 @@ interface UiStore {
   setFontScale: (fontScale: FontScale) => void;
   setReducedMotion: (reducedMotion: ReducedMotionMode) => void;
   setAccentColor: (accent: AccentColor) => void;
+  setSegmentPlayPadding: (padding: number) => void;
   setExportDirectory: (exportDirectory: string | null) => void;
   setLastLLMProviderId: (providerId: string | null) => void;
   setUpdateChannel: (channel: UpdateChannel) => void;
   setAutoCheckUpdates: (enabled: boolean) => void;
   setUpdateNotifications: (enabled: boolean) => void;
+}
+
+export function mergePersistedUiState(persistedState: unknown, currentState: UiStore): UiStore {
+  if (!persistedState || typeof persistedState !== 'object') return currentState;
+  const persisted = persistedState as Partial<UiStore> & { accentColor?: unknown };
+  return {
+    ...currentState,
+    ...persisted,
+    accentColor: normalizeAccentColor(persisted.accentColor ?? currentState.accentColor),
+    segmentPlayPadding: normalizeSegmentPlayPadding(persisted.segmentPlayPadding ?? currentState.segmentPlayPadding),
+  };
 }
 
 export const useUiStore = create<UiStore>()(
@@ -56,6 +75,7 @@ export const useUiStore = create<UiStore>()(
       fontScale: 'standard',
       reducedMotion: 'system',
       accentColor: 'orange',
+      segmentPlayPadding: 0,
       exportDirectory: null,
       lastLLMProviderId: null,
       updateChannel: defaultUpdateChannel,
@@ -68,12 +88,16 @@ export const useUiStore = create<UiStore>()(
       setFontScale: (fontScale) => set({ fontScale }),
       setReducedMotion: (reducedMotion) => set({ reducedMotion }),
       setAccentColor: (accentColor) => set({ accentColor: normalizeAccentColor(accentColor) }),
+      setSegmentPlayPadding: (padding) => set({ segmentPlayPadding: normalizeSegmentPlayPadding(padding) }),
       setExportDirectory: (exportDirectory) => set({ exportDirectory }),
       setLastLLMProviderId: (lastLLMProviderId) => set({ lastLLMProviderId }),
       setUpdateChannel: (updateChannel) => set({ updateChannel }),
       setAutoCheckUpdates: (autoCheckUpdates) => set({ autoCheckUpdates }),
       setUpdateNotifications: (updateNotifications) => set({ updateNotifications }),
     }),
-    { name: 'asrbox-ui' },
+    {
+      name: 'asrbox-ui',
+      merge: mergePersistedUiState,
+    },
   ),
 );

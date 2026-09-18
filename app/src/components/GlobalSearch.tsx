@@ -107,7 +107,7 @@ export function GlobalSearch() {
         <button
           type="button"
           aria-label={t('search.open')}
-          className="flex h-9 w-full max-w-xl min-w-0 items-center gap-2 rounded-lg border app-border bg-[var(--app-control)] px-3 text-sm text-app-muted transition hover:bg-[var(--app-control-strong)] focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
+          className="flex h-10 w-full max-w-3xl min-w-0 items-center gap-2 rounded-lg border app-border bg-[var(--app-control)] px-4 text-sm text-app-muted transition hover:bg-[var(--app-control-strong)] focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30"
         >
           <Search className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">{t('search.placeholder')}</span>

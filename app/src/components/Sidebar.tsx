@@ -1,5 +1,5 @@
 import { Link, useMatchRoute, useNavigate } from '@tanstack/react-router';
-import { BrainCircuit, DownloadCloud, LayoutGrid, ListChecks, Settings } from 'lucide-react';
+import { Box, FileText, Home, Settings, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
@@ -9,13 +9,13 @@ import { useUiStore } from '../stores/uiStore';
 import { useAppUpdateStore } from '../stores/appUpdateStore';
 
 const nav: Array<{ to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: LucideIcon }> = [
-  { to: '/', labelKey: 'nav.transcribe', icon: LayoutGrid },
-  { to: '/tasks', labelKey: 'nav.tasks', icon: ListChecks },
-  { to: '/ai', labelKey: 'nav.ai', icon: BrainCircuit },
-  { to: '/models', labelKey: 'nav.models', icon: DownloadCloud },
+  { to: '/', labelKey: 'nav.transcribe', icon: Home },
+  { to: '/tasks', labelKey: 'nav.tasks', icon: FileText },
+  { to: '/ai', labelKey: 'nav.ai', icon: Sparkles },
+  { to: '/models', labelKey: 'nav.models', icon: Box },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ];
-export function Sidebar() {
+export function Sidebar({ immersive = false }: { immersive?: boolean }) {
   const matchRoute = useMatchRoute();
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -34,29 +34,30 @@ export function Sidebar() {
       data-testid="app-sidebar"
       data-mode={sidebarMode}
       className={cn(
-        'app-shell-surface hidden h-dvh shrink-0 flex-col border-r app-border px-3 py-4 md:flex',
-        expanded ? 'w-60 items-stretch' : 'w-16 items-center',
+        'app-shell-surface hidden h-dvh shrink-0 flex-col border-r app-border px-4 py-5 md:flex',
+        immersive && 'app-sidebar-immersive',
+        expanded ? (immersive ? 'w-[184px] items-stretch' : 'w-[220px] items-stretch') : 'w-[72px] items-center',
       )}
     >
       <Link
         to="/"
         aria-label={t('nav.home')}
-        className={cn('flex items-center gap-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30', expanded ? 'px-1 py-1' : 'justify-center')}
+        className={cn('flex items-center gap-3.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30', expanded ? 'px-1 py-1' : 'justify-center')}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== ' ') return;
           event.preventDefault();
           navigate({ to: '/' });
         }}
       >
-        <img src={asrboxIcon} alt="" className="size-10 shrink-0 rounded-xl shadow-sm ring-1 ring-[var(--app-border)]" />
+        <img src={asrboxIcon} alt="" className="size-12 shrink-0 rounded-[14px] shadow-sm ring-1 ring-[var(--app-border)]" />
         {expanded && (
           <span className="min-w-0">
-            <span className="block text-sm font-semibold text-app">ASRbox</span>
-            <span className="block truncate text-xs text-app-muted">{t('app.subtitle')}</span>
+            <span className="block text-xl font-bold tracking-[-0.02em] text-app">ASRbox</span>
+            <span className="mt-0.5 block truncate text-[13px] text-app-muted">{t('app.subtitle')}</span>
           </span>
         )}
       </Link>
-      <nav className={cn('mt-6 flex flex-1 flex-col gap-1', expanded ? 'items-stretch' : 'items-center')}>
+      <nav className={cn('mt-9 flex flex-1 flex-col gap-2.5', expanded ? 'items-stretch' : 'items-center')}>
         {nav.map((item) => {
           const Icon = item.icon;
           const active =
@@ -71,13 +72,13 @@ export function Sidebar() {
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'relative rounded-lg text-app-muted transition hover:bg-[var(--app-control)] hover:text-app focus:outline-none focus:ring-2 focus:ring-[color:var(--app-accent)]/30',
-                    expanded ? 'flex h-10 items-center gap-3 px-3' : 'grid size-10 place-items-center',
+                    expanded ? 'flex h-[54px] items-center gap-3.5 px-3.5' : 'grid size-11 place-items-center',
                     active && 'bg-[var(--app-accent-soft)] text-[var(--app-accent-text)] hover:bg-[var(--app-accent-soft)]',
                   )}
                 >
                   {active && <span aria-hidden className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[var(--app-accent)]" />}
-                  <Icon size={18} strokeWidth={1.8} />
-                  {expanded && <span className="text-sm font-medium">{t(item.labelKey)}</span>}
+                  <Icon size={22} strokeWidth={1.8} />
+                  {expanded && <span className="text-base font-semibold">{t(item.labelKey)}</span>}
                   {item.to === '/settings' && hasUpdate && (
                     <span className={cn('absolute size-2 rounded-full bg-[var(--app-accent)]', expanded ? 'right-3 top-2' : 'right-1.5 top-1.5')} aria-label={t('about.newVersion')} />
                   )}

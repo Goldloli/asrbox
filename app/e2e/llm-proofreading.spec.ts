@@ -49,6 +49,7 @@ const run = {
   provider_name: 'DeepSeek',
   provider_preset: 'deepseek',
   model_name: 'deepseek-chat',
+  reason_language: 'en',
   status: 'completed',
   total_batches: 1,
   completed_batches: 1,
@@ -99,6 +100,7 @@ type MockOptions = {
   presets?: Dynamic<Array<Record<string, unknown>>>;
   runsRoute?: (route: Route) => Promise<void> | void;
   providersRoute?: (route: Route) => Promise<void> | void;
+  locale?: 'zh' | 'en';
 };
 
 function resolve<T>(value: Dynamic<T>): T {
@@ -111,9 +113,10 @@ async function mockProofreading(page: Page, options: MockOptions = {}) {
   const providers = options.providers ?? [provider];
   const providerPresets = options.presets ?? presets;
 
-  await page.addInitScript((url) => {
+  await page.addInitScript(({ url, locale }) => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: url }, version: 0 }));
-  }, serverUrl);
+    localStorage.setItem('asrbox-ui', JSON.stringify({ state: { locale }, version: 0 }));
+  }, { url: serverUrl, locale: options.locale ?? 'en' });
   await page.route(`${serverUrl}/tasks`, (route) => route.fulfill({ json: { items: resolve(tasks), total: resolve(tasks).length } }));
   await page.route(`${serverUrl}/tasks/active`, (route) => route.fulfill({ json: { items: [] } }));
   await page.route(`${serverUrl}/tasks/${eligibleTask.id}`, (route) => route.fulfill({ json: eligibleTask }));
@@ -169,6 +172,7 @@ test('AI workspace filters eligible tasks and folds each unchanged range indepen
 test('starts, polls, reviews, confirms, and applies one proofreading run', async ({ page }) => {
   let phase: 'idle' | 'queued' | 'completed' | 'applied' = 'idle';
   let appliedIds: number[] = [];
+  let createPayload: Record<string, unknown> | undefined;
   const queuedRun = { ...run, status: 'queued', suggestions: [], total_batches: 2, completed_batches: 0, completed_at: null };
   const appliedRun = {
     ...run,
@@ -181,6 +185,7 @@ test('starts, polls, reviews, confirms, and applies one proofreading run', async
     runs: [],
     runsRoute: (route) => {
       if (route.request().method() === 'POST') {
+        createPayload = route.request().postDataJSON();
         phase = 'queued';
         return route.fulfill({ json: queuedRun });
       }
@@ -201,8 +206,9 @@ test('starts, polls, reviews, confirms, and applies one proofreading run', async
 
   await page.goto('/ai?task=proofreading-task');
   await page.getByRole('button', { name: 'Start proofreading' }).click();
+  await expect.poll(() => createPayload).toEqual({ provider_id: 'deepseek', reason_language: 'en' });
   await expect(page.getByText('0 / 2 batches completed')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Proofreading' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Queued' })).toBeDisabled();
 
   phase = 'completed';
   await expect(page.getByRole('checkbox')).toHaveCount(2, { timeout: 4_000 });
@@ -217,6 +223,178 @@ test('starts, polls, reviews, confirms, and applies one proofreading run', async
   await expect(page.getByText('1 suggestions applied. A new subtitle version was created.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'View new transcript' })).toHaveAttribute('href', /\/tasks\?task=proofreading-task/);
   await expect(page.getByRole('button', { name: 'Run again' })).toHaveCount(2);
+});
+
+test('uses the Chinese interface language for proofreading reasons', async ({ page }) => {
+  let createPayload: Record<string, unknown> | undefined;
+  await mockProofreading(page, {
+    locale: 'zh',
+    runs: [],
+    runsRoute: async (route) => {
+      if (route.request().method() === 'POST') {
+        createPayload = route.request().postDataJSON();
+        return route.fulfill({ json: { ...run, status: 'queued', reason_language: 'zh', suggestions: [] } });
+      }
+      return route.fulfill({ json: { items: [] } });
+    },
+  });
+
+  await page.goto('/ai?task=proofreading-task');
+  await page.getByRole('button', { name: '开始校对' }).click();
+
+  await expect.poll(() => createPayload).toEqual({ provider_id: 'deepseek', reason_language: 'zh' });
+});
+
+test('plays exactly one proofreading segment and stops at its end', async ({ page }) => {
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = async function play() {
+      this.dispatchEvent(new Event('play'));
+    };
+    HTMLMediaElement.prototype.pause = function pause() {
+      this.dispatchEvent(new Event('pause'));
+    };
+  });
+  await mockProofreading(page);
+  await page.route(`${serverUrl}/tasks/${eligibleTask.id}/audio`, (route) => route.fulfill({
+    status: 206,
+    contentType: 'audio/wav',
+    body: Buffer.alloc(44),
+  }));
+  await page.goto('/ai?task=proofreading-task');
+
+  await page.getByRole('button', { name: 'Play subtitle segment 00:02–00:04' }).click();
+  const audio = page.locator('audio');
+  await expect(audio).toHaveAttribute('src', `${serverUrl}/tasks/${eligibleTask.id}/audio`);
+  await expect.poll(() => audio.evaluate((node) => (node as HTMLAudioElement).currentTime)).toBeCloseTo(2, 1);
+
+  await audio.evaluate((node) => {
+    const media = node as HTMLAudioElement;
+    media.currentTime = 4;
+    media.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect(page.getByRole('button', { name: 'Play audio', exact: true })).toBeVisible();
+  await expect.poll(() => audio.evaluate((node) => (node as HTMLAudioElement).currentTime)).toBeCloseTo(4, 1);
+});
+
+test('player bar takeover keeps playing past the segment end', async ({ page }) => {
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.play = async function play() {
+      this.dispatchEvent(new Event('play'));
+    };
+    HTMLMediaElement.prototype.pause = function pause() {
+      this.dispatchEvent(new Event('pause'));
+    };
+  });
+  await mockProofreading(page);
+  await page.route(`${serverUrl}/tasks/${eligibleTask.id}/audio`, (route) => route.fulfill({
+    status: 206,
+    contentType: 'audio/wav',
+    body: Buffer.alloc(44),
+  }));
+  await page.goto('/ai?task=proofreading-task');
+
+  await page.getByRole('button', { name: 'Play subtitle segment 00:02–00:04' }).click();
+  const audio = page.locator('audio');
+  await expect.poll(() => audio.evaluate((node) => (node as HTMLAudioElement).currentTime)).toBeCloseTo(2, 1);
+
+  await audio.evaluate((node) => {
+    const media = node as HTMLAudioElement;
+    media.currentTime = 4;
+    media.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect(page.getByRole('button', { name: 'Play audio', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Play audio', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause audio', exact: true })).toBeVisible();
+
+  await audio.evaluate((node) => {
+    const media = node as HTMLAudioElement;
+    media.currentTime = 6;
+    media.dispatchEvent(new Event('timeupdate'));
+  });
+  await expect(page.getByRole('button', { name: 'Pause audio', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Play audio', exact: true })).toBeHidden();
+});
+
+test('keeps long AI results inside the workspace instead of growing the page', async ({ page }) => {
+  const longRun = {
+    ...run,
+    suggestions: Array.from({ length: 120 }, (_, index) => ({
+      ...suggestions[0],
+      id: index + 1,
+      segment_id: 10_000 + index,
+      original_text: `original ${index}`,
+      suggested_text: `suggested ${index}`,
+    })),
+  };
+  await mockProofreading(page, { runs: [longRun] });
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.goto('/ai?task=proofreading-task');
+  await expect(page.getByTestId('ai-workspace-content')).toBeVisible();
+  await expect(page.getByText('suggested 119', { exact: true })).toBeAttached();
+
+  const geometry = await page.evaluate(() => {
+    const main = document.querySelector('main')!;
+    const workspace = document.querySelector('[data-testid="ai-workspace"]')!;
+    const content = document.querySelector('[data-testid="ai-workspace-content"]')!;
+    const scroller = content.querySelector('.overflow-y-auto')!;
+    return {
+      mainClient: main.clientHeight,
+      mainScroll: main.scrollHeight,
+      workspaceClient: workspace.clientHeight,
+      workspaceScroll: workspace.scrollHeight,
+      contentClient: content.clientHeight,
+      scrollerClient: scroller.clientHeight,
+      scrollerScroll: scroller.scrollHeight,
+    };
+  });
+
+  expect(geometry.mainScroll).toBeLessThanOrEqual(geometry.mainClient + 1);
+  expect(geometry.workspaceScroll).toBeLessThanOrEqual(geometry.workspaceClient + 1);
+  expect(geometry.scrollerClient).toBeGreaterThan(0);
+  expect(geometry.scrollerClient).toBeLessThan(geometry.contentClient);
+  expect(geometry.scrollerScroll).toBeGreaterThan(geometry.scrollerClient);
+});
+
+test('pins the AI document to the viewport while result columns own vertical scrolling', async ({ page }) => {
+  const longRun = {
+    ...run,
+    suggestions: Array.from({ length: 120 }, (_, index) => ({
+      ...suggestions[0],
+      id: index + 1,
+      segment_id: 20_000 + index,
+      original_text: `original ${index}`,
+      suggested_text: `suggested ${index}`,
+    })),
+  };
+  await mockProofreading(page, { runs: [longRun] });
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.goto('/ai?task=proofreading-task');
+  await expect(page.getByTestId('ai-workspace-content')).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('#root')!;
+    const content = document.querySelector<HTMLElement>('[data-testid="ai-workspace-content"]')!;
+    const scroller = content.querySelector<HTMLElement>('.overflow-y-auto')!;
+    scroller.scrollTop = scroller.scrollHeight;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return {
+      htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+      bodyOverflowY: getComputedStyle(document.body).overflowY,
+      rootOverflowY: getComputedStyle(root).overflowY,
+      bodyClient: document.body.clientHeight,
+      bodyScroll: document.body.scrollHeight,
+      windowScrollY: window.scrollY,
+      innerScrollTop: scroller.scrollTop,
+    };
+  });
+
+  expect(geometry.htmlOverflowY).toBe('clip');
+  expect(geometry.bodyOverflowY).toBe('hidden');
+  expect(geometry.rootOverflowY).toBe('hidden');
+  expect(geometry.bodyScroll).toBeLessThanOrEqual(geometry.bodyClient + 1);
+  expect(geometry.windowScrollY).toBe(0);
+  expect(geometry.innerScrollTop).toBeGreaterThan(0);
 });
 
 test('completed task has a lightweight AI entry and settings has a top-level LLM tab', async ({ page }) => {
@@ -450,5 +628,7 @@ test('custom compatibility settings and explicit subtitle tests apply only to th
   await expect(page.getByRole('button', { name: 'Apply tested settings' })).toBeVisible();
   saved = { ...saved, updated_at: '2026-09-08T03:00:02Z' };
   await page.getByRole('button', { name: 'Apply tested settings' }).click();
+  await expect(page.getByText('The operation could not be completed. Review the technical details and retry.', { exact: true })).toBeVisible();
+  await page.getByText('Details', { exact: true }).last().click();
   await expect(page.getByText(/Provider changed; test again/)).toBeVisible();
 });

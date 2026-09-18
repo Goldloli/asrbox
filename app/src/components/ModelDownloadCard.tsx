@@ -4,6 +4,8 @@ import { formatPercent } from '../lib/format';
 import { Badge, Button, Panel, Progress } from './weiui';
 import { useI18n } from '../lib/i18n';
 import { ConfirmAction } from './ConfirmAction';
+import { localizedErrorPresentation } from '../lib/errorMessages';
+import { LocalizedTechnicalMessage } from './LocalizedTechnicalMessage';
 
 export function ModelDownloadCard({
   model,
@@ -28,7 +30,7 @@ export function ModelDownloadCard({
   onUnload: () => void;
   onDelete: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
   const storageUnavailable = model.storage_status !== 'available';
 
@@ -90,9 +92,10 @@ export function ModelDownloadCard({
           </div>
         )}
         {(model.compatibility_error || model.download_error || model.error || progress?.error) && (
-          <p className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]">
-            {progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error}
-          </p>
+          <LocalizedTechnicalMessage
+            message={localizedErrorPresentation(new Error(progress?.error ?? model.download_error ?? model.compatibility_error ?? model.error ?? ''), locale)}
+            className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]"
+          />
         )}
         <div className="flex flex-wrap justify-end gap-2">
           {model.downloading ? (

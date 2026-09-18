@@ -146,6 +146,44 @@ def _read_model_marker(model_name: str) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _marker_size_bytes(marker: dict[str, Any]) -> int:
+    try:
+        return max(0, round(float(marker.get("size_on_disk_mb") or 0) * 1024 * 1024))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _shallow_directory_size(path: Path) -> int:
+    """Best-effort fallback for legacy or partial installs without marker size."""
+
+    total = 0
+    try:
+        for item in path.iterdir():
+            if item.is_file() and not item.is_symlink():
+                total += item.stat().st_size
+    except OSError:
+        return total
+    return total
+
+
+def _catalog_snapshot(model_name: str) -> tuple[bool, dict[str, Any], int]:
+    """Return the last verified install snapshot without walking model files.
+
+    The marker is written only after a completed download and is preserved by
+    verified storage relocation. Full recursive validation remains available
+    through ``verify_models`` and before task execution.
+    """
+
+    model_dir = _model_dir(model_name)
+    marker_path = model_dir / "model.json"
+    marker = _read_model_marker(model_name)
+    downloaded = marker_path.is_file() and model_dir.is_dir()
+    size_bytes = _marker_size_bytes(marker)
+    if size_bytes == 0:
+        size_bytes = _shallow_directory_size(model_dir)
+    return downloaded, marker, size_bytes
+
+
 def _cache_info(model_config: ASRModelConfig) -> dict[str, Any]:
     candidates = _source_candidates(model_config)
     if candidates:
@@ -263,19 +301,39 @@ def is_model_directory_valid(model_name: str, model_dir: Path) -> bool:
     return get_model_config(model_name) is not None and (model_dir / "model.json").exists() and _has_weight_files(model_dir) and not _has_incomplete_files(model_dir)
 
 
-def check_model_compatibility(model_name: str) -> dict[str, Any]:
+_BLOCKING_RUNTIME_PROBE = object()
+
+
+def _runtime_capability(
+    runtime_snapshot: dict[str, Any] | None | object,
+    key: str,
+    blocking_probe,
+) -> bool | None:
+    if runtime_snapshot is _BLOCKING_RUNTIME_PROBE:
+        return bool(blocking_probe())
+    if runtime_snapshot is None:
+        return None
+    return bool(runtime_snapshot.get(key))
+
+
+def check_model_compatibility(
+    model_name: str,
+    *,
+    runtime_snapshot: dict[str, Any] | None | object = _BLOCKING_RUNTIME_PROBE,
+) -> dict[str, Any]:
     model_config = get_model_config(model_name)
     model_dir = _model_dir(model_name)
     downloaded = is_model_downloaded(model_name)
     if model_config is None:
         return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model registry entry"], "message": f"Unknown model: {model_name}", "code": "unknown_model"}
-    runtime_error = _model_runtime_error(model_config)
+    runtime_error = _model_runtime_error(model_config, runtime_snapshot=runtime_snapshot)
     if runtime_error:
         return {"model_name": model_name, "downloaded": downloaded, "compatible": False, "missing": ["compatible runtime"], "message": runtime_error, "code": "runtime_incompatible"}
     if not downloaded:
         return {"model_name": model_name, "downloaded": False, "compatible": False, "missing": ["model.json", "weights"], "message": f"Model {model_name} is not downloaded", "code": "model_not_downloaded"}
 
     missing: list[str] = []
+    runtime_pending = False
     engine = model_config.engine
     if engine == "whisper_transformers":
         if not _has_any(model_dir, ("config.json",)):
@@ -297,9 +355,12 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
         for required in ("config.yaml", "model.pt", "am.mvn"):
             if not _has_any(model_dir, (required,)):
                 missing.append(required)
-        if not torchaudio_available():
+        torchaudio_ready = _runtime_capability(runtime_snapshot, "torchaudio_available", torchaudio_available)
+        funasr_ready = _runtime_capability(runtime_snapshot, "funasr_available", funasr_available)
+        runtime_pending = torchaudio_ready is None or funasr_ready is None
+        if torchaudio_ready is False:
             missing.append("torchaudio runtime")
-        if not funasr_available():
+        if funasr_ready is False:
             missing.append("funasr runtime")
     elif engine == "mlx_whisper":
         if not _has_weight_files(model_dir):
@@ -315,7 +376,9 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
             missing.append("processor/chat_template")
         if not _has_weight_files(model_dir):
             missing.append("weights")
-        if not qwen3_asr_available():
+        qwen_ready = _runtime_capability(runtime_snapshot, "qwen3_asr_available", qwen3_asr_available)
+        runtime_pending = qwen_ready is None
+        if qwen_ready is False:
             missing.append("transformers Qwen3-ASR support")
     elif engine == "moss_transcribe_diarize":
         if not _has_any(model_dir, ("config.json",)):
@@ -328,46 +391,103 @@ def check_model_compatibility(model_name: str) -> dict[str, Any]:
             missing.append("remote code")
         if not _has_weight_files(model_dir):
             missing.append("weights")
-        if not moss_transcribe_diarize_available():
+        moss_ready = _runtime_capability(runtime_snapshot, "moss_transcribe_diarize_available", moss_transcribe_diarize_available)
+        runtime_pending = moss_ready is None
+        if moss_ready is False:
             missing.append("moss-transcribe-diarize runtime")
     else:
         missing.append(f"unsupported engine: {engine}")
 
-    compatible = not missing
+    compatible = None if runtime_pending and not missing else not missing
     return {
         "model_name": model_name,
         "downloaded": downloaded,
         "compatible": compatible,
         "missing": missing,
-        "message": "Compatible" if compatible else f"Missing required files: {', '.join(missing)}",
-        "code": None if compatible else "missing_files",
+        "message": "Runtime compatibility check pending" if compatible is None else "Compatible" if compatible else f"Missing required files: {', '.join(missing)}",
+        "code": None if compatible is not False else "missing_files",
     }
 
 
-def _model_runtime_error(model_config: ASRModelConfig) -> str | None:
+def _model_runtime_error(
+    model_config: ASRModelConfig,
+    *,
+    runtime_snapshot: dict[str, Any] | None | object = _BLOCKING_RUNTIME_PROBE,
+) -> str | None:
     if model_config.engine != "mlx_whisper":
         return None
     if platform.system() != "Darwin" or platform.machine().lower() not in {"arm64", "aarch64"}:
         return "MLX Whisper requires the macOS Apple Silicon desktop runtime and is unavailable in Linux containers"
-    return mlx_runtime_import_error()
+    if runtime_snapshot is _BLOCKING_RUNTIME_PROBE:
+        return mlx_runtime_import_error()
+    if runtime_snapshot is None:
+        return None
+    core_error = runtime_snapshot.get("mlx_import_error")
+    whisper_error = runtime_snapshot.get("mlx_whisper_import_error")
+    if core_error:
+        return f"mlx.core import failed: {core_error}"
+    if whisper_error:
+        return f"mlx_whisper import failed: {whisper_error}"
+    return None
+
+
+def _catalog_runtime_compatibility(
+    model_config: ASRModelConfig,
+    *,
+    downloaded: bool,
+    runtime_snapshot: dict[str, Any] | None,
+) -> tuple[bool | None, str | None]:
+    runtime_error = _model_runtime_error(model_config, runtime_snapshot=runtime_snapshot)
+    if runtime_error:
+        return False, runtime_error
+    if not downloaded:
+        return None, None
+    engine = model_config.engine
+    if engine in {"whisper_transformers", "faster_whisper"}:
+        return True, None
+    if runtime_snapshot is None:
+        return None, None
+    missing: list[str] = []
+    if engine == "funasr":
+        if not runtime_snapshot.get("torchaudio_available"):
+            missing.append("torchaudio runtime")
+        if not runtime_snapshot.get("funasr_available"):
+            missing.append("funasr runtime")
+    elif engine == "qwen3_asr" and not runtime_snapshot.get("qwen3_asr_available"):
+        missing.append("transformers Qwen3-ASR support")
+    elif engine == "moss_transcribe_diarize" and not runtime_snapshot.get("moss_transcribe_diarize_available"):
+        missing.append("moss-transcribe-diarize runtime")
+    if missing:
+        return False, f"Missing required files: {', '.join(missing)}"
+    return True, None
 
 
 def list_model_statuses() -> list[ASRModelStatus]:
     statuses: list[ASRModelStatus] = []
-    storage = model_storage.inspect_storage()
+    storage = model_storage.inspect_storage(include_usage=False)
     storage_available = bool(storage["available"])
+    # Catalog rendering must stay independent from heavyweight runtime imports.
+    # Exact compatibility is checked by explicit diagnostics and before use.
+    runtime_snapshot = None
     progress = get_progress_manager()
     for item in get_all_model_configs():
         progress_state = progress.get_progress(item.model_name)
-        downloaded = is_model_downloaded(item.model_name) if storage_available else None
+        downloaded, marker, size_on_disk_bytes = _catalog_snapshot(item.model_name) if storage_available else (None, {}, 0)
         error = None if downloaded else _download_errors.get(item.model_name)
         if progress_state and progress_state.get("status") == "error":
             error = None if downloaded else progress_state.get("error") or error
-        size_on_disk_mb = round(_directory_size(_model_dir(item.model_name)) / (1024 * 1024), 2) if storage_available else 0
-        marker = _read_model_marker(item.model_name) if storage_available else {}
-        cache = _cache_info(item) if storage_available else {"detected": False, "size_mb": 0, "path": None}
-        compatibility = check_model_compatibility(item.model_name) if storage_available else {"downloaded": False, "compatible": False, "message": "模型存储位置不可用"}
-        runtime_error = _model_runtime_error(item)
+        size_on_disk_mb = round(size_on_disk_bytes / (1024 * 1024), 2)
+        compatible, compatibility_error = _catalog_runtime_compatibility(
+            item,
+            downloaded=bool(downloaded),
+            runtime_snapshot=runtime_snapshot,
+        ) if storage_available else (None, "模型存储位置不可用")
+        compatibility_error_code = None
+        if compatible is False and compatibility_error:
+            compatibility_error_code = "runtime_incompatible"
+        elif downloaded is False:
+            compatibility_error = f"Model {item.model_name} is not downloaded"
+            compatibility_error_code = "model_not_downloaded"
         statuses.append(
             ASRModelStatus(
                 model_name=item.model_name,
@@ -390,12 +510,12 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 error=error,
                 size_on_disk_mb=size_on_disk_mb,
                 download_error=error,
-                compatible=False if runtime_error else compatibility["compatible"] if compatibility["downloaded"] else None,
-                compatibility_error=runtime_error or (None if compatibility["compatible"] else compatibility["message"]),
-                compatibility_error_code="runtime_incompatible" if runtime_error else (None if compatibility["compatible"] else compatibility.get("code")),
-                cache_detected=bool(cache["detected"]),
-                cache_size_mb=round(cache["size_mb"], 2) if cache["size_mb"] else None,
-                cache_path=cache["path"],
+                compatible=compatible,
+                compatibility_error=compatibility_error,
+                compatibility_error_code=compatibility_error_code,
+                cache_detected=False,
+                cache_size_mb=None,
+                cache_path=None,
                 preferred_source=_preferred_source(item),
                 source_candidates=_candidate_dicts(item),
                 installed_source=marker.get("source"),
@@ -721,12 +841,12 @@ def retry_download(model_name: str) -> str:
 
 
 def storage_summary() -> dict[str, Any]:
-    storage = model_storage.inspect_storage()
+    storage = model_storage.inspect_storage(include_usage=False)
     items = []
     total = 0
     for item in get_all_model_configs():
         model_dir = _model_dir(item.model_name)
-        size_bytes = _directory_size(model_dir)
+        downloaded, _marker, size_bytes = _catalog_snapshot(item.model_name) if storage["available"] else (False, {}, 0)
         total += size_bytes
         items.append(
             {
@@ -735,7 +855,7 @@ def storage_summary() -> dict[str, Any]:
                 "exists": model_dir.exists(),
                 "size_bytes": size_bytes,
                 "size_on_disk_mb": round(size_bytes / (1024 * 1024), 2),
-                "downloaded": is_model_downloaded(item.model_name) if storage["available"] else None,
+                "downloaded": downloaded if storage["available"] else None,
             }
         )
     free_disk_bytes = storage["free_bytes"]

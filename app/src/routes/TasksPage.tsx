@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
-import { ArchiveX, BrainCircuit, CheckSquare, ChevronDown, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
+import { Activity, ArchiveX, BrainCircuit, CheckCircle2, CheckSquare, ChevronDown, Clipboard, Download, FileAudio, Filter, Folder, FolderOpen, History, RotateCcw, Scissors, Search, Square, Star, Trash2, Wand2, X } from 'lucide-react';
 import { apiClient, getActiveTaskItems, type TaskStatus, type TranscriptionTask } from '../lib/api';
 import { queryKeys, useActiveTasksQuery, useTasksQuery } from '../lib/queries';
 import { formatDate, formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, DataRow, EmptyState, ErrorState, Input, PageTitle, Panel, Progress, Select, Textarea } from '../components/weiui';
+import { Badge, Button, DataRow, EmptyState, ErrorState, Input, Panel, Progress, Select, Textarea } from '../components/weiui';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { ConfirmAction } from '../components/ConfirmAction';
 import { StatusPill } from '../components/StatusPill';
@@ -19,6 +19,7 @@ import { downloadResponse } from '../lib/downloads';
 import { isApproximateTimelineModel } from '../lib/modelCatalog';
 
 const statuses: Array<'all' | TaskStatus> = ['all', 'queued', 'importing', 'transcribing', 'completed', 'failed', 'failed_resumable', 'cancelled'];
+const quickActiveStatuses: TaskStatus[] = ['queued', 'importing', 'preprocessing', 'waiting_model', 'downloading_model', 'transcribing', 'postprocessing', 'exporting'];
 type DateFilter = 'all' | 'today' | '7d' | '30d';
 type ErrorFilter = 'all' | 'with' | 'without';
 const outputFileFormats = ['txt', 'srt', 'vtt', 'ass', 'json', 'md'];
@@ -126,6 +127,13 @@ export function TasksPage() {
     (dateFilter !== 'all' ? 1 : 0) +
     (errorFilter !== 'all' ? 1 : 0) +
     (collectionFilter !== 'all' ? 1 : 0);
+  const quickFilter = statusFilters.length === 0
+    ? 'recent'
+    : statusFilters.length === 1 && statusFilters[0] === 'completed'
+      ? 'completed'
+      : statusFilters.length === quickActiveStatuses.length && quickActiveStatuses.every((status) => statusFilters.includes(status))
+        ? 'active'
+        : 'custom';
 
   const diagnosticsQuery = useQuery({
     queryKey: selectedTask ? queryKeys.taskDiagnostics(selectedTask.id) : ['tasks', 'empty', 'diagnostics'],
@@ -168,6 +176,10 @@ export function TasksPage() {
   useEffect(() => {
     if (selectedTaskId && !tasks.some((task) => task.id === selectedTaskId)) setSelectedTaskId(null);
   }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!selectedTaskId && !selectionMode && tasks[0]) setSelectedTaskId(tasks[0].id);
+  }, [selectedTaskId, selectionMode, tasks]);
 
   useEffect(() => {
     if (search.task && tasks.some((task) => task.id === search.task)) setSelectedTaskId(search.task);
@@ -313,58 +325,38 @@ export function TasksPage() {
   };
 
   return (
-    <section className="mx-auto grid w-full max-w-[1680px] gap-5 pb-28 xl:pb-0">
-      <PageTitle
-        title={t('tasks.title')}
-        description={t('tasks.listOnlyDescription')}
-        action={
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button size="sm" variant={showFilters ? 'primary' : 'secondary'} onClick={() => setShowFilters((current) => !current)}>
-              <Filter className="size-4" />
-              {activeFilterCount > 0 ? `${t('tasks.filters')} ${activeFilterCount}` : t('tasks.filters')}
-            </Button>
-            <Button size="sm" variant={selectionMode ? 'primary' : 'secondary'} onClick={toggleSelectionMode}>
-              <CheckSquare className="size-4" />
-              {selectionMode ? t('common.cancel') : t('tasks.selectMode')}
-            </Button>
-            <ConfirmAction
-              title={t('confirm.clearTasksTitle')}
-              description={t('confirm.clearTasksDescription')}
-              confirmLabel={t('tasks.clearAll')}
-              onConfirm={clearAllTasks}
-            >
-              <Button size="sm" variant="danger" disabled={tasks.length === 0 || clearingTasks}>
-                <Trash2 className="size-4" />
-                {t('tasks.clearAll')}
+    <section className="grid h-full min-h-0 w-full overflow-hidden bg-[var(--app-panel)] pb-20 md:pb-0">
+      <div className="grid h-full min-h-0 min-w-0 xl:grid-cols-[232px_minmax(0,1fr)] min-[1680px]:grid-cols-[280px_minmax(0,1fr)]">
+      <Panel data-testid="task-center-list" className="flex min-h-0 flex-col overflow-hidden rounded-none border-y-0 border-l-0 shadow-none">
+        <div className="grid gap-3.5 border-b app-border px-4 py-5">
+          <div className="flex items-center justify-between gap-3">
+            <h1 aria-label={t('tasks.title')} data-testid="page-title" className="text-[22px] font-bold tracking-tight text-app">{t('tasks.listTitle')}</h1>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant={showFilters ? 'primary' : 'ghost'} onClick={() => setShowFilters((current) => !current)} title={t('tasks.filters')} aria-label={t('tasks.filters')}>
+                <Filter className="size-4" />
               </Button>
-            </ConfirmAction>
+              <Button size="icon" variant={selectionMode ? 'primary' : 'ghost'} onClick={toggleSelectionMode} title={t('tasks.selectMode')} aria-label={t('tasks.selectMode')}>
+                <CheckSquare className="size-4" />
+              </Button>
+            </div>
           </div>
-        }
-      />
-      <div className="grid min-h-0 gap-4 xl:h-[calc(100dvh-12rem)] xl:grid-cols-[320px_minmax(0,1fr)]">
-      <Panel data-testid="task-center-list" className="flex min-h-0 flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b app-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-app">{t('tasks.listTitle')}</h2>
-          <Badge>{filteredTasks.length}</Badge>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
+            <Input
+              value={taskSearchQuery}
+              onChange={(event) => setTaskSearchQuery(event.target.value)}
+              placeholder={t('search.placeholder')}
+              className="pl-9"
+            />
+          </div>
+          <div className="grid grid-cols-3 items-end gap-2 text-center text-[13px] font-semibold text-app-muted">
+            <button type="button" aria-pressed={quickFilter === 'recent'} className={cn('min-w-0 border-b-2 px-1 pb-2', quickFilter === 'recent' ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} onClick={clearFilters}>{t('transcribe.recentTasks')}</button>
+            <button type="button" aria-pressed={quickFilter === 'active'} className={cn('min-w-0 border-b-2 px-1 pb-2', quickFilter === 'active' ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} onClick={() => setStatusFilters(quickActiveStatuses)}>{t('tasks.active')} <span className="rounded bg-[var(--app-control)] px-1">{activeTaskCount}</span></button>
+            <button type="button" aria-pressed={quickFilter === 'completed'} className={cn('min-w-0 border-b-2 px-1 pb-2', quickFilter === 'completed' ? 'border-[var(--app-accent)] text-app-accent' : 'border-transparent')} onClick={() => setStatusFilters(['completed'])}>{statusLabel('completed')} <span className="rounded bg-[var(--app-control)] px-1">{tasks.filter((task) => task.status === 'completed').length}</span></button>
+          </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
           {tasksQuery.error && <ErrorState title={t('common.unableToLoad')} error={tasksQuery.error} />}
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
-              <Input
-                value={taskSearchQuery}
-                onChange={(event) => setTaskSearchQuery(event.target.value)}
-                placeholder={t('search.placeholder')}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs text-app-muted">
-              <Badge>{tasks.length} {t('tasks.description')}</Badge>
-              <Badge tone={activeTaskCount > 0 ? 'warning' : 'neutral'}>{activeTaskCount} {t('tasks.active')}</Badge>
-              <Badge>{filteredTasks.length} {t('tasks.filtered')}</Badge>
-            </div>
-          </div>
 
           {showFilters && (
             <div className="grid gap-3 rounded-xl border app-control p-3">
@@ -505,7 +497,7 @@ export function TasksPage() {
             </div>
           )}
 
-          <div className="grid min-h-0 flex-1 content-start gap-2 overflow-auto pr-1">
+          <div className="grid min-h-0 flex-1 content-start overflow-auto pr-1">
             {filteredTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -540,7 +532,7 @@ export function TasksPage() {
       </Panel>
 
       {selectedTask ? (
-        <div className="grid min-h-0 gap-4 max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:bg-[var(--app-overlay)] max-xl:p-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid min-h-0 min-w-0 overflow-hidden max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:bg-[var(--app-overlay)] max-xl:p-3 xl:grid-cols-[minmax(0,1fr)_clamp(280px,25vw,340px)]">
           <button
             type="button"
             className="max-xl:fixed max-xl:inset-0 max-xl:-z-10 xl:hidden"
@@ -549,45 +541,57 @@ export function TasksPage() {
           />
           <aside
             data-testid="task-center-detail"
-            className="app-panel flex min-h-0 flex-col overflow-hidden border app-border rounded-xl max-xl:min-h-[70vh]"
+            className="app-panel flex min-h-0 flex-col overflow-hidden border-y-0 border-l-0 app-border rounded-none shadow-none max-xl:min-h-[70vh] max-xl:rounded-xl max-xl:border"
           >
-            <header className="z-10 flex items-start justify-between gap-4 border-b app-border px-4 py-3 sm:px-5 sm:py-4">
+            <header className="z-10 flex min-h-[116px] items-start border-b app-border px-5 py-5 min-[1680px]:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase text-app-accent">{t('tasks.currentTask')}</p>
-                <h2 className="mt-1 truncate text-lg font-semibold text-app">{selectedTask.filename}</h2>
-                <p className="mt-1 text-xs text-app-muted">{selectedTask.id} · {formatDate(selectedTask.updated_at)}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <StatusPill status={selectedTask.status} />
-                <Button size="icon" variant="ghost" aria-label={t('tasks.closeDetails')} title={t('tasks.closeDetails')} onClick={() => setSelectedTaskId(null)}>
-                  <X className="size-4" />
-                </Button>
+                <p className="text-sm font-semibold text-app-muted">{t('tasks.currentTask')}</p>
+                <h2 className="mt-2 truncate text-[26px] font-bold tracking-tight text-app">{selectedTask.filename}</h2>
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-app-muted">
+                  <span>{formatDate(selectedTask.updated_at)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatDuration(selectedTask.duration_ms)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source}</span>
+                </p>
               </div>
             </header>
-            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4 sm:p-5">
-              <Progress value={selectedTask.progress} />
+            <div className="grid min-h-0 flex-1 content-start gap-5 overflow-auto px-6 py-5">
+              <Progress value={selectedTask.progress} className="h-1.5" />
               {selectedTask.error && <ErrorState title={selectedTask.error_code ?? 'Task error'} error={selectedTask.error} />}
               <TranscriptViewer task={selectedTask} mode="detail" />
             </div>
           </aside>
           <aside
             data-testid="task-center-inspector"
-            className="app-panel flex min-h-0 flex-col overflow-hidden border app-border rounded-xl max-xl:min-h-[40vh]"
+            className="app-panel flex min-h-0 min-w-0 flex-col overflow-hidden border-y-0 border-r-0 app-border rounded-none shadow-none max-xl:min-h-[40vh] max-xl:rounded-xl max-xl:border"
           >
-            <div className="flex items-center justify-between gap-3 border-b app-border px-4 py-3">
-              <h2 className="text-sm font-semibold text-app">{t('tasks.inspector')}</h2>
+            <div className="flex min-h-[74px] items-center justify-between gap-3 border-b app-border px-5 py-4">
+              <h2 className="text-xl font-bold text-app">{t('tasks.inspector')}</h2>
               <StatusPill status={selectedTask.status} />
             </div>
-            <div className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-4">
+            <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-5 overflow-auto p-5 [&>*]:min-w-0">
+              <div className="flex items-center gap-3 border-b app-border pb-5">
+                <div className={cn('grid size-11 shrink-0 place-items-center rounded-full', selectedTask.status === 'completed' ? 'bg-[var(--app-success-soft)] text-[var(--app-success)]' : 'bg-[var(--app-accent-soft)] text-app-accent')}>
+                  {selectedTask.status === 'completed' ? <CheckCircle2 className="size-6" /> : <Activity className="size-6" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-app-muted">{t('tasks.status')}</p>
+                  <p className="mt-1 text-lg font-semibold text-app">{statusLabel(selectedTask.status)}</p>
+                </div>
+              </div>
               <div className="grid gap-1">
+                <DataRow label={t('tasks.taskId')} value={<span className="break-all text-right">{selectedTask.id}</span>} />
                 <DataRow label={t('tasks.created')} value={formatDate(selectedTask.created_at)} />
+                {selectedTask.completed_at && <DataRow label={t('tasks.completedAt')} value={formatDate(selectedTask.completed_at)} />}
                 <DataRow label={t('tasks.duration')} value={formatDuration(selectedTask.duration_ms)} />
                 <DataRow label={t('tasks.progress')} value={formatPercent(selectedTask.progress)} />
-                <DataRow label={t('tasks.engine')} value={selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source} />
+                <DataRow label={t('tasks.language')} value={selectedTask.language ?? '—'} />
+                <DataRow label={t('tasks.engine')} value={<span className="break-words text-right">{selectedTask.model_name ?? selectedTask.provider_id ?? selectedTask.source}</span>} />
               </div>
               {selectedTask.status === 'completed' && (
-                <div className="grid gap-3 rounded-xl border app-control p-3">
-                  <div className="flex items-center justify-between gap-3">
+                <div className="grid min-w-0 gap-3 border-t app-border pt-5">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-app">{t('tasks.outputFiles')}</h3>
                     <Button size="sm" variant="secondary" onClick={() => copyTaskText(selectedTask)} disabled={!selectedTask.text}>
                       <Clipboard className="size-4" />
@@ -597,12 +601,12 @@ export function TasksPage() {
                   {isApproximateTimelineModel(selectedTask.model_name) && (
                     <p className="text-xs leading-5 text-app-muted">{t('tasks.approximateTimelineNote')}</p>
                   )}
-                  <div className="flex flex-wrap gap-2">
-                    {outputFileFormats.map((format) => (
+                  <div className="grid gap-2">
+                    {(['srt', 'txt'] as const).map((format) => (
                       <Button
                         key={format}
-                        size="sm"
-                        variant="secondary"
+                        variant={format === 'srt' ? 'primary' : 'secondary'}
+                        className="h-12 w-full text-[15px]"
                         onClick={() => {
                           downloadTaskFormat(selectedTask, format)
                             .then((saved) => {
@@ -616,7 +620,7 @@ export function TasksPage() {
                       </Button>
                     ))}
                     <Button
-                      size="sm"
+                      size="md"
                       variant="secondary"
                       disabled={!desktopCapabilities.canOpenFileLocation}
                       title={desktopCapabilities.canOpenFileLocation ? t('tasks.openFileLocation') : t('tasks.openFileLocationUnavailable')}
@@ -822,7 +826,7 @@ export function TasksPage() {
           </aside>
         </div>
       ) : (
-        <Panel className="hidden xl:grid place-items-center">
+        <Panel className="hidden rounded-none border-y-0 border-r-0 shadow-none xl:grid place-items-center">
           <EmptyState
             title={t('tasks.inspectorEmptyTitle')}
             body={t('tasks.inspectorEmptyBody')}

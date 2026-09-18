@@ -2,7 +2,7 @@ import { Pause, Play, Repeat, Volume2, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { formatDuration } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { useAudioStore } from '../stores/audioStore';
+import { clipReachedEnd, useAudioStore } from '../stores/audioStore';
 import { Button } from './weiui';
 
 export function PersistentAudioPlayer() {
@@ -13,10 +13,12 @@ export function PersistentAudioPlayer() {
   const audioCurrentTime = useAudioStore((state) => state.audioCurrentTime);
   const audioDuration = useAudioStore((state) => state.audioDuration);
   const audioLoop = useAudioStore((state) => state.audioLoop);
+  const audioClipEnd = useAudioStore((state) => state.audioClipEnd);
   const audioVolume = useAudioStore((state) => state.audioVolume);
   const audioIsOpen = useAudioStore((state) => state.audioIsOpen);
   const audioShouldPlay = useAudioStore((state) => state.audioShouldPlay);
   const closeAudio = useAudioStore((state) => state.closeAudio);
+  const releaseAudioClip = useAudioStore((state) => state.releaseAudioClip);
   const setAudioCurrentTime = useAudioStore((state) => state.setAudioCurrentTime);
   const setAudioDuration = useAudioStore((state) => state.setAudioDuration);
   const setAudioLoop = useAudioStore((state) => state.setAudioLoop);
@@ -60,7 +62,10 @@ export function PersistentAudioPlayer() {
           size="icon"
           variant="secondary"
           aria-label={audioShouldPlay ? t('audio.pause') : t('audio.play')}
-          onClick={() => setAudioShouldPlay(!audioShouldPlay)}
+          onClick={() => {
+            if (!audioShouldPlay && audioClipEnd != null) releaseAudioClip();
+            setAudioShouldPlay(!audioShouldPlay);
+          }}
         >
           {audioShouldPlay ? <Pause className="size-4" /> : <Play className="size-4" />}
         </Button>
@@ -80,6 +85,7 @@ export function PersistentAudioPlayer() {
             aria-label={t('audio.seek')}
             className="h-2 w-full accent-[var(--app-accent)]"
             onChange={(event) => {
+              if (audioClipEnd != null) releaseAudioClip();
               const nextTime = Number(event.target.value);
               setAudioCurrentTime(nextTime);
               if (audioRef.current) audioRef.current.currentTime = nextTime;
@@ -130,7 +136,17 @@ export function PersistentAudioPlayer() {
             audio.currentTime = Math.min(useAudioStore.getState().audioCurrentTime, audio.duration || 0);
           }}
           onError={() => { setAudioUnavailable(true); setAudioShouldPlay(false); }}
-          onTimeUpdate={(event) => setAudioCurrentTime(event.currentTarget.currentTime)}
+          onTimeUpdate={(event) => {
+            const audio = event.currentTarget;
+            if (clipReachedEnd(audio.currentTime, audioClipEnd)) {
+              audio.pause();
+              audio.currentTime = audioClipEnd!;
+              setAudioCurrentTime(audioClipEnd!);
+              setAudioShouldPlay(false);
+              return;
+            }
+            setAudioCurrentTime(audio.currentTime);
+          }}
           onPlay={() => setAudioShouldPlay(true)}
           onPause={() => setAudioShouldPlay(false)}
           onEnded={() => setAudioShouldPlay(false)}

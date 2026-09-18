@@ -31,9 +31,9 @@ export function TaskRow({
   return (
     <article
       className={cn(
-        'grid items-start gap-2 rounded-lg border px-3 py-2.5 transition hover:border-[color:var(--app-accent)]/40 hover:bg-[var(--app-control)]',
+        'relative grid items-start gap-2 rounded-xl border border-transparent px-3 py-3.5 transition hover:bg-[var(--app-control)]',
         selectionMode ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1',
-        selected ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'app-control',
+        selected ? 'border-[color:var(--app-accent)]/20 bg-[var(--app-accent-soft)] shadow-[inset_3px_0_0_var(--app-accent)]' : '',
       )}
     >
       {selectionMode && (
@@ -45,21 +45,21 @@ export function TaskRow({
           className="mt-1 size-4 rounded border app-control accent-[var(--app-accent)]"
         />
       )}
-      <button type="button" className="grid min-w-0 gap-2 text-left" onClick={onSelect}>
+      <button type="button" className="grid min-w-0 gap-2.5 text-left" onClick={onSelect}>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-app">
+            <h2 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold leading-5 text-app">
               {favorited && <Star className="size-3.5 shrink-0 fill-[var(--app-accent)] text-[var(--app-accent)]" />}
               <span className="truncate">{task.filename}</span>
             </h2>
-            <p className="mt-0.5 text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source} · {formatDuration(task.duration_ms)}</p>
+            <p className="mt-1 truncate text-xs text-app-muted">{task.model_name ?? task.provider_id ?? task.source}</p>
           </div>
           <StatusPill status={task.status} />
         </div>
-        <Progress value={task.progress} />
+        {task.status !== 'completed' && <Progress value={task.progress} />}
         <div className="flex justify-between gap-3 text-xs text-app-muted">
-          <span>{formatDate(task.updated_at)}</span>
-          <span>{formatPercent(task.progress)}</span>
+          <span>{formatDuration(task.duration_ms)} · {formatDate(task.updated_at)}</span>
+          {task.status !== 'completed' && <span>{formatPercent(task.progress)}</span>}
         </div>
         {collection && (
           <div className="flex min-w-0 items-center gap-1 text-xs text-app-muted">

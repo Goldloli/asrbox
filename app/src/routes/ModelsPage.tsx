@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, DownloadCloud, Pause, Play, RefreshCw, Square } from 'lucide-react';
+import { Database, DownloadCloud, Pause, Play, RefreshCw, Search, Square } from 'lucide-react';
 import { apiClient, getActiveDownloadItems, type ModelProgress } from '../lib/api';
 import { queryKeys, useActiveDownloadsQuery, useModelStorageQuery, useModelsQuery, useSettingsQuery } from '../lib/queries';
 import { formatBytes } from '../lib/format';
-import { Badge, Button, EmptyState, ErrorState, PageTitle, Panel, PanelHeader, Progress } from '../components/weiui';
+import { Badge, Button, EmptyState, ErrorState, Input, PageTitle, Panel, PanelHeader, Progress } from '../components/weiui';
 import { Link } from '@tanstack/react-router';
 import { toastErrorMessage, useToast } from '../components/Toast';
 import { isRecommendedModel, modelBestFor, modelCategory, modelDescription, modelDetails, type ModelCategory } from '../lib/modelCatalog';
 import { modelDeviceSummaryKey } from '../lib/modelDevices';
 import { useI18n } from '../lib/i18n';
-import { createModelGroups, ModelListRow, StorageMetric } from '../components/models/ModelManagement';
+import { ModelListRow, StorageMetric } from '../components/models/ModelManagement';
 import { ModelLadder } from '../components/models/ModelLadder';
 
 type GuidePreference = 'general' | Exclude<ModelCategory, 'recommended'>;
@@ -33,6 +33,7 @@ export function ModelsPage() {
   const [category, setCategory] = useState<ModelViewCategory>('all');
   const [guidePreference, setGuidePreference] = useState<GuidePreference>('general');
   const [pinnedModelNames, setPinnedModelNames] = useState<string[]>([]);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
   const modelsQuery = useModelsQuery();
   const downloadsQuery = useActiveDownloadsQuery();
   const storageQuery = useModelStorageQuery();
@@ -128,6 +129,8 @@ export function ModelsPage() {
   const loadedCount = models.filter((model) => model.loaded).length;
   const visibleModels = models
     .filter((model) => {
+      const needle = modelSearchQuery.trim().toLowerCase();
+      if (needle && !`${model.display_name} ${model.model_name} ${model.engine} ${model.repo_id ?? ''}`.toLowerCase().includes(needle)) return false;
       if (category === 'all') return true;
       if (category === 'pinned') return pinnedModelNames.includes(model.model_name);
       if (category === 'recommended') return isRecommendedModel(model);
@@ -139,7 +142,6 @@ export function ModelsPage() {
   const guideRecommendedModel =
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference) && model.downloaded === false) ??
     models.find((model) => (guidePreference === 'general' ? isRecommendedModel(model) : modelCategory(model) === guidePreference));
-  const modelGroups = createModelGroups(visibleModels, progressByModel, pinnedModelNames, t);
   const categoryItems: Array<{ value: ModelViewCategory; label: string }> = [
     { value: 'all', label: t('models.categoryAll') },
     { value: 'recommended', label: t('models.categoryRecommended') },
@@ -165,7 +167,7 @@ export function ModelsPage() {
   };
 
   return (
-    <section className="grid gap-5">
+    <section className="product-page grid gap-5 p-5 sm:p-6">
       <PageTitle
         title={t('models.title')}
         description={t('models.pageDescription')}
@@ -179,36 +181,40 @@ export function ModelsPage() {
         }
       />
       <ModelLadder models={models} />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <Panel className="overflow-hidden">
-        <PanelHeader
-          eyebrow={t('models.eyebrow')}
-          title={t('models.title')}
-          description={storageUnavailable ? t('settings.modelStorageUnavailable') : `${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}
-          action={
-            <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')} aria-label={t('common.refresh')}>
-              <RefreshCw className="size-4" />
-            </Button>
-          }
-        />
-        <div className="grid gap-4 p-4">
-          <div className="flex flex-wrap gap-2">
-            {categoryItems.map((item) => (
-              <Button key={item.value} size="sm" variant={category === item.value ? 'primary' : 'secondary'} onClick={() => setCategory(item.value)}>
-                {item.label}
+      <div className="grid gap-4">
+      <Panel className="overflow-hidden shadow-none">
+        <div className="grid gap-4 p-5">
+          <div className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_auto] xl:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-app-muted" />
+              <Input value={modelSearchQuery} onChange={(event) => setModelSearchQuery(event.target.value)} placeholder={t('models.searchPlaceholder')} className="pl-9" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categoryItems.map((item) => (
+                <Button key={item.value} size="sm" variant={category === item.value ? 'primary' : 'secondary'} onClick={() => setCategory(item.value)}>
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 text-sm text-app-muted">
+              <span className="whitespace-nowrap">{storageUnavailable ? t('settings.modelStorageUnavailable') : `${downloadedCount}/${models.length} ${t('models.descriptionDownloaded')} · ${loadedCount} ${t('models.descriptionLoaded')}`}</span>
+              <Button variant="ghost" size="icon" onClick={refresh} title={t('common.refresh')} aria-label={t('common.refresh')}>
+                <RefreshCw className="size-4" />
               </Button>
-            ))}
+            </div>
           </div>
           {modelsQuery.error && <ErrorState title={t('common.unableToLoad')} error={modelsQuery.error} />}
-          <div className="grid gap-4">
-            {modelGroups.map((group) => (
-              <section key={group.key} className="grid gap-2">
-                <div className="flex items-center justify-between gap-3 px-1">
-                  <h2 className="text-sm font-semibold text-app">{group.title}</h2>
-                  <span className="text-xs text-app-muted">{group.models.length}</span>
-                </div>
-                <div className="grid gap-2">
-                  {group.models.map((model) => (
+          <div className="overflow-hidden rounded-xl border app-border">
+            <div className="hidden grid-cols-[minmax(220px,1.7fr)_70px_50px_60px_minmax(120px,1fr)_110px_180px] items-center gap-3 bg-[var(--app-control-strong)] px-4 py-2.5 text-xs font-semibold text-app-muted min-[1100px]:grid">
+              <span>{t('models.modelName')}</span>
+              <span>{t('models.size')}</span>
+              <span>{t('models.ladderSpeed')}</span>
+              <span>{t('models.ladderAccuracy')}</span>
+              <span>{t('models.detailCapabilities')}</span>
+              <span>{t('tasks.status')}</span>
+              <span>{t('models.actions')}</span>
+            </div>
+                  {visibleModels.map((model) => (
                     <ModelListRow
                       key={model.model_name}
                       model={model}
@@ -229,9 +235,6 @@ export function ModelsPage() {
                       onDelete={() => remove.mutate(model.model_name)}
                     />
                   ))}
-                </div>
-              </section>
-            ))}
           </div>
           {visibleModels.length === 0 && (
             <EmptyState

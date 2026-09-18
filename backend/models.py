@@ -842,6 +842,7 @@ class TranslationVersionResponse(TranslationVersionSummary):
 
 class ProofreadingCreateRequest(BaseModel):
     provider_id: str = Field(..., min_length=1)
+    reason_language: Literal["zh", "en"] = "en"
 
 
 class ProofreadingApplyRequest(BaseModel):
@@ -865,6 +866,7 @@ class ProofreadingRunResponse(BaseModel):
     provider_name: str
     provider_preset: str
     model_name: str
+    reason_language: Literal["zh", "en"] = "en"
     status: Literal["queued", "running", "completed", "failed", "interrupted", "applied"]
     total_batches: int
     completed_batches: int

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { BrainCircuit, FileAudio, Loader2, MessageSquarePlus, Send, Settings2, Square, Trash2 } from 'lucide-react';
+import { BrainCircuit, FileAudio, Loader2, MessageSquarePlus, Play, Send, Settings2, Square, Trash2 } from 'lucide-react';
 import { apiClient, type ChatMessage, type TranscriptionTask } from '../../lib/api';
 import { ChatStreamError } from '../../lib/eventStream';
 import { formatDate } from '../../lib/format';
@@ -9,6 +9,7 @@ import { useI18n } from '../../lib/i18n';
 import { cn } from '../../lib/cn';
 import { queryKeys, useChatSessionQuery, useChatSessionsQuery, useLLMProvidersQuery } from '../../lib/queries';
 import { useUiStore } from '../../stores/uiStore';
+import { openSegmentAudio } from '../../stores/audioStore';
 import { ConfirmAction } from '../ConfirmAction';
 import { Markdown } from '../Markdown';
 import { toastErrorMessage, useToast } from '../Toast';
@@ -126,10 +127,18 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
   };
 
   const stop = () => abortRef.current?.abort();
+  const playEvidence = async (task: TranscriptionTask, startAt: number, endAt: number) => {
+    try {
+      const url = await apiClient.taskAudioUrl(task.id);
+      openSegmentAudio({ taskId: task.id, url, title: task.filename, start: startAt, end: endAt });
+    } catch (error) {
+      toast.error(t('chat.playFailed'), toastErrorMessage(error));
+    }
+  };
 
   if (!providers.isLoading && enabledProviders.length === 0) {
     return (
-      <Panel className="min-w-0 overflow-hidden">
+      <Panel className="h-full min-h-0 min-w-0 overflow-hidden">
         <PanelHeader eyebrow={t('chat.eyebrow')} title={t('chat.title')} description={t('chat.description')} />
         {providers.error ? (
           <div className="p-4"><ErrorState error={providers.error} /></div>
@@ -150,57 +159,53 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
   const boundTask = effectiveTaskId ? tasks.find((task) => task.id === effectiveTaskId) : undefined;
 
   return (
-    <div className="grid min-w-0 gap-4 lg:h-[calc(100dvh-210px)] lg:min-h-[480px] lg:grid-cols-[300px_minmax(0,1fr)]">
-      <Panel className="flex min-w-0 flex-col overflow-hidden lg:h-full">
+    <div className="grid h-full min-h-0 min-w-0 lg:grid-cols-[220px_minmax(0,1fr)_220px]">
+      <Panel className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-none border-y-0 border-l-0 shadow-none">
         <PanelHeader title={t('chat.sessionsTitle')} description={t('chat.sessionsDescription')} />
-        <div className="border-b app-border p-2">
-          <Button variant="secondary" className="w-full" disabled={streaming} onClick={() => setSelectedId(null)}>
+        <div className="border-b app-border p-3">
+          <Button variant="secondary" className="w-full" disabled={streaming} onClick={() => { setSelectedId(null); setPendingTaskId(UNBOUND_TASK); }}>
             <MessageSquarePlus className="size-4" />{t('chat.newSession')}
           </Button>
         </div>
         {sessions.error && <div className="p-3"><ErrorState error={sessions.error} /></div>}
-        {sessions.isSuccess && sessions.data.items.length === 0 && (
-          <EmptyState title={t('chat.noSessions')} body={t('chat.noSessionsBody')} icon={<BrainCircuit className="size-5" />} />
-        )}
-        <div className="grid max-h-[300px] min-h-0 flex-1 content-start gap-1 overflow-auto p-2 lg:max-h-none">
-          {(sessions.data?.items ?? []).map((item) => {
-            const active = item.id === selectedId;
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  'group flex min-w-0 items-center gap-1 rounded-lg border transition',
-                  active ? 'border-[color:var(--app-accent)] bg-[var(--app-accent-soft)]' : 'border-transparent hover:border-[var(--app-border)] hover:bg-[var(--app-control)]',
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(item.id)}
-                  aria-pressed={active}
-                  className="grid min-w-0 flex-1 gap-1 px-3 py-2 text-left focus:outline-none"
-                >
-                  <span className="truncate text-sm font-medium text-app">{item.title || t('chat.untitled')}</span>
-                  <span className="text-xs text-app-muted">{formatDate(item.updated_at)}</span>
-                </button>
-                <ConfirmAction
-                  title={t('chat.deleteTitle')}
-                  description={t('chat.deleteDescription')}
-                  confirmLabel={t('chat.deleteConfirm')}
-                  onConfirm={() => removeSession.mutate(item.id)}
-                >
-                  <Button size="sm" variant="ghost" aria-label={t('chat.deleteConfirm')} className="opacity-0 transition group-hover:opacity-100 focus:opacity-100">
-                    <Trash2 className="size-4" />
-                  </Button>
-                </ConfirmAction>
-              </div>
-            );
-          })}
+        <div className="grid min-h-0 flex-1 content-start gap-1 overflow-auto p-2">
+          {(sessions.data?.items ?? []).map((item) => (
+            <div key={item.id} className="group flex items-center gap-1 rounded-lg hover:bg-[var(--app-control)]">
+              <button type="button" onClick={() => setSelectedId(item.id)} className="min-w-0 flex-1 truncate px-2 py-2 text-left text-xs text-app-muted">{item.title || t('chat.untitled')}</button>
+              <ConfirmAction title={t('chat.deleteTitle')} description={t('chat.deleteDescription')} confirmLabel={t('chat.deleteConfirm')} onConfirm={() => removeSession.mutate(item.id)}>
+                <Button size="icon" variant="ghost" className="size-8" aria-label={t('chat.deleteConfirm')}><Trash2 className="size-3.5" /></Button>
+              </ConfirmAction>
+            </div>
+          ))}
+          {!sessions.isLoading && (sessions.data?.items ?? []).length === 0 ? (
+            <p className="px-2 py-3 text-xs text-app-muted">{t('chat.noSessions')}</p>
+          ) : null}
         </div>
       </Panel>
 
-      <Panel className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+      <Panel className="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-none border-y-0 border-l-0 shadow-none">
         <div className="grid gap-3 border-b app-border p-4">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <h2 className="text-xl font-bold text-app">{t('chat.workspaceTitle')}</h2>
+            <p className="mt-1 truncate text-sm text-app-muted">{effectiveTaskId ? t('chat.boundTaskHint', { name: boundTask?.filename ?? effectiveTaskId }) : t('chat.qaOnlyHint')}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-app-muted">{t('chat.bindTaskLabel')}</span>
+              <Select
+                aria-label={t('chat.bindTask')}
+                value={effectiveTaskId ?? UNBOUND_TASK}
+                disabled={streaming || updateBinding.isPending}
+                onValueChange={(value) => {
+                  if (selectedId) updateBinding.mutate({ task_id: value === UNBOUND_TASK ? null : value });
+                  else setPendingTaskId(value);
+                }}
+                options={[
+                  { value: UNBOUND_TASK, label: t('chat.noTask') },
+                  ...tasks.map((task) => ({ value: task.id, label: task.filename })),
+                ]}
+              />
+            </label>
             <label className="grid min-w-0 gap-1.5">
               <span className="text-xs font-medium text-app-muted">{t('chat.providerLabel')}</span>
               <Select
@@ -218,28 +223,7 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
                 }))}
               />
             </label>
-            <label className="grid min-w-0 gap-1.5">
-              <span className="text-xs font-medium text-app-muted">{t('chat.bindTaskLabel')}</span>
-              <Select
-                value={session ? (session.task_id ?? UNBOUND_TASK) : pendingTaskId}
-                onValueChange={(value) => {
-                  if (selectedId) updateBinding.mutate({ task_id: value === UNBOUND_TASK ? null : value });
-                  else setPendingTaskId(value);
-                }}
-                placeholder={t('chat.bindTask')}
-                aria-label={t('chat.bindTask')}
-                options={[
-                  { value: UNBOUND_TASK, label: t('chat.noTask') },
-                  ...tasks.map((task) => ({ value: task.id, label: task.filename })),
-                ]}
-              />
-            </label>
           </div>
-          <p className="text-xs text-app-muted">
-            {effectiveTaskId
-              ? t('chat.boundTaskHint', { name: boundTask?.filename ?? effectiveTaskId })
-              : t('chat.qaOnlyHint')}
-          </p>
         </div>
 
         <div ref={scrollRef} className="grid min-h-[300px] content-start gap-3 overflow-auto p-4 lg:min-h-0">
@@ -298,6 +282,30 @@ export function ChatPanel({ tasks }: { tasks: TranscriptionTask[] }) {
               </Button>
             )}
           </div>
+        </div>
+      </Panel>
+      <Panel className="h-full min-h-0 min-w-0 overflow-y-auto rounded-none border-y-0 border-x-0 shadow-none">
+        <PanelHeader title={t('chat.evidenceTitle')} description={t('chat.evidenceDescription')} />
+        <div className="grid gap-3 p-4">
+          {boundTask ? boundTask.segments.slice(0, 3).map((segment, index) => (
+            <article key={segment.id} className="grid gap-2 rounded-xl border app-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Badge>{index + 1}</Badge>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-8"
+                  aria-label={t('translation.play', { id: segment.id })}
+                  disabled={!boundTask.audio_path}
+                  onClick={() => void playEvidence(boundTask, segment.start, segment.end)}
+                >
+                  <Play className="size-4 fill-current" />
+                </Button>
+              </div>
+              <p className="text-xs font-semibold text-app">{boundTask.filename}</p>
+              <p className="line-clamp-4 text-sm leading-6 text-app-muted">{segment.text}</p>
+            </article>
+          )) : <EmptyState title={t('chat.noTask')} body={t('chat.evidenceDescription')} icon={<FileAudio className="size-5" />} />}
         </div>
       </Panel>
     </div>

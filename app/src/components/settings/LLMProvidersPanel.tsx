@@ -5,6 +5,7 @@ import { apiClient, type LLMProvider, type LLMProviderPreset, type LLMCompatibil
 import { queryKeys, useLLMProviderPresetsQuery, useLLMProvidersQuery } from '../../lib/queries';
 import { Badge, Button, Dialog, DialogContent, DialogTrigger, EmptyState, ErrorState, Field, Input, Panel, PanelHeader, Select, Switch } from '../weiui';
 import { ConfirmAction } from '../ConfirmAction';
+import { BrandIcon } from '../BrandIcon';
 import { toastErrorMessage, useToast } from '../Toast';
 import { LLMCompatibilityFields, LLMCapabilityPanel, defaultCompatibility } from './LLMCompatibility';
 import { useI18n } from '../../lib/i18n';
@@ -36,6 +37,16 @@ export function LLMProvidersPanel() {
   const providers = useLLMProvidersQuery();
   const presets = useLLMProviderPresetsQuery();
   const [testResults, setTestResults] = useState<Record<string, LLMProviderTestResult>>({});
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const providerItems = providers.data?.items ?? [];
+  const selectedProvider = providerItems.find((provider) => provider.id === selectedProviderId) ?? providerItems[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedProviderId && providerItems[0]) setSelectedProviderId(providerItems[0].id);
+    if (selectedProviderId && !providerItems.some((provider) => provider.id === selectedProviderId)) {
+      setSelectedProviderId(providerItems[0]?.id ?? null);
+    }
+  }, [providerItems, selectedProviderId]);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.llmProviders });
   const remove = useMutation({
@@ -66,75 +77,81 @@ export function LLMProvidersPanel() {
   };
 
   return (
-    <Panel className="overflow-hidden">
-      <PanelHeader
-        eyebrow={t('llmProviders.eyebrow')}
-        title={t('llmProviders.title')}
-        description={t('llmProviders.description')}
-        action={
-          <LLMProviderDialog presets={presets.data?.items ?? []} onSaved={handleSaved}>
-            <Button size="sm"><Plus className="size-4" />{t('llmProviders.add')}</Button>
-          </LLMProviderDialog>
-        }
-      />
-      <div className="grid gap-3 p-4">
-        {(providers.error || presets.error) && <ErrorState error={providers.error ?? presets.error} />}
-        {(providers.data?.items ?? []).map((provider) => (
-          <article key={provider.id} className="grid gap-3 rounded-lg border app-control p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 gap-3">
-                <div className="grid size-10 shrink-0 place-items-center rounded-lg border app-control text-app-accent">
-                  <BrainCircuit className="size-5" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="truncate text-sm font-semibold text-app">{provider.name}</h2>
-                  <p className="mt-1 break-all text-xs text-app-muted">{provider.base_url}</p>
-                  <p className="mt-1 text-xs text-app-muted">{provider.default_model || t('llmProviders.modelMissing')} · {provider.api_key_masked ?? t('providers.notSet')}</p>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                <Badge tone={provider.is_local ? 'success' : 'warning'}>
-                  {provider.is_local ? <HardDrive className="mr-1 size-3" /> : <Wifi className="mr-1 size-3" />}
-                  {provider.is_local ? t('llmProviders.local') : t('llmProviders.thirdParty')}
-                </Badge>
-                <Badge tone={provider.enabled ? 'success' : 'neutral'}>{provider.enabled ? t('common.enabled') : t('common.disabled')}</Badge>
-              </div>
-            </div>
-            {testResults[provider.id] && (
-              <p className={testResults[provider.id].ok
-                ? 'flex items-start gap-2 rounded-lg border border-[color:var(--app-success)] bg-[var(--app-success-soft)] px-3 py-2 text-xs text-[var(--app-success)]'
-                : 'flex items-start gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]'}
-              >
-                {testResults[provider.id].ok ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
-                <span className="break-words">{testResults[provider.id].message}</span>
-              </p>
-            )}
-            <LLMCapabilityPanel provider={provider} onSaved={refresh} />
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" variant="secondary" onClick={() => test.mutate(provider.id)} disabled={test.isPending && test.variables === provider.id}>
-                {test.isPending && test.variables === provider.id ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}
-                {test.isPending && test.variables === provider.id ? t('llmProviders.testing') : t('llmProviders.testConnection')}
-              </Button>
-              <LLMProviderDialog provider={provider} presets={presets.data?.items ?? []} onSaved={handleSaved}>
-                <Button size="sm" variant="ghost"><Pencil className="size-4" />{t('common.edit')}</Button>
-              </LLMProviderDialog>
-              <ConfirmAction
-                title={t('confirm.deleteTitle')}
-                description={t('llmProviders.deleteDescription')}
-                confirmLabel={t('common.delete')}
-                onConfirm={() => remove.mutate(provider.id)}
-              >
-                <Button size="sm" variant="danger"><Trash2 className="size-4" />{t('common.delete')}</Button>
-              </ConfirmAction>
-            </div>
-          </article>
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_410px]">
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          eyebrow={t('llmProviders.eyebrow')}
+          title={t('llmProviders.title')}
+          description={t('llmProviders.description')}
+          action={
+            <LLMProviderDialog presets={presets.data?.items ?? []} onSaved={handleSaved}>
+              <Button size="sm"><Plus className="size-4" />{t('llmProviders.add')}</Button>
+            </LLMProviderDialog>
+          }
+        />
+        {(providers.error || presets.error) && <div className="p-4"><ErrorState error={providers.error ?? presets.error} /></div>}
+        {providerItems.length > 0 ? (
+          <div className="product-table-head grid grid-cols-[minmax(220px,1.2fr)_minmax(160px,0.8fr)_120px_110px] gap-3 px-5 py-3 text-xs font-semibold text-app-muted">
+            <span>{t('providers.name')}</span><span>{t('providers.defaultModel')}</span><span>{t('llmProviders.runtime')}</span><span>{t('common.status')}</span>
+          </div>
+        ) : null}
+        {providerItems.map((provider) => (
+          <button
+            key={provider.id}
+            type="button"
+            onClick={() => setSelectedProviderId(provider.id)}
+            className={`grid w-full grid-cols-[minmax(220px,1.2fr)_minmax(160px,0.8fr)_120px_110px] items-center gap-3 border-t app-border px-5 py-4 text-left transition ${selectedProvider?.id === provider.id ? 'bg-[var(--app-accent-soft)]' : 'hover:bg-[var(--app-bg-soft)]'}`}
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl border app-control"><BrandIcon name={`${provider.preset} ${provider.name}`} /></span>
+              <span className="min-w-0"><strong className="block truncate text-sm font-semibold text-app">{provider.name}</strong><span className="mt-1 block truncate text-xs text-app-muted">{provider.base_url}</span></span>
+            </span>
+            <span className="truncate text-xs text-app-muted">{provider.default_model || t('llmProviders.modelMissing')}</span>
+            <span><Badge tone={provider.is_local ? 'success' : 'warning'}>{provider.is_local ? <HardDrive className="mr-1 size-3" /> : <Wifi className="mr-1 size-3" />}{provider.is_local ? t('llmProviders.local') : t('llmProviders.thirdParty')}</Badge></span>
+            <span><Badge tone={provider.enabled ? 'success' : 'neutral'}>{provider.enabled ? t('common.enabled') : t('common.disabled')}</Badge></span>
+          </button>
         ))}
-        {(providers.data?.items ?? []).length === 0 && !providers.isLoading && (
-          <EmptyState title={t('llmProviders.empty')} body={t('llmProviders.emptyBody')} icon={<BrainCircuit className="size-5" />} />
-        )}
-      </div>
-    </Panel>
+        {providerItems.length === 0 && !providers.isLoading && <div className="p-4"><EmptyState title={t('llmProviders.empty')} body={t('llmProviders.emptyBody')} icon={<BrainCircuit className="size-5" />} /></div>}
+      </Panel>
+
+      <Panel className="overflow-hidden">
+        <PanelHeader eyebrow={t('llmProviders.eyebrow')} title={selectedProvider?.name ?? t('llmProviders.title')} description={selectedProvider?.base_url ?? t('llmProviders.description')} />
+        {selectedProvider ? (
+          <article className="grid gap-4 p-5">
+            <div className="grid gap-3 rounded-xl border app-border p-4 text-sm">
+              <ProviderMeta label={t('providers.defaultModel')} value={selectedProvider.default_model || t('llmProviders.modelMissing')} />
+              <ProviderMeta label={t('providers.apiKey')} value={selectedProvider.api_key_masked ?? t('providers.notSet')} />
+              <ProviderMeta label={t('llmProviders.runtime')} value={selectedProvider.is_local ? t('llmProviders.local') : t('llmProviders.thirdParty')} />
+            </div>
+            {testResults[selectedProvider.id] ? (
+              <p className={testResults[selectedProvider.id].ok
+                ? 'flex items-start gap-2 rounded-xl border border-[color:var(--app-success)] bg-[var(--app-success-soft)] px-3 py-2 text-xs text-[var(--app-success)]'
+                : 'flex items-start gap-2 rounded-xl border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]'}>
+                {testResults[selectedProvider.id].ok ? <CheckCircle2 className="size-4 shrink-0" /> : <XCircle className="size-4 shrink-0" />}
+                <span className="break-words">{testResults[selectedProvider.id].message}</span>
+              </p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => test.mutate(selectedProvider.id)} disabled={test.isPending && test.variables === selectedProvider.id}>
+                {test.isPending && test.variables === selectedProvider.id ? <Loader2 className="size-4 animate-spin" /> : <TestTube2 className="size-4" />}{test.isPending && test.variables === selectedProvider.id ? t('llmProviders.testing') : t('llmProviders.testConnection')}
+              </Button>
+              <LLMProviderDialog provider={selectedProvider} presets={presets.data?.items ?? []} onSaved={handleSaved}>
+                <Button variant="secondary"><Pencil className="size-4" />{t('common.edit')}</Button>
+              </LLMProviderDialog>
+            </div>
+            <LLMCapabilityPanel provider={selectedProvider} onSaved={refresh} />
+            <ConfirmAction title={t('confirm.deleteTitle')} description={t('llmProviders.deleteDescription')} confirmLabel={t('common.delete')} onConfirm={() => remove.mutate(selectedProvider.id)}>
+              <Button variant="danger"><Trash2 className="size-4" />{t('common.delete')}</Button>
+            </ConfirmAction>
+          </article>
+        ) : <div className="p-5 text-sm text-app-muted">{t('llmProviders.emptyBody')}</div>}
+      </Panel>
+    </section>
   );
+}
+
+function ProviderMeta({ label, value }: { label: string; value: string }) {
+  return <div className="grid gap-1 border-b app-border pb-3 last:border-b-0 last:pb-0"><span className="text-xs font-medium text-app-muted">{label}</span><span className="break-all text-app">{value}</span></div>;
 }
 
 function LLMProviderDialog({

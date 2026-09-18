@@ -4,8 +4,8 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -14,6 +14,7 @@ from backend.database import get_db
 from backend.models import ActiveTasksResponse, TaskListResponse, TaskLogResponse, TaskPostprocessRequest, TaskQualityResponse, TaskRelinkRequest, TaskRetranscribeRequest
 from backend.models import SegmentCreateRequest, SegmentMergeRequest, SegmentSplitRequest, SegmentUpdateRequest, SegmentsBulkUpdateRequest
 from backend.services import exports as export_service
+from backend.services import media_streaming
 from backend.services import tasks as task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -310,14 +311,21 @@ async def delete_task(task_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{task_id}/audio")
-async def task_audio(task_id: str, db: Session = Depends(get_db)):
+async def task_audio(task_id: str, request: Request, db: Session = Depends(get_db)):
     task = task_service.get_task(db, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    path = config.resolve_storage_path(task.audio_path)
-    if path is None or not path.exists():
+    path = next(
+        (
+            candidate
+            for stored_path in (task.normalized_audio_path, task.audio_path)
+            if (candidate := config.resolve_storage_path(stored_path)) is not None and candidate.exists()
+        ),
+        None,
+    )
+    if path is None:
         raise HTTPException(status_code=404, detail="Audio not found")
-    return FileResponse(path)
+    return media_streaming.audio_response(path, request.headers.get("range"))
 
 
 @router.get("/{task_id}/export/{fmt}")

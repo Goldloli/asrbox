@@ -171,7 +171,7 @@ def sample_reply(request):
     body = json.loads(request.content)
     data = json.loads(body['messages'][1]['content'])
     if 'target_language' in data:
-        content = {'translations': [{'segment_id': 1, 'text': '你好。'}, {'segment_id': 2, 'text': '谢谢。'}]}
+        content = {'translations': ['你好。', '谢谢。']}
     else:
         content = {'suggestions': [{'segment_id': 1, 'suggested_text': 'I have a book.', 'reason': 'Subject agreement'}]}
     if request.url.path == '/api/chat':

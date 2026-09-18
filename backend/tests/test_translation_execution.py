@@ -497,7 +497,7 @@ def test_create_run_uses_local_batch_limits_for_ollama_only(setup, monkeypatch):
     run = create(setup)
     shapes = [json.loads(row.target_ids_json) for row in
               db.query(svc.TranslationBatch).filter_by(run_id=run.id).order_by(svc.TranslationBatch.batch_index)]
-    assert [len(batch) for batch in shapes] == [16, 16, 8]
+    assert [len(batch) for batch in shapes] == [40]
 
     db.get(TranslationRun, run.id).status = 'failed'
     provider.preset = 'deepseek'
@@ -536,6 +536,7 @@ def test_translate_batch_timeout_is_provider_protocol_scoped(setup, monkeypatch)
 def test_ollama_translation_sends_schema_and_validates_complete_result(setup, monkeypatch):
     import jsonschema
     db, task, provider, source = setup
+    provider_output = ['Bonjour', 'Salut']
     expected = [{'segment_id': 1, 'text': 'Bonjour'}, {'segment_id': 2, 'text': 'Salut'}]
     def handler(request):
         assert request.url.path == '/api/chat'
@@ -543,17 +544,16 @@ def test_ollama_translation_sends_schema_and_validates_complete_result(setup, mo
         assert body['think'] is False
         assert body['options'] == {'num_ctx': 32768, 'num_predict': -1}
         schema = body['format']
-        jsonschema.validate({'translations': expected}, schema)
+        jsonschema.validate({'translations': provider_output}, schema)
         invalid = [
-            {'translations': expected[:1]},
-            {'translations': expected + [expected[0]]},
-            {'translations': [{'segment_id_id': 1, 'text': 'bad'}, expected[1]]},
-            {'translations': [{'segment_id': 99, 'text': 'bad'}, expected[1]]},
-            {'translations': [{'segment_id': 1, 'text': ''}, expected[1]]},
+            {'translations': provider_output[:1]},
+            {'translations': provider_output + [provider_output[0]]},
+            {'translations': [{'text': 'bad'}, provider_output[1]]},
+            {'translations': ['', provider_output[1]]},
         ]
         for value in invalid:
             with pytest.raises(jsonschema.ValidationError): jsonschema.validate(value, schema)
-        return httpx.Response(200, json={'message': {'content': json.dumps({'translations': expected})}, 'done': True, 'done_reason': 'stop'})
+        return httpx.Response(200, json={'message': {'content': json.dumps({'translations': provider_output})}, 'done': True, 'done_reason': 'stop'})
     mock_transport(monkeypatch, handler)
     run = create(setup)
     svc.execute_run(run.id, run.attempt)

@@ -117,11 +117,12 @@ def test_create_proofreading_run_uses_current_immutable_version(tmp_path: Path, 
     try:
         task, provider, version = _completed_task(db)
 
-        run = proofreading.create_run(db, task.id, provider.id)
+        run = proofreading.create_run(db, task.id, provider.id, reason_language="zh")
         db.query(DBSegment).filter_by(task_id=task.id, idx=1).one().text = "live edit"
         db.commit()
 
         assert run.source_version_id == version.id
+        assert run.reason_language == "zh"
         assert queued == [run.id]
         assert [item.text for item in proofreading.source_segments(db, run)] == ["first text", "second text"]
         db.refresh(task)
@@ -246,6 +247,58 @@ def test_default_batch_limits_support_long_context_models() -> None:
     assert proofreading.MAX_BATCH_SEGMENTS == 500
     assert proofreading.MAX_BATCH_CHARACTERS == 30_000
     assert [len(batch.targets) for batch in batches] == [300, 201]
+
+
+def test_local_batch_limits_keep_ollama_requests_bounded() -> None:
+    from backend.services import proofreading
+
+    segments = [
+        TranscriptSegment(id=index, start=index - 1, end=index, text="x" * 50)
+        for index in range(1, 131)
+    ]
+
+    batches = proofreading.build_batches(
+        segments,
+        max_segments=proofreading.LOCAL_MAX_BATCH_SEGMENTS,
+        max_characters=proofreading.LOCAL_MAX_BATCH_CHARACTERS,
+    )
+
+    assert [len(batch.targets) for batch in batches] == [64, 64, 2]
+    assert all(sum(len(str(item["text"])) for item in batch.targets) <= 6000 for batch in batches)
+
+
+def test_ollama_timeout_splits_batch_and_uses_local_deadline(tmp_path: Path, monkeypatch) -> None:
+    from backend.database.models import ProofreadingRun
+    from backend.services import llm_providers, proofreading
+
+    db_session = _database(tmp_path)
+    db = db_session.SessionLocal()
+    monkeypatch.setattr(proofreading, "enqueue_run", lambda _run_id: None)
+    calls: list[tuple[int, float]] = []
+
+    def fake_completion(_provider, messages, **kwargs):
+        targets = json.loads(messages[1]["content"])["targets"]
+        calls.append((len(targets), kwargs["timeout"]))
+        if len(targets) > 2:
+            raise llm_providers.LLMProviderError("LLM_PROVIDER_TIMEOUT", "timed out")
+        return '{"suggestions":[]}'
+
+    monkeypatch.setattr(llm_providers, "chat_completion", fake_completion)
+    try:
+        task, provider, _version = _completed_task(
+            db,
+            texts=[f"segment {index}" for index in range(4)],
+        )
+        run = proofreading.create_run(db, task.id, provider.id)
+
+        proofreading.execute_run(db, run.id)
+
+        db.expire_all()
+        completed = db.get(ProofreadingRun, run.id)
+        assert completed.status == "completed"
+        assert calls == [(4, 300), (2, 300), (2, 300)]
+    finally:
+        db.close()
 
 
 def test_mark_interrupted_proofreading_runs_does_not_touch_completed(tmp_path: Path) -> None:
@@ -402,6 +455,37 @@ def test_parse_suggestions_accepts_changed_targets_and_filters_unchanged() -> No
     ]
 
 
+def test_parse_suggestions_accepts_compact_tuples_and_keeps_legacy_compatibility() -> None:
+    from backend.services import proofreading
+
+    targets = [{"id": 7, "text": "teh answer"}]
+
+    compact = proofreading.parse_suggestions(
+        '{"suggestions":[[7,"the answer","Spelling"]]}',
+        targets,
+    )
+    legacy = proofreading.parse_suggestions(
+        '{"suggestions":[{"segment_id":7,"suggested_text":"the answer","reason":"Spelling"}]}',
+        targets,
+    )
+
+    assert compact == legacy
+    assert compact[0].segment_id == 7
+
+
+def test_proofreading_prompt_requires_the_saved_reason_language() -> None:
+    from backend.services import proofreading
+
+    batch = proofreading.ProofreadingBatch(targets=[{"id": 1, "text": "错别子"}], context=[])
+
+    chinese = proofreading._messages_for_batch(batch, "zh")
+    english = proofreading._messages_for_batch(batch, "en")
+
+    assert "简体中文" in chinese[0]["content"]
+    assert "concise English" in english[0]["content"]
+    assert proofreading.response_schema([1])["properties"]["suggestions"]["items"]["type"] == "array"
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -433,7 +517,7 @@ def test_failed_later_batch_persists_no_partial_suggestions(tmp_path: Path, monk
         calls += 1
         target_id = json.loads(messages[1]["content"])["targets"][0]["id"]
         if calls == 2:
-            raise llm_providers.LLMProviderError("LLM_PROVIDER_TIMEOUT", "LLM provider timed out")
+            raise llm_providers.LLMProviderError("LLM_PROVIDER_UNAVAILABLE", "LLM provider unavailable")
         return json.dumps(
             {
                 "suggestions": [
@@ -454,7 +538,7 @@ def test_failed_later_batch_persists_no_partial_suggestions(tmp_path: Path, monk
         db.refresh(task)
         assert calls == 2
         assert run.status == "failed"
-        assert run.error_code == "LLM_PROVIDER_TIMEOUT"
+        assert run.error_code == "LLM_PROVIDER_UNAVAILABLE"
         assert db.query(ProofreadingSuggestion).filter_by(run_id=run.id).count() == 0
         assert task.status == "completed"
         assert task.text == "\n".join(texts)

@@ -7,6 +7,7 @@ import platform as platform_module
 import shutil
 import subprocess
 import sys
+import threading
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from backend.services.process_utils import no_window_kwargs
 
 RUNTIME_PROBE_CHILD_ENV = "ASRBOX_RUNTIME_PROBE_CHILD"
 RUNTIME_PROBE_TIMEOUT_SECONDS = 180
+_runtime_probe_lock = threading.Lock()
 
 
 def module_available(name: str) -> bool:
@@ -217,7 +219,7 @@ def detect_runtime() -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def runtime_probe_snapshot() -> dict[str, Any]:
+def _runtime_probe_snapshot_cached() -> dict[str, Any]:
     if os.environ.get(RUNTIME_PROBE_CHILD_ENV) == "1":
         return detect_runtime_in_process()
 
@@ -246,6 +248,27 @@ def runtime_probe_snapshot() -> dict[str, Any]:
     except (TypeError, ValueError, json.JSONDecodeError) as exc:
         return _failed_runtime_probe(f"invalid probe output: {exc}")
     return payload
+
+
+def runtime_probe_snapshot() -> dict[str, Any]:
+    """Return the full runtime probe with single-flight semantics.
+
+    ``functools.lru_cache`` may execute the wrapped function more than once when
+    concurrent cold-cache calls arrive. The explicit lock prevents multiple
+    heavyweight frozen-runtime probes from starting at the same time.
+    """
+
+    with _runtime_probe_lock:
+        return _runtime_probe_snapshot_cached()
+
+
+def _clear_runtime_probe_cache() -> None:
+    with _runtime_probe_lock:
+        _runtime_probe_snapshot_cached.cache_clear()
+
+
+runtime_probe_snapshot.cache_clear = _clear_runtime_probe_cache  # type: ignore[attr-defined]
+runtime_probe_snapshot.cache_info = _runtime_probe_snapshot_cached.cache_info  # type: ignore[attr-defined]
 
 
 def _runtime_probe_command() -> list[str]:

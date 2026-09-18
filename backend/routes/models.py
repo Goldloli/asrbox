@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from backend import config
 from backend.database import get_db
@@ -34,7 +35,8 @@ router = APIRouter(prefix="/models", tags=["models"])
 
 @router.get("/status", response_model=ModelStatusListResponse)
 async def model_status():
-    return ModelStatusListResponse(models=model_service.list_model_statuses())
+    models = await run_in_threadpool(model_service.list_model_statuses)
+    return ModelStatusListResponse(models=models)
 
 
 @router.get("/cache-dir")
@@ -101,7 +103,8 @@ async def active_downloads():
 
 @router.get("/storage", response_model=ModelStorageResponse)
 async def model_storage():
-    return ModelStorageResponse(**model_service.storage_summary())
+    summary = await run_in_threadpool(model_service.storage_summary)
+    return ModelStorageResponse(**summary)
 
 
 @router.post("/storage/plan", response_model=ModelStorageCandidateResponse)

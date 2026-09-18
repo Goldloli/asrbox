@@ -41,7 +41,8 @@ def test_capabilities(db, provider_id):
                              'context_before': [], 'context_after': []}
                     run = SimpleNamespace(source_language_json='{"kind":"preset","code":"en"}',
                                           target_language_json='{"kind":"preset","code":"zh-Hans"}')
-                    messages, schema = translation.messages_for(run, batch), translation.response_schema([1, 2])
+                    messages = translation.messages_for(run, batch)
+                    schema = translation.provider_response_schema([1, 2])
                 else:
                     batch = proofreading.ProofreadingBatch(targets=[{'id': 1, 'text': 'I has a book.'}], context=[])
                     messages, schema = proofreading._messages_for_batch(batch), proofreading.response_schema([1])
@@ -49,7 +50,7 @@ def test_capabilities(db, provider_id):
                 try:
                     content = llm_providers.chat_completion(provider, messages, timeout=min(90, remaining), response_schema=schema)
                     if kind == 'translation':
-                        values = translation.parse_translations(content, [1, 2])
+                        values = translation.parse_provider_translations(content, [1, 2])
                         if not all(any('\u4e00' <= c <= '\u9fff' for c in item['text']) for item in values):
                             raise llm_providers.LLMProviderError('LLM_CAPABILITY_SAMPLE_FAILED', 'Sample did not perform the requested operation')
                     else:

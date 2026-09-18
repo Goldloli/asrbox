@@ -35,6 +35,16 @@ export function ProvidersPage() {
   const settingsQuery = useSettingsQuery();
   const [testMessage, setTestMessage] = useState('');
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const providerItems = providersQuery.data?.items ?? [];
+  const selectedProvider = providerItems.find((provider) => provider.id === selectedProviderId) ?? providerItems[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedProviderId && providerItems[0]) setSelectedProviderId(providerItems[0].id);
+    if (selectedProviderId && !providerItems.some((provider) => provider.id === selectedProviderId)) {
+      setSelectedProviderId(providerItems[0]?.id ?? null);
+    }
+  }, [providerItems, selectedProviderId]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.providers });
@@ -70,7 +80,7 @@ export function ProvidersPage() {
   });
 
   return (
-    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
       <Panel className="overflow-hidden">
         <PanelHeader
           eyebrow={t('providers.eyebrow')}
@@ -85,54 +95,38 @@ export function ProvidersPage() {
             </ProviderDialog>
           }
         />
-        <div className="grid gap-3 p-4">
+        <div>
           {providersQuery.error && <ErrorState title={t('common.unableToLoad')} error={providersQuery.error} />}
-          {(providersQuery.data?.items ?? []).map((provider) => (
-            <article key={provider.id} className="grid gap-4 rounded-xl border app-control p-4">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
-                <div className="flex min-w-0 gap-3">
-                  <div className="grid size-10 shrink-0 place-items-center rounded-lg border app-control text-app-accent">
-                    <BrandIcon name={`${provider.provider_type} ${provider.name}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold text-app">{provider.name}</h2>
-                    <p className="mt-1 truncate text-xs text-app-muted">
-                      {provider.provider_type} · {provider.base_url ?? t('providers.builtIn')} · {t('providers.apiKey')} {provider.api_key_masked ?? t('providers.notSet')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                  <Badge tone={provider.enabled ? 'success' : 'neutral'}>{provider.enabled ? t('common.enabled') : t('common.disabled')}</Badge>
-                  {settingsQuery.data?.default_provider_id === provider.id && <Badge tone="accent">{t('common.default')}</Badge>}
-                </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="secondary" size="sm" onClick={() => test.mutate(provider.id)}>{t('common.test')}</Button>
-                <Button variant="secondary" size="sm" onClick={() => setDefault.mutate(provider.id)}>
-                  <CheckCircle2 className="size-4" />
-                  {t('common.default')}
-                </Button>
-                <ProviderDialog provider={provider} onSaved={refresh} openProvider={editingProvider} setOpenProvider={setEditingProvider}>
-                  <Button variant="ghost" size="sm" onClick={() => setEditingProvider(provider)}>
-                    <Pencil className="size-4" />
-                    {t('common.edit')}
-                  </Button>
-                </ProviderDialog>
-                <ConfirmAction
-                  title={t('confirm.deleteTitle')}
-                  description={t('confirm.deleteProviderDescription')}
-                  confirmLabel={t('common.delete')}
-                  onConfirm={() => remove.mutate(provider.id)}
-                >
-                  <Button variant="danger" size="sm">
-                    <Trash2 className="size-4" />
-                    {t('common.delete')}
-                  </Button>
-                </ConfirmAction>
-              </div>
-            </article>
+          {providerItems.length > 0 ? (
+            <div className="product-table-head grid grid-cols-[minmax(220px,1.2fr)_minmax(220px,1fr)_110px_110px] gap-3 px-5 py-3 text-xs font-semibold text-app-muted">
+              <span>{t('providers.name')}</span>
+              <span>{t('providers.baseUrl')}</span>
+              <span>{t('common.status')}</span>
+              <span>{t('common.actions')}</span>
+            </div>
+          ) : null}
+          {providerItems.map((provider) => (
+            <button
+              key={provider.id}
+              type="button"
+              onClick={() => setSelectedProviderId(provider.id)}
+              className={`grid w-full grid-cols-[minmax(220px,1.2fr)_minmax(220px,1fr)_110px_110px] items-center gap-3 border-t app-border px-5 py-4 text-left transition ${selectedProvider?.id === provider.id ? 'bg-[var(--app-accent-soft)]' : 'hover:bg-[var(--app-bg-soft)]'}`}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl border app-control text-app-accent">
+                  <BrandIcon name={`${provider.provider_type} ${provider.name}`} />
+                </span>
+                <span className="min-w-0">
+                  <strong className="block truncate text-sm font-semibold text-app">{provider.name}</strong>
+                  <span className="mt-1 block truncate text-xs text-app-muted">{provider.provider_type}</span>
+                </span>
+              </span>
+              <span className="truncate text-xs text-app-muted">{provider.base_url ?? t('providers.builtIn')}</span>
+              <span><Badge tone={provider.enabled ? 'success' : 'neutral'}>{provider.enabled ? t('common.enabled') : t('common.disabled')}</Badge></span>
+              <span>{settingsQuery.data?.default_provider_id === provider.id ? <Badge tone="accent">{t('common.default')}</Badge> : <span className="text-xs text-app-muted">—</span>}</span>
+            </button>
           ))}
-          {(providersQuery.data?.items ?? []).length === 0 && (
+          {providerItems.length === 0 && (
             <EmptyState
               title={t('providers.noProviders')}
               action={
@@ -149,19 +143,44 @@ export function ProvidersPage() {
       </Panel>
 
       <Panel className="overflow-hidden">
-        <PanelHeader eyebrow={t('common.test')} title={t('providers.testResult')} description={t('providers.testDescription')} />
-        <div className="grid gap-4 p-5">
-          {testMessage ? (
-            <p className="rounded-xl border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-4 py-3 text-sm leading-6 text-app-accent">{testMessage}</p>
-          ) : (
-            <p className="text-sm leading-6 text-app-muted">{t('providers.testEmpty')}</p>
-          )}
-          {(test.error || setDefault.error || remove.error) && (
-            <ErrorState title={t('common.unableToLoad')} error={test.error ?? setDefault.error ?? remove.error} />
-          )}
-        </div>
+        <PanelHeader eyebrow={t('providers.eyebrow')} title={selectedProvider?.name ?? t('providers.testResult')} description={t('providers.testDescription')} />
+        {selectedProvider ? (
+          <div className="grid gap-5 p-5">
+            <div className="grid gap-3 rounded-xl border app-border p-4 text-sm">
+              <ProviderDetail label={t('providers.type')} value={selectedProvider.provider_type} />
+              <ProviderDetail label={t('providers.baseUrl')} value={selectedProvider.base_url ?? t('providers.builtIn')} />
+              <ProviderDetail label={t('providers.defaultModel')} value={selectedProvider.default_model ?? t('providers.notSet')} />
+              <ProviderDetail label={t('providers.apiKey')} value={selectedProvider.api_key_masked ?? t('providers.notSet')} />
+            </div>
+            <div className="grid gap-2">
+              <Button onClick={() => test.mutate(selectedProvider.id)}>{t('common.test')}</Button>
+              <Button variant="secondary" onClick={() => setDefault.mutate(selectedProvider.id)}>
+                <CheckCircle2 className="size-4" />{t('common.default')}
+              </Button>
+              <ProviderDialog provider={selectedProvider} onSaved={refresh} openProvider={editingProvider} setOpenProvider={setEditingProvider}>
+                <Button variant="secondary" onClick={() => setEditingProvider(selectedProvider)}><Pencil className="size-4" />{t('common.edit')}</Button>
+              </ProviderDialog>
+              <ConfirmAction title={t('confirm.deleteTitle')} description={t('confirm.deleteProviderDescription')} confirmLabel={t('common.delete')} onConfirm={() => remove.mutate(selectedProvider.id)}>
+                <Button variant="danger"><Trash2 className="size-4" />{t('common.delete')}</Button>
+              </ConfirmAction>
+            </div>
+            {testMessage ? (
+              <p className="rounded-xl border border-[color:var(--app-accent)] bg-[var(--app-accent-soft)] px-4 py-3 text-sm leading-6 text-app-accent">{testMessage}</p>
+            ) : <p className="text-sm leading-6 text-app-muted">{t('providers.testEmpty')}</p>}
+            {(test.error || setDefault.error || remove.error) && <ErrorState title={t('common.unableToLoad')} error={test.error ?? setDefault.error ?? remove.error} />}
+          </div>
+        ) : <div className="p-5"><p className="text-sm text-app-muted">{t('providers.testEmpty')}</p></div>}
       </Panel>
     </section>
+  );
+}
+
+function ProviderDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 border-b app-border pb-3 last:border-b-0 last:pb-0">
+      <span className="text-xs font-medium text-app-muted">{label}</span>
+      <span className="break-all text-sm text-app">{value}</span>
+    </div>
   );
 }
 

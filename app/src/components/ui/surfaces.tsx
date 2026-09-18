@@ -1,10 +1,12 @@
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/cn';
-import { friendlyErrorMessage } from '../../lib/errorMessages';
+import { localizedErrorPresentation } from '../../lib/errorMessages';
+import { useI18n } from '../../lib/i18n';
+import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
 
 export function Panel({ className, children, ...rest }: React.ComponentPropsWithoutRef<'section'>) {
-  return <section className={cn('app-panel rounded-xl border', className)} {...rest}>{children}</section>;
+  return <section className={cn('app-panel rounded-2xl border', className)} {...rest}>{children}</section>;
 }
 
 export function PanelHeader({
@@ -24,7 +26,7 @@ export function PanelHeader({
     <div className={cn('flex flex-wrap items-start justify-between gap-4 border-b app-border px-5 py-4', className)}>
       <div className="min-w-0">
         {eyebrow && <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-app-accent">{eyebrow}</p>}
-        <h1 className="truncate text-lg font-semibold text-app">{title}</h1>
+        <h1 className="truncate text-xl font-semibold text-app">{title}</h1>
         {description && <p className="mt-1 text-sm text-app-muted">{description}</p>}
       </div>
       {action && <div className="ml-auto shrink-0">{action}</div>}
@@ -58,21 +60,23 @@ export function CompactEmptyState({ title, body, icon, action }: { title: string
   );
 }
 
-export function ErrorState({ title = 'Unable to load', error }: { title?: string; error: unknown }) {
-  const message = friendlyErrorMessage(error);
+export function ErrorState({ title, error }: { title?: string; error: unknown }) {
+  const { locale, t } = useI18n();
+  const message = localizedErrorPresentation(error, locale);
   return (
     <div className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-4 py-3 text-sm text-[var(--app-danger)]">
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 opacity-80">{message}</p>
+      <p className="font-medium">{title ?? t('common.unableToLoad')}</p>
+      <LocalizedTechnicalMessage message={message} className="mt-1 opacity-80" />
     </div>
   );
 }
 
-export function LoadingState({ label = 'Loading' }: { label?: string }) {
+export function LoadingState({ label }: { label?: string }) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-2 text-sm text-app-muted">
       <Loader2 className="size-4 animate-spin" />
-      {label}
+      {label ?? t('common.loading')}
     </div>
   );
 }
@@ -103,9 +107,9 @@ export function InspectorSection({ title, action, children, className }: { title
 
 export function DataRow({ label, value, className }: { label: ReactNode; value: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex items-center justify-between gap-3 border-b app-border py-2 text-sm last:border-b-0', className)}>
-      <span className="min-w-0 text-app-muted">{label}</span>
-      <span className="min-w-0 truncate text-right font-medium text-app">{value}</span>
+    <div className={cn('flex min-w-0 items-start justify-between gap-3 border-b app-border py-2 text-sm last:border-b-0', className)}>
+      <span className="shrink-0 text-app-muted">{label}</span>
+      <span className="min-w-0 max-w-[68%] break-words text-right font-medium text-app">{value}</span>
     </div>
   );
 }
@@ -122,8 +126,8 @@ export function PageTitle({ title, description, action, className }: { title: st
   return (
     <div className={cn('flex flex-wrap items-end justify-between gap-3', className)}>
       <div className="min-w-0">
-        <h1 data-testid="page-title" className="truncate text-2xl font-semibold tracking-tight text-app">{title}</h1>
-        {description && <p className="mt-1 text-sm text-app-muted">{description}</p>}
+        <h1 data-testid="page-title" className="truncate text-[28px] font-bold leading-tight tracking-[-0.02em] text-app">{title}</h1>
+        {description && <p className="mt-1.5 text-[15px] text-app-muted">{description}</p>}
       </div>
       {action && <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>}
     </div>
@@ -155,7 +159,7 @@ export function ContentSection({ title, description, action, children, className
 }
 
 export function RowList({ children, className }: { children: ReactNode; className?: string }) {
-  return <div role="list" className={cn('divide-y app-border rounded-xl border app-control bg-[var(--app-panel)]', className)}>{children}</div>;
+  return <div role="list" className={cn('divide-y divide-[color:var(--app-border)] rounded-xl border app-control bg-[var(--app-panel)]', className)}>{children}</div>;
 }
 
 export function RowItem({ children, className, active }: { children: ReactNode; className?: string; active?: boolean }) {

@@ -4,6 +4,7 @@ import { formatDate } from '../lib/format';
 import { Badge, Button, Progress, Tabs, TabsContent, TabsList, TabsTrigger } from './weiui';
 import { useI18n } from '../lib/i18n';
 import { diffTextLines } from '../lib/transcriptDiff';
+import { localizeQualityWarning } from '../lib/userMessages';
 
 export type TaskTimelineTab = 'diagnostics' | 'logs' | 'versions' | 'quality';
 
@@ -71,7 +72,7 @@ export function TaskTimeline({
 }
 
 function QualityPanel({ quality }: { quality?: TaskQuality }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   if (!quality) return <p className="rounded-lg border app-border px-4 py-8 text-center text-sm text-app-muted">{t('tasks.noQuality')}</p>;
 
@@ -95,7 +96,7 @@ function QualityPanel({ quality }: { quality?: TaskQuality }) {
         <h4 className="mb-2 text-sm font-semibold text-app">{t('tasks.qualityWarnings')}</h4>
         {warnings.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {warnings.map((warning) => <Badge key={warning} tone="warning">{warning}</Badge>)}
+            {warnings.map((warning) => <Badge key={warning} tone="warning"><span title={warning}>{localizeQualityWarning(warning, locale)}</span></Badge>)}
           </div>
         ) : (
           <p className="text-sm text-app-muted">{t('tasks.noQualityWarnings')}</p>

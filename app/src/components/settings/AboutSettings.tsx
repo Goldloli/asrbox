@@ -20,6 +20,8 @@ import {
 } from '../../lib/desktopCapabilities';
 import { formatBytes, formatDate, formatPercent } from '../../lib/format';
 import { useI18n } from '../../lib/i18n';
+import { localizedErrorPresentation } from '../../lib/errorMessages';
+import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
 import { useCudaAccelerationQuery, useHealthQuery } from '../../lib/queries';
 import {
   cancelAppUpdateDownload,
@@ -35,7 +37,7 @@ import asrboxIcon from '../../assets/asrbox-icon-256.png';
 const activeDownloadStatuses = new Set(['preparing', 'downloading', 'verifying', 'cancelling']);
 
 export function AboutSettings() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const toast = useToast();
   const updateChannel = useUiStore((state) => state.updateChannel);
   const autoCheckUpdates = useUiStore((state) => state.autoCheckUpdates);
@@ -370,7 +372,7 @@ function DownloadCard({
   onOpen: () => void;
   onOpenLocation: () => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const download = useAppUpdateStore((state) => state.download);
   const installerKind = useAppUpdateStore((state) => state.versionInfo.installerKind);
   const active = activeDownloadStatuses.has(download.status);
@@ -402,7 +404,7 @@ function DownloadCard({
       )}
       {download.status === 'error' && (
         <>
-          <p className="break-words text-sm text-[var(--app-danger)]">{download.error}</p>
+          <LocalizedTechnicalMessage message={localizedErrorPresentation(new Error(download.error ?? ''), locale)} className="text-sm text-[var(--app-danger)]" />
           <Button size="sm" variant="secondary" onClick={onRetry}>{t('common.retry')}</Button>
         </>
       )}

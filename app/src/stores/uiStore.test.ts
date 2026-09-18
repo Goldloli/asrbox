@@ -10,7 +10,7 @@ if (!existingNavigator || typeof existingNavigator.language !== 'string') {
     value: { ...(existingNavigator ?? {}), language: 'en-US' },
   });
 }
-const { useUiStore } = await import('./uiStore');
+const { mergePersistedUiState, useUiStore } = await import('./uiStore');
 
 const initial = useUiStore.getState();
 
@@ -35,6 +35,10 @@ describe('uiStore new-user defaults', () => {
     expect(state.fontScale).toBe('standard');
     expect(state.reducedMotion).toBe('system');
   });
+
+  it('defaults segment playback padding to strict timestamps', () => {
+    expect(useUiStore.getState().segmentPlayPadding).toBe(0);
+  });
 });
 
 describe('uiStore persisted preference contract', () => {
@@ -46,6 +50,29 @@ describe('uiStore persisted preference contract', () => {
   it('restores a saved accent color instead of the default', () => {
     useUiStore.setState({ accentColor: 'purple' });
     expect(useUiStore.getState().accentColor).toBe('purple');
+  });
+
+  it('normalizes unsupported accent colors while rehydrating persisted state', () => {
+    const merged = mergePersistedUiState(
+      { accentColor: 'neon', sidebarMode: 'icons' },
+      initial,
+    );
+
+    expect(merged.accentColor).toBe('orange');
+    expect(merged.sidebarMode).toBe('icons');
+    expect(merged.setAccentColor).toBe(initial.setAccentColor);
+  });
+
+  it('keeps supported persisted accents and ignores non-object payloads', () => {
+    expect(mergePersistedUiState({ accentColor: 'cyan' }, initial).accentColor).toBe('cyan');
+    expect(mergePersistedUiState(null, initial)).toBe(initial);
+  });
+
+  it('normalizes unsupported segment padding values while rehydrating persisted state', () => {
+    expect(mergePersistedUiState({ segmentPlayPadding: 7 }, initial).segmentPlayPadding).toBe(0);
+    expect(mergePersistedUiState({ segmentPlayPadding: 'wide' }, initial).segmentPlayPadding).toBe(0);
+    expect(mergePersistedUiState({ segmentPlayPadding: 0.5 }, initial).segmentPlayPadding).toBe(0.5);
+    expect(mergePersistedUiState({ segmentPlayPadding: 3 }, initial).segmentPlayPadding).toBe(3);
   });
 });
 
@@ -69,5 +96,15 @@ describe('uiStore accent color setter', () => {
     setAccentColor!('neon');
     const state = useUiStore.getState() as unknown as Record<string, unknown>;
     expect(state.accentColor).toBe('orange');
+  });
+});
+
+describe('uiStore segment playback padding setter', () => {
+  it('stores a supported padding and rejects unsupported values', () => {
+    useUiStore.getState().setSegmentPlayPadding(2);
+    expect(useUiStore.getState().segmentPlayPadding).toBe(2);
+
+    useUiStore.getState().setSegmentPlayPadding(99);
+    expect(useUiStore.getState().segmentPlayPadding).toBe(0);
   });
 });

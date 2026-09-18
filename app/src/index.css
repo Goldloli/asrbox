@@ -12,33 +12,33 @@
     "Segoe UI",
     sans-serif;
   /* Canvas and surfaces: one continuous canvas, solid layered surfaces. */
-  --app-bg: #f4f4f5;
-  --app-bg-soft: #ebebed;
-  --app-shell: #fafafa;
+  --app-bg: #f7f9fc;
+  --app-bg-soft: #eef2f7;
+  --app-shell: #fbfcfe;
   --app-panel: #ffffff;
   --app-panel-solid: #ffffff;
-  --app-control: rgba(15, 23, 42, 0.04);
-  --app-control-strong: rgba(15, 23, 42, 0.08);
+  --app-control: #f8fafc;
+  --app-control-strong: #eef2f7;
   /* Text and borders. */
-  --app-border: rgba(15, 23, 42, 0.1);
-  --app-border-strong: rgba(15, 23, 42, 0.18);
-  --app-text: #18181b;
-  --app-text-soft: #3f3f46;
-  --app-text-muted: #71717a;
-  --app-text-faint: #a1a1aa;
+  --app-border: #dce3ec;
+  --app-border-strong: #c9d2df;
+  --app-text: #101828;
+  --app-text-soft: #344054;
+  --app-text-muted: #667085;
+  --app-text-faint: #98a2b3;
   /* Accent (default orange) and fixed semantic states. */
-  --app-accent: #f59e0b;
-  --app-accent-hover: #d97706;
-  --app-accent-soft: rgba(245, 158, 11, 0.15);
-  --app-accent-text: #b45309;
-  --app-accent-contrast: #231a07;
-  --app-shadow: rgba(15, 23, 42, 0.08);
+  --app-accent: #ff9d00;
+  --app-accent-hover: #f08a00;
+  --app-accent-soft: #fff1d7;
+  --app-accent-text: #d65f00;
+  --app-accent-contrast: #17130b;
+  --app-shadow: rgba(16, 24, 40, 0.05);
   --app-overlay: rgba(24, 24, 27, 0.44);
   --app-switch-thumb: #ffffff;
   --app-danger: #dc2626;
   --app-danger-soft: rgba(220, 38, 38, 0.1);
-  --app-success: #047857;
-  --app-success-soft: rgba(4, 120, 87, 0.1);
+  --app-success: #12a66a;
+  --app-success-soft: #e9f8f1;
   --app-warning: #b45309;
   --app-warning-soft: rgba(180, 83, 9, 0.1);
   color-scheme: light;
@@ -203,9 +203,24 @@ html,
 body,
 #root {
   min-width: 320px;
-  min-height: 100%;
+  width: 100%;
+  height: 100%;
   margin: 0;
   background: var(--app-bg);
+}
+
+html {
+  overflow: clip;
+}
+
+body,
+#root {
+  overflow: hidden;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
 }
 
 .app-bg {
@@ -217,6 +232,38 @@ body,
   background: var(--app-shell);
 }
 
+.app-sidebar-immersive {
+  background: var(--app-panel);
+}
+
+.settings-page > [role="tabpanel"] > .app-panel {
+  margin-top: -1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+@media (min-width: 768px) {
+  .settings-interface-grid > label {
+    display: grid;
+    grid-template-columns: minmax(140px, 0.45fr) minmax(220px, 1fr) minmax(280px, 1.1fr);
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 64px;
+    border-bottom: 1px solid var(--app-border);
+    padding: 0.55rem 0;
+  }
+
+  .settings-interface-grid > label:last-child { border-bottom: 0; }
+  .settings-interface-grid > label > span:first-child {
+    grid-column: 1;
+    color: var(--app-text);
+    font-size: 0.95rem;
+    font-weight: 650;
+  }
+  .settings-interface-grid > label > :not(span) { grid-column: 3; grid-row: 1; }
+  .settings-interface-grid > label > span:last-child:not(:first-child) { grid-column: 2; grid-row: 1; }
+}
+
 /* Vendored brand marks ship as black glyphs; invert them on dark surfaces. */
 [data-theme="dark"] .app-brand-icon {
   filter: invert(1);
@@ -225,7 +272,31 @@ body,
 .app-panel {
   border-color: var(--app-border);
   background: var(--app-panel);
-  box-shadow: 0 1px 2px var(--app-shadow);
+  box-shadow: 0 1px 3px var(--app-shadow), 0 8px 24px rgba(16, 24, 40, 0.025);
+}
+
+.product-page {
+  min-height: 100%;
+  background: var(--app-panel);
+}
+
+.product-kicker {
+  color: var(--app-accent-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.product-table-head {
+  background: linear-gradient(90deg, #f4f7fb, #fbfcfe);
+  color: var(--app-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .product-table-head {
+  background: #20252d;
 }
 
 .app-border {
@@ -240,6 +311,22 @@ body,
 
 .app-control:hover {
   background: var(--app-control-strong);
+}
+
+.app-switch {
+  border-color: var(--app-border-strong);
+  background: var(--app-control-strong);
+  color: var(--app-text);
+}
+
+.app-switch[data-state="checked"] {
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+}
+
+.app-switch[data-state="checked"]:hover {
+  border-color: var(--app-accent-hover);
+  background: var(--app-accent-hover);
 }
 
 .text-app {

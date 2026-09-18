@@ -1,6 +1,7 @@
 export const translationI18n = {
   en: {
     'translation.title': 'Subtitle translation',
+    'translation.advancedSettings': 'Translation settings',
     'translation.proofreading': 'Subtitle proofreading',
     'translation.description': 'Keep the source subtitle. Translate between languages and export translated or bilingual subtitles.',
     'translation.sourceVersion': 'Source subtitle version',
@@ -18,6 +19,7 @@ export const translationI18n = {
     'translation.invalidLanguage': 'Choose two different languages. Custom names must contain 1–80 characters without control characters.',
     'translation.notReady': 'New translations, resuming and editing require a completed transcription. Saved translation history remains available.',
     'translation.history': 'Translation history',
+    'translation.runDetails': 'History and progress',
     'translation.missingTask': 'The requested task was not found.',
     'translation.missingRun': 'The requested translation is unavailable for this task.',
     'translation.sourceUpdated': 'The source subtitle has changed. This translation remains paired with its original source version.',
@@ -64,6 +66,7 @@ export const translationI18n = {
   },
   zh: {
     'translation.title': '字幕翻译',
+    'translation.advancedSettings': '翻译设置',
     'translation.proofreading': '字幕校对',
     'translation.description': '保留原字幕，支持多语言互译，并导出译文或双语字幕。',
     'translation.sourceVersion': '原字幕版本',
@@ -81,6 +84,7 @@ export const translationI18n = {
     'translation.invalidLanguage': '请选择不同的源语言和目标语言。自定义名称需为 1–80 个字符，且不含控制字符。',
     'translation.notReady': '新建、续译和编辑需要转写任务已完成。已保存的翻译历史仍可查看。',
     'translation.history': '翻译历史',
+    'translation.runDetails': '翻译记录与进度',
     'translation.missingTask': '没有找到指定任务。',
     'translation.missingRun': '当前任务中没有找到指定翻译。',
     'translation.sourceUpdated': '原字幕已有更新。这份译文仍与创建时的原字幕版本配对。',

@@ -545,6 +545,51 @@ def test_runtime_routes_move_sync_work_off_event_loop(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("route_name", ["model_status", "model_storage"])
+def test_model_inventory_routes_move_directory_scans_off_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+    route_name: str,
+) -> None:
+    from backend.routes import models as model_routes
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    if route_name == "model_status":
+        def slow_result():
+            entered.set()
+            assert release.wait(3)
+            return []
+
+        monkeypatch.setattr(model_routes.model_service, "list_model_statuses", slow_result)
+    else:
+        def slow_result():
+            entered.set()
+            assert release.wait(3)
+            return {
+                "root": "/tmp/models",
+                "models_dir": "/tmp/models/models",
+                "models": [],
+                "used_bytes": 0,
+                "total_size_mb": 0,
+            }
+
+        monkeypatch.setattr(model_routes.model_service, "storage_summary", slow_result)
+
+    async def scenario() -> None:
+        route = getattr(model_routes, route_name)
+        pending = asyncio.create_task(route())
+        try:
+            assert await asyncio.to_thread(entered.wait, 1)
+            await asyncio.wait_for(asyncio.sleep(0), timeout=0.2)
+            assert not pending.done()
+        finally:
+            release.set()
+        await pending
+
+    asyncio.run(scenario())
+
+
 def test_split_audio_failure_removes_chunks_created_by_same_call(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

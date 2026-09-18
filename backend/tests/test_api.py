@@ -983,29 +983,31 @@ def test_local_model_task_returns_before_transcription_finishes_without_inventin
     )
     elapsed = time.monotonic() - started_at
 
-    assert response.status_code == 200
-    # The fake transcription blocks up to 10s, so a synchronous implementation
-    # would take at least that long and is caught well above these thresholds;
-    # slow CI runners (especially Windows) need the extra headroom for thread
-    # startup around the async boundary.
-    assert elapsed < (0.2 if os.name == "posix" else 5.0)
-    task_id = response.json()["id"]
-    assert started.wait(timeout=10)
+    try:
+        assert response.status_code == 200
+        # The fake transcription blocks up to 10s, so a synchronous implementation
+        # would take at least that long. Leave enough headroom for a fully loaded
+        # suite while still failing decisively if the request waits for inference.
+        assert elapsed < (2.0 if os.name == "posix" else 5.0)
+        task_id = response.json()["id"]
+        assert started.wait(timeout=10)
 
-    transcribing = wait_for_task(
-        client,
-        task_id,
-        lambda task: task["status"] == "transcribing",
-        "transcribing",
-    )
-    assert transcribing["progress"] == 60
-    assert transcribing["normalized_audio_path"].endswith(".mp3")
-    time.sleep(0.05)
-    assert client.get(f"/tasks/{task_id}").json()["progress"] == 60
+        transcribing = wait_for_task(
+            client,
+            task_id,
+            lambda task: task["status"] == "transcribing",
+            "transcribing",
+        )
+        assert transcribing["progress"] == 60
+        assert transcribing["normalized_audio_path"].endswith(".mp3")
+        time.sleep(0.05)
+        assert client.get(f"/tasks/{task_id}").json()["progress"] == 60
 
-    release.set()
-    completed = wait_for_task(client, task_id, lambda task: task["status"] == "completed", "completed")
-    assert completed["text"] == "background local transcript"
+        release.set()
+        completed = wait_for_task(client, task_id, lambda task: task["status"] == "completed", "completed")
+        assert completed["text"] == "background local transcript"
+    finally:
+        release.set()
 
 
 def test_task_retry_and_cancel_endpoints_are_idempotent(tmp_path: Path, monkeypatch) -> None:
@@ -1181,6 +1183,31 @@ def test_funasr_backend_cleans_sensevoice_tags_and_maps_segments(monkeypatch) ->
     assert [segment.text for segment in result.segments] == ["你好", "世界"]
     assert result.segments[1].end == 2.3
     assert result.raw_result_summary["items"] == 1
+
+
+def test_funasr_backend_defers_frozen_registry_preload_until_first_use(monkeypatch) -> None:
+    import builtins
+    from backend.backends import local_asr
+
+    calls: list[str] = []
+
+    class FakeAutoModel:
+        pass
+
+    def preload() -> None:
+        calls.append("preload")
+        local_asr.AutoModel = FakeAutoModel
+
+    monkeypatch.setattr(local_asr, "AutoModel", None)
+    monkeypatch.setattr(local_asr, "FUNASR_IMPORT_ERROR", None)
+    monkeypatch.setattr(local_asr, "_FUNASR_IMPORT_ATTEMPTED", False)
+    monkeypatch.setattr(builtins, "_asrbox_preload_funasr_submodules", preload, raising=False)
+
+    local_asr._ensure_funasr_auto_model()
+    local_asr._ensure_funasr_auto_model()
+
+    assert local_asr.AutoModel is FakeAutoModel
+    assert calls == ["preload"]
 
 
 class _FakeLength:

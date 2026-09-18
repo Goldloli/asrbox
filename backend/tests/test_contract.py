@@ -216,6 +216,7 @@ def test_llm_proofreading_openapi_contract_is_typed_and_masked(tmp_path: Path) -
         "provider_name",
         "provider_preset",
         "model_name",
+        "reason_language",
         "status",
         "total_batches",
         "completed_batches",

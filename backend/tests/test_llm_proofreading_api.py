@@ -108,25 +108,21 @@ def test_proofreading_api_polls_reviews_applies_exports_and_restores(
 
         started = client.post(
             "/tasks/proofread-task/proofreading-runs",
-            json={"provider_id": provider["id"]},
+            json={"provider_id": provider["id"], "reason_language": "zh"},
         )
         assert started.status_code == 200
         run_id = started.json()["id"]
         assert started.json()["status"] == "queued"
+        assert started.json()["reason_language"] == "zh"
         assert started.json()["stale"] is False
 
         def completion(_provider, messages, **_kwargs):
+            assert "简体中文" in messages[0]["content"]
             targets = json.loads(messages[1]["content"])["targets"]
             assert set(targets[0]) == {"id", "text"}
             return json.dumps(
                 {
-                    "suggestions": [
-                        {
-                            "segment_id": 1,
-                            "suggested_text": "错别字",
-                            "reason": "修正错别字",
-                        }
-                    ]
+                    "suggestions": [[1, "错别字", "修正错别字"]]
                 },
                 ensure_ascii=False,
             )

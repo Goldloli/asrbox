@@ -114,14 +114,24 @@ def test_batch_limits_and_coverage():
 def test_local_batch_limits():
     segments = [{'id': i, 'text': 'x' * 50} for i in range(40)]
     batches = svc.make_batches(segments, local=True)
-    assert [len(b['targets']) for b in batches] == [16, 16, 8]
+    assert [len(b['targets']) for b in batches] == [40]
     assert [s['id'] for b in batches for s in b['targets']] == list(range(40))
     for b in batches:
-        assert sum(len(s['text']) for s in b['targets']) <= 1600
-    # A single segment above the local character cap (but under the hard 6000) still
-    # forms its own batch instead of looping forever.
+        assert sum(len(s['text']) for s in b['targets']) <= 6000
     batches = svc.make_batches([{'id': 1, 'text': 'x' * 2000}, {'id': 2, 'text': 'x' * 50}], local=True)
-    assert [len(b['targets']) for b in batches] == [1, 1]
+    assert [len(b['targets']) for b in batches] == [2]
+
+
+def test_compact_provider_response_maps_translations_by_required_order():
+    result = svc.parse_provider_translations('{"translations":["first","second"]}', [7, 24])
+    assert result == [
+        {'segment_id': 7, 'text': 'first'},
+        {'segment_id': 24, 'text': 'second'},
+    ]
+    with pytest.raises(svc.TranslationError):
+        svc.parse_provider_translations('{"translations":["missing final"]}', [7, 24])
+    schema = svc.provider_response_schema([7, 24])
+    assert schema['properties']['translations']['items'] == {'type': 'string', 'minLength': 1}
 
 
 @pytest.mark.parametrize('value', [
@@ -165,6 +175,19 @@ def test_partial_failure_resumes_only_unfinished_batches(setup, monkeypatch):
     svc.execute_run(run.id, resumed.attempt); db.expire_all()
     assert svc.get_run(db, task.id, run.id).status == 'completed'
     assert seen == [[0,1], [2,3], [2,3], [4]]
+
+
+def test_local_translation_uses_large_compact_first_pass_batches():
+    segments = [
+        {"id": index, "start": index, "end": index + 1, "text": "x" * 50}
+        for index in range(100)
+    ]
+
+    batches = svc.make_batches(segments, local=True)
+
+    assert svc.LOCAL_MAX_SEGMENTS == 64
+    assert svc.LOCAL_MAX_CHARACTERS == 6000
+    assert [len(batch["targets"]) for batch in batches] == [64, 36]
 
 
 @pytest.mark.parametrize('action', ['cancel', 'delete'])

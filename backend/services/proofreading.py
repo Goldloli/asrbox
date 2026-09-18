@@ -20,7 +20,7 @@ from backend.database.models import (
     TranscriptionTask,
 )
 from backend.models import ProofreadingRunResponse, ProofreadingSuggestionResponse, TranscriptSegment
-from backend.services import llm_providers
+from backend.services import llm_compatibility, llm_providers
 from backend.services.llm_compatibility import json_object
 from backend.services import versions as version_service
 from backend.services.task_transitions import task_transition_lock
@@ -32,6 +32,17 @@ _logger = logging.getLogger(__name__)
 ACTIVE_RUN_STATUSES = {"queued", "running"}
 MAX_BATCH_SEGMENTS = 500
 MAX_BATCH_CHARACTERS = 30_000
+LOCAL_MAX_BATCH_SEGMENTS = 64
+LOCAL_MAX_BATCH_CHARACTERS = 6_000
+REMOTE_REQUEST_TIMEOUT = 90
+LOCAL_REQUEST_TIMEOUT = 300
+MAX_RESPONSE_BYTES = 1024 * 1024
+SPLIT_RETRYABLE = {
+    "LLM_PROVIDER_TIMEOUT",
+    "LLM_PROVIDER_TRUNCATED",
+    "LLM_PROVIDER_CONTEXT_TOO_LONG",
+    "LLM_PROVIDER_RESPONSE_TOO_LARGE",
+}
 
 _run_queue: queue.Queue[str] = queue.Queue()
 _worker_lock = threading.Lock()
@@ -79,9 +90,14 @@ SYSTEM_PROMPT = """You proofread transcript segments conservatively.
 Correct only clear transcription, spelling, punctuation, or contextual text errors.
 Preserve meaning, language, tone, names, and numbers unless a correction is clear.
 Never merge, split, reorder, retime, or relabel segments.
-Return only a JSON object with a suggestions array. Each suggestion must contain
-segment_id, suggested_text, and a short reason. Return suggestions only for target
-segments, never for read-only context segments."""
+Return only a JSON object with a suggestions array. Each suggestion is a compact
+three-item array: [segment_id, suggested_text, short_reason]. Return suggestions
+only for target segments, never for read-only context segments."""
+
+REASON_LANGUAGE_INSTRUCTIONS = {
+    "zh": "Write every short_reason in concise Simplified Chinese (简体中文).",
+    "en": "Write every short_reason in concise English.",
+}
 
 
 def build_batches(
@@ -134,7 +150,22 @@ def parse_suggestions(
     targets: list[dict[str, int | str]],
 ) -> list[ParsedSuggestion]:
     try:
-        payload = _ProofreadingPayload.model_validate(json_object(content), strict=True)
+        raw = json_object(content)
+        if not isinstance(raw, dict) or set(raw) != {"suggestions"} or not isinstance(raw["suggestions"], list):
+            raise ValueError("suggestions must be an array")
+        normalized: list[dict[str, object]] = []
+        for item in raw["suggestions"]:
+            if isinstance(item, list) and len(item) == 3:
+                normalized.append({
+                    "segment_id": item[0],
+                    "suggested_text": item[1],
+                    "reason": item[2],
+                })
+            elif isinstance(item, dict):
+                normalized.append(item)
+            else:
+                raise ValueError("suggestion must be a compact tuple or legacy object")
+        payload = _ProofreadingPayload.model_validate({"suggestions": normalized}, strict=True)
     except (json.JSONDecodeError, ValidationError, TypeError, ValueError, RecursionError) as exc:
         raise ProofreadingError(
             "LLM_INVALID_RESPONSE",
@@ -179,7 +210,15 @@ def source_segments(db: Session, run: ProofreadingRun) -> list[TranscriptSegment
     return version.segments
 
 
-def create_run(db: Session, task_id: str, provider_id: str) -> ProofreadingRun:
+def create_run(
+    db: Session,
+    task_id: str,
+    provider_id: str,
+    *,
+    reason_language: str = "en",
+) -> ProofreadingRun:
+    if reason_language not in REASON_LANGUAGE_INSTRUCTIONS:
+        raise ProofreadingError("PROOFREADING_LANGUAGE_INVALID", "Unsupported proofreading reason language")
     task = db.query(TranscriptionTask).filter(TranscriptionTask.id == task_id).first()
     if task is None:
         raise ProofreadingError("TASK_NOT_FOUND", "Task not found")
@@ -213,6 +252,7 @@ def create_run(db: Session, task_id: str, provider_id: str) -> ProofreadingRun:
         provider_name=provider.name,
         provider_preset=provider.preset,
         model_name=provider.default_model,
+        reason_language=reason_language,
         status="queued",
     )
     db.add(run)
@@ -261,6 +301,7 @@ def to_response(db: Session, run: ProofreadingRun) -> ProofreadingRunResponse:
         provider_name=run.provider_name,
         provider_preset=run.provider_preset,
         model_name=run.model_name,
+        reason_language=run.reason_language,
         status=run.status,
         total_batches=run.total_batches,
         completed_batches=run.completed_batches,
@@ -413,9 +454,13 @@ def apply_suggestions(
         return _apply_suggestions_unlocked(db, run_id, suggestion_ids)
 
 
-def _messages_for_batch(batch: ProofreadingBatch) -> list[dict[str, str]]:
+def _messages_for_batch(batch: ProofreadingBatch, reason_language: str = "en") -> list[dict[str, str]]:
+    language_instruction = REASON_LANGUAGE_INSTRUCTIONS.get(
+        reason_language,
+        REASON_LANGUAGE_INSTRUCTIONS["en"],
+    )
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": f"{SYSTEM_PROMPT}\n{language_instruction}"},
         {
             "role": "user",
             "content": json.dumps(
@@ -429,11 +474,79 @@ def _messages_for_batch(batch: ProofreadingBatch) -> list[dict[str, str]]:
 def response_schema(target_ids):
     return {"type": "object", "additionalProperties": False, "required": ["suggestions"],
         "properties": {"suggestions": {"type": "array", "maxItems": len(target_ids),
-            "items": {"type": "object", "additionalProperties": False,
-                "required": ["segment_id", "suggested_text", "reason"],
-                "properties": {"segment_id": {"type": "integer", "enum": target_ids},
-                    "suggested_text": {"type": "string", "minLength": 1},
-                    "reason": {"type": "string", "minLength": 1}}}}}}
+            "items": {"type": "array", "minItems": 3, "maxItems": 3,
+                "prefixItems": [
+                    {"type": "integer", "enum": target_ids},
+                    {"type": "string", "minLength": 1},
+                    {"type": "string", "minLength": 1},
+                ]}}}}
+
+
+def _sub_batch(batch: ProofreadingBatch, start: int, stop: int) -> ProofreadingBatch:
+    targets = batch.targets[start:stop]
+    target_ids = {int(item["id"]) for item in targets}
+    candidates = [
+        *(batch.targets[start - 1:start] if start > 0 else []),
+        *(batch.targets[stop:stop + 1] if stop < len(batch.targets) else []),
+        *batch.context,
+    ]
+    context: list[dict[str, int | str]] = []
+    seen: set[int] = set()
+    for item in candidates:
+        segment_id = int(item["id"])
+        if segment_id in target_ids or segment_id in seen:
+            continue
+        context.append(item)
+        seen.add(segment_id)
+        if len(context) == 2:
+            break
+    return ProofreadingBatch(targets=targets, context=context)
+
+
+def _proofread_batch(
+    provider,
+    batch: ProofreadingBatch,
+    *,
+    timeout: int,
+    reason_language: str = "en",
+) -> list[ParsedSuggestion]:
+    target_ids = [int(item["id"]) for item in batch.targets]
+
+    def split_and_retry() -> list[ParsedSuggestion]:
+        half = len(batch.targets) // 2
+        return (
+            _proofread_batch(
+                provider,
+                _sub_batch(batch, 0, half),
+                timeout=timeout,
+                reason_language=reason_language,
+            )
+            + _proofread_batch(
+                provider,
+                _sub_batch(batch, half, len(batch.targets)),
+                timeout=timeout,
+                reason_language=reason_language,
+            )
+        )
+
+    try:
+        content = llm_providers.chat_completion(
+            provider,
+            _messages_for_batch(batch, reason_language),
+            timeout=timeout,
+            max_response_bytes=MAX_RESPONSE_BYTES,
+            response_schema=response_schema(target_ids),
+        )
+    except llm_providers.LLMProviderError as exc:
+        if exc.code in SPLIT_RETRYABLE and len(batch.targets) > 1:
+            return split_and_retry()
+        raise
+    try:
+        return parse_suggestions(content, batch.targets)
+    except ProofreadingError as exc:
+        if exc.code == "LLM_INVALID_RESPONSE" and len(batch.targets) > 1:
+            return split_and_retry()
+        raise
 
 
 def execute_run(db: Session, run_id: str) -> None:
@@ -445,7 +558,13 @@ def execute_run(db: Session, run_id: str) -> None:
         if provider is None:
             raise ProofreadingError("LLM_PROVIDER_NOT_FOUND", "LLM provider no longer exists")
         segments = source_segments(db, run)
-        batches = build_batches(segments)
+        local = llm_compatibility.resolved(provider).protocol == "ollama"
+        batches = build_batches(
+            segments,
+            max_segments=LOCAL_MAX_BATCH_SEGMENTS if local else MAX_BATCH_SEGMENTS,
+            max_characters=LOCAL_MAX_BATCH_CHARACTERS if local else MAX_BATCH_CHARACTERS,
+        )
+        timeout = LOCAL_REQUEST_TIMEOUT if local else REMOTE_REQUEST_TIMEOUT
         run.status = "running"
         run.total_batches = len(batches)
         run.completed_batches = 0
@@ -455,13 +574,14 @@ def execute_run(db: Session, run_id: str) -> None:
 
         collected: list[ParsedSuggestion] = []
         for index, batch in enumerate(batches, 1):
-            content = llm_providers.chat_completion(
-                provider,
-                _messages_for_batch(batch),
-                timeout=90,
-                response_schema=response_schema([int(item["id"]) for item in batch.targets]),
+            collected.extend(
+                _proofread_batch(
+                    provider,
+                    batch,
+                    timeout=timeout,
+                    reason_language=run.reason_language,
+                )
             )
-            collected.extend(parse_suggestions(content, batch.targets))
             run.completed_batches = index
             run.updated_at = datetime.now(UTC)
             db.commit()

@@ -8,7 +8,7 @@ macOS 与 Windows Release 任务分别把 DMG 和 NSIS 安装包的校验条目�
 - publish job 汇总全部平台资产后统一生成一次只包含 basename 的最终 `SHA256SUMS.txt`，不再合并平台各自生成的清单片段。
 - 发布资产验证增加“应用可解析校验清单”的断言，覆盖 macOS DMG 与 Windows NSIS 安装包，避免仅靠 `shasum -c` 成功而漏过客户端不兼容格式。
 - 发布兼容性验证使用不绑定具体版本号的“上一受维护版本客户端 → 下一版本 Release”场景；任一平台无法发现、下载或校验对应安装包时阻止发布。
-- 为已发布 v0.2.1 准备最小化修复与验证步骤；替换 GitHub Release 资产属于外部发布操作，必须获得明确授权后执行。
+- 已发布的 v0.2.1 资产保持原样不做替换；受影响客户端的恢复由发布携带修复后清单的 v0.3.0 完成（更新器只针对频道最新 Release）。
 
 ## 能力（Capabilities）
 
@@ -25,5 +25,5 @@ macOS 与 Windows Release 任务分别把 DMG 和 NSIS 安装包的校验条目�
 - 桌面更新 Rust 回归测试：`tauri/src-tauri/src/update.rs`；不改变运行时接受的清单格式。
 - Release 生成与门禁：`.github/workflows/release.yml`、`scripts/verify-release-assets.sh` 及其聚焦测试或 fixture。
 - 发布与故障排查文档：`docs/release.md`、`docs/troubleshooting.md`。
-- 已发布 v0.2.1 的即时恢复需要在代码变更之外替换该 Release 的 `SHA256SUMS.txt`；不会改动安装包字节或摘要，也不会在未授权时执行。
+- 已发布 v0.2.1 的全部资产（含 `SHA256SUMS.txt`）不做任何替换；v0.2.0 客户端的升级路径随 v0.3.0 发布恢复。
 - 不改变前端/后端 API、下载目标、受信 GitHub 域、安装包命名、哈希算法、手动安装流程或签名状态；不引入新依赖。

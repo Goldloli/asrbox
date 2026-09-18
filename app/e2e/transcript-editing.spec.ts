@@ -108,12 +108,12 @@ async function openTaskDetails(page: Page) {
   await page.goto('/tasks');
   await page.getByRole('button', { name: /meeting\.wav/ }).click();
   await expect(page.getByRole('heading', { name: 'Audio player' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Subtitle preview' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Segments' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Transcript' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Transcript', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit subtitles', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Segment text')).toHaveCount(0);
 }
 
-test('home result keeps full text and audio review with only SRT and TXT quick downloads', async ({ page }) => {
+test('home result keeps full text with only SRT and TXT quick downloads', async ({ page }) => {
   await mockEditingTask(page);
   await page.route(`${serverUrl}/transcriptions/readiness`, (route) => route.fulfill({ json: { ready: true, issues: [], warnings: [], missing_models: [] } }));
   await page.route(`${serverUrl}/settings/asr`, (route) => route.fulfill({ json: {
@@ -136,7 +136,7 @@ test('home result keeps full text and audio review with only SRT and TXT quick d
   await page.goto('/');
 
   await expect(page.getByText(baseTask.text, { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Audio player' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Audio player' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Subtitle preview' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Segments' })).toHaveCount(0);
   await expect(page.getByLabel('Segment text')).toHaveCount(0);
@@ -162,31 +162,18 @@ test('home quick download reports export failures without exposing the segment e
 
   await page.getByRole('button', { name: 'TXT', exact: true }).click();
   await expect(page.getByText('Action failed', { exact: true })).toBeVisible();
-  await expect(page.getByText('Export unavailable', { exact: true })).toBeVisible();
+  await expect(page.getByText('The operation could not be completed. Review the technical details and retry.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Segment text')).toHaveCount(0);
 });
 
-test('edits a segment, saves it to the backend, and exports the edited subtitle', async ({ page }) => {
+test('task detail keeps the transcript read-only and exports the original subtitle', async ({ page }) => {
   const mock = await mockEditingTask(page);
   await openTaskDetails(page);
 
-  const segmentTextboxes = page.getByLabel('Segment text');
-  await expect(segmentTextboxes).toHaveCount(3);
-  await expect(page.getByText('Unsaved changes')).toHaveCount(0);
-
-  await segmentTextboxes.nth(1).fill('corrected words');
-  await expect(page.getByText('Unsaved changes')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Save changes' }).click();
-  await expect(page.getByText('Changes saved. A new subtitle version was created.')).toBeVisible();
-  await expect(page.getByText('Unsaved changes')).toHaveCount(0);
-
-  expect(mock.getLastPutPayload()?.segments).toEqual([
-    { id: 1, start: 0, end: 2, text: 'opening', speaker: null },
-    { id: 2, start: 2, end: 4, text: 'corrected words', speaker: null },
-    { id: 3, start: 4, end: 8, text: 'ending', speaker: null },
-  ]);
-  await expect(segmentTextboxes.nth(1)).toHaveValue('corrected words');
+  await expect(page.getByTestId('segment-row')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
+  expect(mock.getLastPutPayload()).toBeUndefined();
 
   const outputFilesPanel = page.getByRole('heading', { name: 'Output files' }).locator('xpath=../..');
   const downloadPromise = page.waitForEvent('download');
@@ -195,26 +182,56 @@ test('edits a segment, saves it to the backend, and exports the edited subtitle'
   const downloadPath = await download.path();
   expect(downloadPath).toBeTruthy();
   const content = await readFile(downloadPath as string, 'utf-8');
-  expect(content).toContain('corrected words');
-  expect(content).not.toContain('wrong text');
+  expect(content).toContain('wrong text');
 });
 
-test('keeps the draft and reports an error when saving fails', async ({ page }) => {
-  const mock = await mockEditingTask(page, { failPut: true });
+test('task detail reports export errors while staying in read-only transcript mode', async ({ page }) => {
+  const mock = await mockEditingTask(page, { failExport: true });
   await openTaskDetails(page);
 
-  const segmentTextboxes = page.getByLabel('Segment text');
-  await segmentTextboxes.nth(1).fill('corrected words');
+  const outputFilesPanel = page.getByRole('heading', { name: 'Output files' }).locator('xpath=../..');
+  await outputFilesPanel.getByRole('button', { name: 'TXT', exact: true }).click();
+  await expect(page.getByText('Action failed', { exact: true })).toBeVisible();
+  await expect(page.getByText('The operation could not be completed. Review the technical details and retry.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Segment text')).toHaveCount(0);
+  expect(mock.getLastPutPayload()).toBeUndefined();
+});
+
+test('edit mode saves staged segment edits from the header row', async ({ page }) => {
+  const mock = await mockEditingTask(page);
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Edit subtitles', exact: true }).click();
+  const textInputs = page.getByLabel('Segment text');
+  await expect(textInputs).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+
+  await textInputs.nth(1).fill('corrected text');
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Changes saved. A new subtitle version was created.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+
+  const payload = mock.getLastPutPayload();
+  expect(payload?.segments).toHaveLength(3);
+  expect(payload?.segments.map((segment) => segment.id)).toEqual([1, 2, 3]);
+  expect(payload?.segments[1]?.text).toBe('corrected text');
+  expect(payload?.segments[0]?.text).toBe('opening');
+});
+
+test('edit mode keeps drafts and shows an error when saving fails', async ({ page }) => {
+  await mockEditingTask(page, { failPut: true });
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Edit subtitles', exact: true }).click();
+  const textInputs = page.getByLabel('Segment text');
+  await textInputs.nth(1).fill('corrected text');
   await page.getByRole('button', { name: 'Save changes' }).click();
 
-  await expect(page.getByText('Failed to save changes')).toBeVisible();
-  await expect(page.getByText('Unsaved changes')).toBeVisible();
-  await expect(segmentTextboxes.nth(1)).toHaveValue('corrected words');
-  expect(mock.getLastPutPayload()?.segments).toHaveLength(3);
-
-  await page.getByRole('button', { name: 'Discard changes' }).click();
-  await expect(page.getByText('Unsaved changes')).toHaveCount(0);
-  await expect(segmentTextboxes.nth(1)).toHaveValue('wrong text');
+  await expect(page.getByText('Failed to save changes', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+  await expect(textInputs.nth(1)).toHaveValue('corrected text');
 });
 
 test('task detail keeps its content and controls reachable at desktop and narrow widths', async ({ page }) => {
@@ -235,17 +252,18 @@ test('task detail keeps its content and controls reachable at desktop and narrow
   await expect(inspectorRegion).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(detailRegion.getByRole('button', { name: 'Close details' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Close details' })).toBeVisible();
   detailBox = await detailRegion.boundingBox();
   expect(detailBox?.width).toBeLessThanOrEqual(390);
   const pageWidth = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
   expect(pageWidth.scroll).toBeLessThanOrEqual(pageWidth.client);
 
-  const firstSegment = page.getByLabel('Segment text').first();
+  const firstSegment = page.getByRole('button', { name: /Jump to segment(?: time)? 0\.00/ });
   await firstSegment.scrollIntoViewIfNeeded();
   const segmentBox = await firstSegment.boundingBox();
   expect(segmentBox?.x).toBeGreaterThanOrEqual(0);
   expect((segmentBox?.x ?? 0) + (segmentBox?.width ?? 0)).toBeLessThanOrEqual(390);
-  await firstSegment.fill('narrow layout edit');
-  await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+  await expect(inspectorRegion.getByRole('button', { name: 'SRT', exact: true })).toBeVisible();
+  await expect(inspectorRegion.getByRole('button', { name: 'TXT', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Segment text')).toHaveCount(0);
 });

@@ -1,21 +1,21 @@
-import { Activity, AlertTriangle, CloudOff, Cpu, DownloadCloud, PackageCheck, PlugZap } from 'lucide-react';
+import { CloudOff, Cpu, PlugZap } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
-import { TaskCenterDrawer } from './TaskCenterDrawer';
 import { GlobalSearch } from './GlobalSearch';
 import { PersistentAudioPlayer } from './PersistentAudioPlayer';
 import { Badge, Button } from './weiui';
-import { useActiveDownloadsQuery, useActiveTasksQuery, useHealthQuery, useRuntimeQuery } from '../lib/queries';
-import { formatBytes, formatPercent } from '../lib/format';
+import { useHealthQuery, useRuntimeQuery } from '../lib/queries';
+import { formatBytes } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { getActiveDownloadItems, getActiveTaskItems } from '../lib/api';
 import { useDesktopServerControl } from '../lib/useDesktopServerControl';
-import { useAppUpdateStore } from '../stores/appUpdateStore';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { t } = useI18n();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const immersiveTaskCenter = pathname === '/tasks';
+  const boundedWorkspace = immersiveTaskCenter || pathname === '/ai';
 
   return (
     <div className="app-bg flex h-dvh min-w-[320px] overflow-hidden">
@@ -25,15 +25,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {t('app.skipToContent')}
       </a>
-      <Sidebar />
+      <Sidebar immersive={immersiveTaskCenter} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopStatusBar />
-        <main id="main-content" tabIndex={-1} className="min-h-0 flex-1 overflow-auto focus:outline-none">
-          <div className="mx-auto w-full max-w-[1680px] p-4 xl:p-5">{children}</div>
+        {!immersiveTaskCenter && <TopStatusBar />}
+        <main id="main-content" tabIndex={-1} className={`min-h-0 flex-1 focus:outline-none ${boundedWorkspace ? 'overflow-hidden' : 'overflow-auto'}`}>
+          <div className={immersiveTaskCenter ? 'h-full min-h-0 w-full' : 'h-full min-h-0 w-full py-3 pr-3 md:py-4'}>{children}</div>
         </main>
         <PersistentAudioPlayer />
         <MobileNav />
-        <BottomTaskBar />
       </div>
     </div>
   );
@@ -43,13 +42,13 @@ function TopStatusBar() {
   const healthQuery = useHealthQuery();
   const runtimeQuery = useRuntimeQuery();
   const desktopServer = useDesktopServerControl();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const connected = healthQuery.isSuccess;
   const runtime = runtimeQuery.data;
 
   return (
-    <header className="app-shell-surface flex h-14 shrink-0 items-center gap-4 border-b app-border px-4">
-      <div className="mx-auto flex w-full max-w-[1680px] min-w-0 items-center gap-4 px-1 xl:px-2">
+    <header className="app-shell-surface flex h-20 shrink-0 items-center gap-4 border-b app-border px-6">
+      <div className="flex w-full min-w-0 items-center gap-8">
         <div className="min-w-0 flex-1">
           <GlobalSearch />
         </div>
@@ -98,71 +97,11 @@ function TopStatusBar() {
               </>
             )}
           </div>
+          <span className="hidden border-l app-border pl-4 text-xs text-app-muted xl:inline">
+            {new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())}
+          </span>
         </div>
       </div>
     </header>
-  );
-}
-
-function BottomTaskBar() {
-  const { t, statusLabel } = useI18n();
-  const activeTasksQuery = useActiveTasksQuery();
-  const downloadsQuery = useActiveDownloadsQuery();
-  const activeTasks = getActiveTaskItems(activeTasksQuery.data);
-  const downloads = getActiveDownloadItems(downloadsQuery.data);
-  const topTask = activeTasks[0];
-  const topDownload = downloads[0];
-  const hasError = activeTasksQuery.isError || downloadsQuery.isError;
-  const appUpdate = useAppUpdateStore((state) => state.download);
-  const appUpdateActive = ['preparing', 'downloading', 'verifying', 'cancelling'].includes(appUpdate.status);
-
-  return (
-    <footer className="app-shell-surface flex h-11 shrink-0 items-center gap-2 overflow-x-auto border-t app-border px-3">
-      <Link to="/tasks" className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
-        <Activity className="size-3.5 shrink-0" />
-        {topTask ? (
-          <>
-            <span className="max-w-36 truncate text-app-soft">{topTask.filename}</span>
-            <span className="shrink-0">{statusLabel(topTask.status)} · {formatPercent(topTask.progress)}</span>
-          </>
-        ) : (
-          <span className="truncate">{t('status.noActiveTask')}</span>
-        )}
-      </Link>
-      <Link to="/models" className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app">
-        <DownloadCloud className="size-3.5 shrink-0" />
-        {topDownload ? (
-          <>
-            <span className="max-w-36 truncate text-app-soft">{topDownload.model_name}</span>
-            <span className="shrink-0">{topDownload.status} · {formatPercent(topDownload.progress)}</span>
-          </>
-        ) : (
-          <span className="truncate">{t('status.noModelDownload')}</span>
-        )}
-      </Link>
-      {appUpdateActive && (
-        <Link
-          to="/settings"
-          search={{ tab: 'about' }}
-          className="flex min-w-0 shrink items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-app-muted transition hover:bg-[var(--app-control)] hover:text-app"
-        >
-          <PackageCheck className="size-3.5 shrink-0" />
-          <span className="max-w-40 truncate text-app-soft">{appUpdate.filename ?? t('about.applicationUpdate')}</span>
-          <span className="shrink-0">{formatPercent(appUpdate.progress)}</span>
-        </Link>
-      )}
-      <TaskCenterDrawer />
-      {hasError && (
-        <Link
-          to="/settings"
-          search={{ tab: 'storage' }}
-          aria-label={t('status.openDiagnostics')}
-          className="ml-auto flex shrink-0 items-center gap-2 rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-1.5 text-xs text-[var(--app-danger)] transition hover:brightness-95"
-        >
-          <AlertTriangle className="size-4" />
-          <span className="hidden sm:inline">{t('status.liveUnavailable')}</span>
-        </Link>
-      )}
-    </footer>
   );
 }
