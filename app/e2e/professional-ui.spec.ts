@@ -269,6 +269,7 @@ test('paused waveform seek updates the active transcript segment immediately', a
     Object.defineProperty(media, 'duration', { configurable: true, get: () => 30 });
     media.dispatchEvent(new Event('loadedmetadata'));
   });
+  await expect(detail.getByText('0:00 / 0:30')).toBeVisible();
 
   const waveform = detail.getByRole('button', { name: 'Click waveform to seek audio' });
   await waveform.evaluate((element) => {
