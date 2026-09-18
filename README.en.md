@@ -1,4 +1,4 @@
-![ASRbox task center](assets/asrbox-task-center.png)
+![ASRbox home workspace](assets/asrbox-home.png)
 
 # ASRbox
 

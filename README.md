@@ -1,4 +1,4 @@
-![ASRbox 任务中心](assets/asrbox-task-center.png)
+![ASRbox 工作台首页](assets/asrbox-home.png)
 
 # ASRbox
 
