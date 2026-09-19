@@ -1,13 +1,13 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Download, FileText, FolderOpen, Pause, Play, Save, Volume2, X } from 'lucide-react';
+import { Activity, Download, FileText, FolderOpen, Pause, Play, Replace, Save, Volume2, X } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, type SegmentBulkUpdateItem, type TranscriptionTask } from '../lib/api';
 import { desktopCapabilities } from '../lib/desktopCapabilities';
 import { queryKeys } from '../lib/queries';
 import { formatDuration, formatPercent } from '../lib/format';
-import { Badge, Button, EmptyState, Panel, PanelHeader, Progress, Textarea } from './weiui';
+import { Badge, Button, EmptyState, Input, Panel, PanelHeader, Progress, Textarea } from './weiui';
 import { StatusPill } from './StatusPill';
 import { useI18n } from '../lib/i18n';
 import { cn } from '../lib/cn';
@@ -34,10 +34,14 @@ export function TranscriptViewer({
   const toast = useToast();
   const queryClient = useQueryClient();
   const [draftEdits, setDraftEdits] = useState<Record<number, string>>({});
-  const [detailView, setDetailView] = useState<'transcript' | 'edit'>('transcript');
+  const [detailView, setDetailView] = useState<'transcript' | 'edit' | 'replace'>('transcript');
+  const [replaceSearch, setReplaceSearch] = useState('');
+  const [replaceTarget, setReplaceTarget] = useState('');
+  const [replaceCursor, setReplaceCursor] = useState(0);
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const [playbackTime, setPlaybackTime] = useState(0);
   const segmentListRef = useRef<HTMLDivElement>(null);
+  const replaceTextRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id;
   const fullText = task?.text ?? '';
@@ -53,6 +57,39 @@ export function TranscriptViewer({
     const active = displaySegments.find((segment) => playbackTime >= segment.start && playbackTime < segment.end);
     return active?.id ?? null;
   }, [displaySegments, mode, playbackTime]);
+  const replaceOccurrences = useMemo(() => {
+    if (!replaceSearch) return [] as Array<{ segmentId: number; offset: number }>;
+    const occurrences: Array<{ segmentId: number; offset: number }> = [];
+    for (const segment of displaySegments) {
+      let from = 0;
+      let index = segment.text.indexOf(replaceSearch, from);
+      while (index !== -1) {
+        occurrences.push({ segmentId: segment.id, offset: index });
+        from = index + replaceSearch.length;
+        index = segment.text.indexOf(replaceSearch, from);
+      }
+    }
+    return occurrences;
+  }, [displaySegments, replaceSearch]);
+  const replaceMatchCount = replaceOccurrences.length;
+  const replaceCursorEffective = replaceMatchCount ? replaceCursor % replaceMatchCount : -1;
+  const replacePreviewParts = useMemo(() => {
+    const parts: Array<{ text: string; matchIndex?: number }> = [];
+    let matchIndex = 0;
+    displaySegments.forEach((segment, segmentIndex) => {
+      if (segmentIndex > 0) parts.push({ text: '\n' });
+      if (!replaceSearch) {
+        parts.push({ text: segment.text });
+        return;
+      }
+      const pieces = segment.text.split(replaceSearch);
+      pieces.forEach((piece, pieceIndex) => {
+        if (piece) parts.push({ text: piece });
+        if (pieceIndex < pieces.length - 1) parts.push({ text: replaceTarget || replaceSearch, matchIndex: matchIndex++ });
+      });
+    });
+    return parts;
+  }, [displaySegments, replaceSearch, replaceTarget]);
 
   // Keep the active segment visible while playback advances, but never steal
   // focus from in-progress transcript editing.
@@ -69,7 +106,17 @@ export function TranscriptViewer({
     setDraftEdits({});
     setSeekTarget(null);
     setDetailView('transcript');
+    setReplaceSearch('');
+    setReplaceTarget('');
+    setReplaceCursor(0);
   }, [taskId]);
+
+  useEffect(() => {
+    if (detailView !== 'replace' || replaceCursorEffective < 0 || !replaceTextRef.current) return;
+    replaceTextRef.current
+      .querySelector(`[data-replace-match="${replaceCursorEffective}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [detailView, replaceCursorEffective]);
 
   const saveEdits = useMutation({
     mutationFn: (input: { taskId: string; segments: SegmentBulkUpdateItem[] }) => apiClient.updateSegments(input.taskId, input.segments),
@@ -129,6 +176,38 @@ export function TranscriptViewer({
     });
   };
   const discardDraftEdits = () => setDraftEdits({});
+  const canApplyReplace = replaceMatchCount > 0 && replaceTarget !== replaceSearch;
+  const buildBulkPayload = (textForSegment: (segment: (typeof displaySegments)[number]) => string) =>
+    displaySegments.map((segment) => ({
+      id: segment.id,
+      start: segment.start,
+      end: segment.end,
+      text: textForSegment(segment),
+      speaker: segment.speaker || null,
+    }));
+  const applyBatchReplace = () => {
+    if (!canApplyReplace || saveEdits.isPending) return;
+    saveEdits.mutate({
+      taskId: task.id,
+      segments: buildBulkPayload((segment) => segment.text.split(replaceSearch).join(replaceTarget)),
+    });
+  };
+  const applyCurrentReplace = () => {
+    const occurrence = replaceOccurrences[replaceCursorEffective];
+    if (!occurrence || !canApplyReplace || saveEdits.isPending) return;
+    saveEdits.mutate({
+      taskId: task.id,
+      segments: buildBulkPayload((segment) =>
+        segment.id === occurrence.segmentId
+          ? `${segment.text.slice(0, occurrence.offset)}${replaceTarget}${segment.text.slice(occurrence.offset + replaceSearch.length)}`
+          : segment.text,
+      ),
+    });
+  };
+  const goToNextMatch = () => {
+    if (replaceMatchCount === 0) return;
+    setReplaceCursor((cursor) => (cursor + 1) % replaceMatchCount);
+  };
   const seekToSegment = (seconds: number) => {
     setSeekTarget(Math.max(0, seconds));
   };
@@ -202,7 +281,7 @@ export function TranscriptViewer({
       {audioPlayer}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b app-border pt-1">
         <div className="flex items-center gap-7">
-          {(['transcript', 'edit'] as const).map((view) => (
+          {(['transcript', 'edit', 'replace'] as const).map((view) => (
             <button
               key={view}
               type="button"
@@ -213,7 +292,7 @@ export function TranscriptViewer({
               )}
               onClick={() => setDetailView(view)}
             >
-              {view === 'transcript' ? t('transcript.text') : t('transcript.editSubtitles')}
+              {view === 'transcript' ? t('transcript.text') : view === 'edit' ? t('transcript.editSubtitles') : t('transcript.batchReplace')}
             </button>
           ))}
         </div>
@@ -230,6 +309,86 @@ export function TranscriptViewer({
           </div>
         ) : null}
       </div>
+      {detailView === 'replace' ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border app-border bg-[var(--app-panel)] px-4 py-3" data-testid="batch-replace-bar">
+          <Input
+            value={replaceSearch}
+            onChange={(event) => {
+              setReplaceSearch(event.target.value);
+              setReplaceCursor(0);
+            }}
+            aria-label={t('transcript.replaceSearch')}
+            placeholder={t('transcript.replaceSearch')}
+            className="w-52"
+          />
+          <Input
+            value={replaceTarget}
+            onChange={(event) => setReplaceTarget(event.target.value)}
+            aria-label={t('transcript.replaceWith')}
+            placeholder={t('transcript.replaceWith')}
+            className="w-52"
+          />
+          <span className="text-sm text-app-muted" data-testid="batch-replace-count">
+            {replaceSearch
+              ? replaceMatchCount > 0
+                ? t('transcript.replaceMatches', { count: replaceMatchCount })
+                : t('transcript.replaceNoMatches')
+              : t('transcript.replaceHint')}
+          </span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={goToNextMatch} disabled={replaceMatchCount === 0}>
+              {t('transcript.replaceNext')}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={applyCurrentReplace}
+              disabled={!canApplyReplace || saveEdits.isPending}
+            >
+              {t('transcript.replaceCurrent')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={applyBatchReplace}
+              disabled={!canApplyReplace || saveEdits.isPending}
+            >
+              <Replace className="size-4" />
+              {saveEdits.isPending ? t('transcript.replaceSaving') : t('transcript.replaceAction')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {detailView === 'replace' ? (
+        displaySegments.length > 0 ? (
+          <section
+            ref={replaceTextRef}
+            data-testid="transcript-replace-text"
+            className="max-h-[min(42vh,30rem)] overflow-auto whitespace-pre-wrap rounded-xl border app-border bg-[var(--app-panel)] px-4 py-3 text-[15px] leading-7 text-app-soft"
+          >
+            {replacePreviewParts.map((part, index) =>
+              part.matchIndex === undefined ? (
+                <span key={index}>{part.text}</span>
+              ) : (
+                <mark
+                  key={index}
+                  data-replace-match={part.matchIndex}
+                  data-current={part.matchIndex === replaceCursorEffective ? 'true' : undefined}
+                  className={cn(
+                    'rounded-sm px-0.5 text-inherit',
+                    part.matchIndex === replaceCursorEffective
+                      ? 'bg-[var(--app-accent)] text-[var(--app-panel)]'
+                      : 'bg-[var(--app-accent-soft)]',
+                  )}
+                >
+                  {part.text}
+                </mark>
+              ),
+            )}
+          </section>
+        ) : (
+          <p className="px-3 py-10 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>
+        )
+      ) : (
       <section ref={segmentListRef} data-testid="transcript-segments" className="max-h-[min(42vh,30rem)] overflow-auto rounded-xl border app-border bg-[var(--app-panel)]">
         {displaySegments.length > 0 ? displaySegments.map((segment) => (
           <div
@@ -266,6 +425,7 @@ export function TranscriptViewer({
           </div>
         )) : <p className="px-3 py-10 text-center text-sm text-app-muted">{t('transcript.noSegments')}</p>}
       </section>
+      )}
     </div>
   );
 }

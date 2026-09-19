@@ -4,6 +4,12 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
+### Added
+
+- 任务中心转写结果新增"一键替换"页签：以分段列表展示字幕全文，输入搜索词实时高亮匹配分段并显示匹配数量，一键把全部匹配分段中的搜索词替换为替换词；保存复用批量更新并原子创建恰好一个不可变 `edit` 版本，时间与说话人保持原值，可经版本历史恢复。
+
 ## [0.3.0] - 2026-09-18
 
 ### Changed
@@ -310,7 +316,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Goldloli/asrbox/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Goldloli/asrbox/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Goldloli/asrbox/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Goldloli/asrbox/compare/v0.1.9...v0.2.0

@@ -267,3 +267,107 @@ test('task detail keeps its content and controls reachable at desktop and narrow
   await expect(inspectorRegion.getByRole('button', { name: 'TXT', exact: true })).toBeVisible();
   await expect(page.getByLabel('Segment text')).toHaveCount(0);
 });
+
+
+test('batch replace replaces all matches in one bulk save', async ({ page }) => {
+  const mock = await mockEditingTask(page);
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Batch replace', exact: true }).click();
+  await page.getByLabel('Search text').fill('wrong');
+
+  await expect(page.getByTestId('batch-replace-count')).toHaveText('1 match(es)');
+  await expect(page.getByTestId('transcript-replace-text')).toContainText('wrong');
+
+  await page.getByLabel('Replace with').fill('right');
+  await expect(page.getByTestId('batch-replace-count')).toHaveText('1 match(es)');
+  await expect(page.getByTestId('transcript-replace-text')).toContainText('right text');
+  await expect(page.getByRole('button', { name: 'Replace all', exact: true })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Replace all', exact: true }).click();
+  await expect(page.getByText('Changes saved. A new subtitle version was created.', { exact: true })).toBeVisible();
+
+  const payload = mock.getLastPutPayload();
+  expect(payload?.segments).toHaveLength(3);
+  expect(payload?.segments.map((segment) => segment.id)).toEqual([1, 2, 3]);
+  expect(payload?.segments[1]?.text).toBe('right text');
+  expect(payload?.segments[0]?.text).toBe('opening');
+  expect(payload?.segments[2]?.text).toBe('ending');
+
+  await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+  await expect(page.getByTestId('segment-row').nth(1)).toContainText('right text');
+});
+
+test('batch replace replaces only the located match and next wraps around', async ({ page }) => {
+  const mock = await mockEditingTask(page);
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Batch replace', exact: true }).click();
+  await page.getByLabel('Search text').fill('n');
+  await page.getByLabel('Replace with').fill('X');
+
+  await expect(page.getByTestId('batch-replace-count')).toHaveText('5 match(es)');
+  await expect(page.locator('[data-replace-match="0"]')).toHaveAttribute('data-current', 'true');
+
+  const nextButton = page.getByRole('button', { name: 'Next', exact: true });
+  await nextButton.click();
+  await expect(page.locator('[data-replace-match="1"]')).toHaveAttribute('data-current', 'true');
+
+  for (let index = 0; index < 4; index += 1) await nextButton.click();
+  await expect(page.locator('[data-replace-match="0"]')).toHaveAttribute('data-current', 'true');
+
+  await nextButton.click();
+  await page.getByRole('button', { name: 'Replace', exact: true }).click();
+  await expect(page.getByText('Changes saved. A new subtitle version was created.', { exact: true })).toBeVisible();
+
+  const payload = mock.getLastPutPayload();
+  expect(payload?.segments).toHaveLength(3);
+  expect(payload?.segments[0]?.text).toBe('openiXg');
+  expect(payload?.segments[1]?.text).toBe('wrong text');
+  expect(payload?.segments[2]?.text).toBe('ending');
+});
+
+test('batch replace stays inactive without matches or without changes', async ({ page }) => {
+  const mock = await mockEditingTask(page);
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Batch replace', exact: true }).click();
+  const replaceButton = page.getByRole('button', { name: 'Replace', exact: true });
+  const replaceAllButton = page.getByRole('button', { name: 'Replace all', exact: true });
+  const nextButton = page.getByRole('button', { name: 'Next', exact: true });
+
+  await expect(replaceButton).toBeDisabled();
+  await expect(replaceAllButton).toBeDisabled();
+  await expect(nextButton).toBeDisabled();
+  await expect(page.getByTestId('batch-replace-count')).toHaveText('Enter the text to search');
+  await expect(page.getByTestId('transcript-replace-text')).toContainText('opening');
+
+  await page.getByLabel('Search text').fill('absent');
+  await expect(page.getByTestId('batch-replace-count')).toHaveText('No matches');
+  await expect(replaceButton).toBeDisabled();
+  await expect(replaceAllButton).toBeDisabled();
+  await expect(nextButton).toBeDisabled();
+
+  await page.getByLabel('Search text').fill('wrong');
+  await page.getByLabel('Replace with').fill('wrong');
+  await expect(replaceButton).toBeDisabled();
+  await expect(replaceAllButton).toBeDisabled();
+  await expect(nextButton).toBeEnabled();
+
+  expect(mock.getLastPutPayload()).toBeUndefined();
+});
+
+test('batch replace reports an error and keeps content when saving fails', async ({ page }) => {
+  const mock = await mockEditingTask(page, { failPut: true });
+  await openTaskDetails(page);
+
+  await page.getByRole('button', { name: 'Batch replace', exact: true }).click();
+  await page.getByLabel('Search text').fill('wrong');
+  await page.getByLabel('Replace with').fill('right');
+  await page.getByRole('button', { name: 'Replace all', exact: true }).click();
+
+  await expect(page.getByText('Failed to save changes', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Transcript', exact: true }).click();
+  await expect(page.getByTestId('segment-row').nth(1)).toContainText('wrong text');
+  expect(mock.getLastPutPayload()?.segments[1]?.text).toBe('right text');
+});
