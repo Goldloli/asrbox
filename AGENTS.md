@@ -141,7 +141,7 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - Python 依赖变更从适当的 `requirements-*.in` 文件开始，并包含重新生成的 lock file；不要只手动编辑 `requirements.txt`。macOS 运行时使用 `requirements-runtime.lock`（Apple Silicon + Python 3.13 快照），Windows 使用独立的 `requirements-windows.lock` 快照（runtime+dev 合一，从通过全量测试的 Windows + Python 3.14 环境冻结；3.11/3.13 的 Windows proactor 在取消流式请求后会污染后续连接，3.14 行为与 POSIX 一致），两者保持各自平台可复现。
 - 脚本与 npm 命令解析项目 Python 一律使用 `scripts/venv-python.mjs`（Windows 解析 `.venv/Scripts/python.exe`，POSIX 解析 `.venv/bin/python`）；不得硬编码任一平台的 venv 路径。
 - `requirements-windows-cuda.lock` 是 Windows CUDA 加速套件的独立锁：只为 `scripts/build-cuda-kit.py` 的套件构建服务（`pip --target` 安装 cu128 torch 树后裁剪为仅 torch），不进入应用运行环境；其 torch 基线版本必须与 `requirements-windows.lock` 一致（`check-versions.mjs` 强制），其余共享包 pin 保持一致，torch bump 时从干净 Windows + Python 3.14 venv 重新 freeze 并重建套件（Release 的 `cuda-kit` job 自动完成）。
-- 前端依赖变更应更新 `bun.lock` 并运行依赖审计。
+- 前端依赖变更应更新 `bun.lock` 并运行依赖审计。解决 `bun.lock` 合并冲突（如给 Dependabot 分支合入最新 main）后，`bun install` 第一遍可能丢 `"@asrbox/web/@asrbox/app"` workspace override 条目；提交前必须跑 `bun install --frozen-lockfile` 验证到不动点（报 lockfile 变化就再跑一遍 `bun install` 后重验），否则 CI 的 frozen-lockfile 安装会失败。
 - vendored binary 变更应更新 checksum、来源记录、license 和 notice。
 - 绝不提交 `.venv/`、`node_modules/`、cache、model weight、用户数据、构建产物、Tauri `target/`、PyInstaller 产物、DMG、凭据或签名数据。
 - 绝不提交 agent 交互与对话记录（如 `.beads/interactions.jsonl`）；任务跟踪数据本身通过 bd 的 Dolt remote 同步，不依赖工作树提交。
