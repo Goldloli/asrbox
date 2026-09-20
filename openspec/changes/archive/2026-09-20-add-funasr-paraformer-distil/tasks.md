@@ -64,3 +64,12 @@
 - [x] 9.6 回归与重打包：`npm run test:backend` 550 通过、`npm run test:backend:binary-smoke` 通过，随后重打 DMG
 - [x] 9.7 逐引擎排查影响面（进程内 A/B，`OMP_NUM_THREADS` 1 vs 16，90 秒片段）：CTranslate2 大模型影响严重（distil 56.8s → 13.1s，约 4.3 倍），CTranslate2 小模型无影响（faster-whisper-base 4.1s → 6.1s，单线程反而略快），torch/transformers 与 FunASR 无影响（whisper-base 5.8s 持平、fun-asr-nano 27.4s 持平），MOSS 轻微（19.9s → 16.8s）
 - [x] 9.8 修复后全模型复测（打包版热态 vs 开发环境热态，7 模型覆盖 4 引擎，90 秒片段）：whisper-base 8.1/8.1s、faster-whisper-base 8.1/8.1s、faster-whisper-large-v3-turbo 16.1/16.1s、distil 14.1/14.1s、moss 22.1/20.1s、paraformer-zh 12.1/12.1s、fun-asr-nano 30.1/30.1s；全部 `completed` 且段数/字符数与开发环境一致。唯一残留差异是安装新构建后的首个任务偏慢（冷启动：whisper-base 首跑 42.3s vs 热态 8.1s）
+
+## 10. Windows 桌面端验证与平台差异修复
+
+在 Windows PC 上完成安装包验证时发现并修复的平台差异（提交 `1f79df9`、`2975869`、`ffb9121`）：
+
+- [x] 10.1 `backend/build_binary.py` 的 funasr `--add-data` 目标路径改用 `as_posix()`：原先由 `Path` 渲染，Windows 会输出反斜杠，导致打包断言在 Windows 上必然失败、冻结包目录结构与断言不一致
+- [x] 10.2 模型列表把下载错误与兼容性提示分开渲染：兼容性提示本身已是面向用户的文案（如「模型文件未下载，下载后即可使用。」），不再经通用错误映射被替换成「操作未能完成，请查看技术详情后重试。」；下载错误仍走错误映射，原始后端文本保留在「详情」折叠区
+- [x] 10.3 桌面壳在后端停止路径上等待 17494 端口释放（最多 30 秒），并让健康探测把任何传输失败都视为"无健康后端"：避免重启时旧实例尚未释放端口、新实例拒绝启动
+- [x] 10.4 PC 端人工验证完成（安装包安装、三模型下载与转写、CPU 多线程、CUDA 开关），并在 macOS 侧复验：`npm run typecheck`、前端单测 47、`npm run test:backend` 550、`cargo check`、`npm run check:open-source`（85 e2e）全部通过
