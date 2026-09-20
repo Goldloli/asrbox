@@ -4,6 +4,25 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-20
+
+### Added
+
+- 本地模型目录新增三个模型：**Paraformer Large 中文**（中文转写并输出原生字级时间戳，适合中文字幕）、**Fun-ASR-Nano**（通义 2025 新模型，多语种含中文方言）与 **Faster Whisper Distil Large V3**（英文专用，速度约为 Large V3 的两倍）。三者均可在模型页下载、设为默认，并在转写页直接选择。
+- 模型页「模型天梯」为三个新模型补上实测等级（速度 / 准确率 / 语言覆盖），并注明测量口径来自 Windows + RTX 5080 与 macOS Apple Silicon CPU 两轮实测。
+
+### Changed
+
+- 兼容性提示与下载错误分开呈现：模型未下载等状态直接显示原因（如"模型文件未下载，下载后即可使用。"），不再被通用"操作未能完成，请查看技术详情后重试。"覆盖；真实下载错误仍走错误映射，原始后端文本保留在"详情"折叠区。
+- 下载中的模型行改为整行进度布局：文件名、百分比与"暂停 / 停止"排在同一行，避免窄列把文字挤成竖排。
+
+### Fixed
+
+- 修复打包版无法运行 faster-whisper 模型的问题：冻结包缺少 Silero VAD 资源，现已随包分发，并加入打包参数断言与二进制 smoke 断言。
+- 修复打包版带 VAD 的 FunASR 模型加载失败的问题：funasr 中 TorchScript 依赖的源码未随包，现按已安装版本自动收集；Windows 上的打包目标路径统一使用 POSIX 分隔符。
+- 修复打包版 CPU 推理被限制为单线程的问题：转写 worker 现在自行设置线程数（按 CPU 核数与本地并发上限分摊）。大型 CTranslate2 模型实测提速约 4 倍——18 分 05 秒英文视频由约 10 分钟缩短到约 2 分钟，字幕输出逐字一致。
+- 修复桌面端重启内置后端时与 17494 端口释放竞争、导致新实例拒绝启动的问题。
+
 ## [0.3.1] - 2026-09-19
 
 ### Added
@@ -316,7 +335,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Goldloli/asrbox/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Goldloli/asrbox/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Goldloli/asrbox/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Goldloli/asrbox/compare/v0.2.0...v0.2.1
