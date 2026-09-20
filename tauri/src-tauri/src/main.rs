@@ -275,6 +275,11 @@ async fn stop_server(app: tauri::AppHandle, state: State<'_, ServerState>) -> Re
     if let Some(child) = state.child.lock().map_err(|e| e.to_string())?.take() {
         let _ = child.kill();
     }
+    // Killing the child returns before the OS tears its listening socket down.
+    // start_server treats a backend that still answers /health as a foreign
+    // instance and refuses to start (unconditionally in packaged builds), so a
+    // restart must not race the release of port 17494.
+    wait_for_port_release().await;
     Ok(())
 }
 
@@ -745,12 +750,18 @@ async fn check_health() -> Result<bool, String> {
     let client = desktop_http_client()?;
     match client.get(format!("{SERVER_URL}/health")).send().await {
         Ok(response) if response.status().is_success() => {
-            let body = response.text().await.map_err(|e| e.to_string())?;
+            let body = match response.text().await {
+                Ok(body) => body,
+                Err(_) => return Ok(false),
+            };
             Ok(is_asrbox_health_response(&body))
         }
         Ok(_) => Ok(false),
-        Err(error) if error.is_connect() || error.is_timeout() => Ok(false),
-        Err(error) => Err(format!("Failed to check ASRbox server health: {error}")),
+        // A health probe only answers "is a healthy backend reachable?". Any
+        // transport failure - including a request that dies mid-flight while a
+        // backend shuts down - means there is none, and must not abort the
+        // caller: start_server would otherwise refuse to spawn a replacement.
+        Err(_) => Ok(false),
     }
 }
 
@@ -859,6 +870,16 @@ fn port_is_open() -> bool {
         return false;
     };
     std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300)).is_ok()
+}
+
+async fn wait_for_port_release() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if !port_is_open() {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 fn is_asrbox_health_response(body: &str) -> bool {
