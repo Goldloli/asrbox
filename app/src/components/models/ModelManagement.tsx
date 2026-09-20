@@ -100,9 +100,19 @@ export function ModelListRow({
   const { locale, t } = useI18n();
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
   const isActive = model.downloading || Boolean(progress);
-  const error = progress?.error ?? model.download_error ?? modelCompatibilityIssue(model, t, isActive) ?? model.error;
+  const downloadError = progress?.error ?? model.download_error;
+  const compatibilityIssue = modelCompatibilityIssue(model, t, isActive);
+  // A compatibility hint is already user-facing copy; running it through the
+  // error mapper would replace it with the generic "operation failed" fallback.
+  const errorMessage = downloadError
+    ? localizedErrorPresentation(new Error(downloadError), locale)
+    : compatibilityIssue
+      ? { summary: compatibilityIssue, detail: model.compatibility_error ?? '' }
+      : model.error
+        ? localizedErrorPresentation(new Error(model.error), locale)
+        : null;
   const isPaused = progress?.status === 'paused';
-  const hasDownloadError = Boolean(progress?.error || model.download_error);
+  const hasDownloadError = Boolean(downloadError);
   const storageUnavailable = model.storage_status === 'unavailable' || model.storage_status === 'migrating' || model.storage_status === 'read_only';
   const deviceLabels = modelDeviceLabelKeys(model.supported_devices);
   const [introOpen, setIntroOpen] = useState(false);
@@ -200,9 +210,9 @@ export function ModelListRow({
           <Progress value={activeProgress} />
         </div>
       )}
-      {error && (
+      {errorMessage && (
         <LocalizedTechnicalMessage
-          message={localizedErrorPresentation(new Error(error), locale)}
+          message={errorMessage}
           className={`rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]${isActive ? ' col-span-full' : ''}`}
         />
       )}
