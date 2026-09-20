@@ -13,11 +13,11 @@ import { LocalizedTechnicalMessage } from '../LocalizedTechnicalMessage';
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
-function modelCompatibilityIssue(model: ModelStatus, t: Translate): string | null {
+function modelCompatibilityIssue(model: ModelStatus, t: Translate, downloadPending: boolean): string | null {
   if (!model.compatibility_error) return null;
   switch (model.compatibility_error_code) {
     case 'model_not_downloaded':
-      return t('models.issueNotDownloaded');
+      return downloadPending ? null : t('models.issueNotDownloaded');
     case 'missing_files':
       return t('models.issueMissingFiles');
     case 'unknown_model':
@@ -99,8 +99,8 @@ export function ModelListRow({
 }) {
   const { locale, t } = useI18n();
   const activeProgress = progress?.progress ?? (model.downloading ? 5 : 0);
-  const error = progress?.error ?? model.download_error ?? modelCompatibilityIssue(model, t) ?? model.error;
   const isActive = model.downloading || Boolean(progress);
+  const error = progress?.error ?? model.download_error ?? modelCompatibilityIssue(model, t, isActive) ?? model.error;
   const isPaused = progress?.status === 'paused';
   const hasDownloadError = Boolean(progress?.error || model.download_error);
   const storageUnavailable = model.storage_status === 'unavailable' || model.storage_status === 'migrating' || model.storage_status === 'read_only';
@@ -169,34 +169,33 @@ export function ModelListRow({
           >
             <Info className="size-4" />
           </Button>
-          {isActive ? (
-            <>
-              <Button variant="secondary" size="sm" onClick={isPaused ? onResume : onPause}>
-                {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
-                {isPaused ? t('common.resume') : t('common.pause')}
-              </Button>
-              <Button variant="danger" size="sm" onClick={onStop}>
-                <Square className="size-4" />
-                {t('common.stop')}
-              </Button>
-            </>
-          ) : hasDownloadError ? (
-            <Button variant="secondary" size="sm" onClick={onRetry} disabled={storageUnavailable}>
+          {isActive ? null : hasDownloadError ? (
+            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={onRetry} disabled={storageUnavailable}>
               <RefreshCw className="size-4" />
               {t('common.retry')}
             </Button>
           ) : model.downloaded ? null : (
-            <Button variant="secondary" size="sm" onClick={onDownload} disabled={storageUnavailable}>
+            <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={onDownload} disabled={storageUnavailable}>
               <DownloadCloud className="size-4" />
               {t('common.download')}
             </Button>
           )}
       </div>
       {isActive && (
-        <div className="grid gap-1">
-          <div className="flex justify-between gap-3 text-xs text-app-muted">
-            <span className="truncate">{progress?.filename ?? progress?.status ?? t('common.downloading')}</span>
-            <span>{formatPercent(activeProgress)}</span>
+        <div className="col-span-full grid gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="min-w-0 flex-1 truncate text-xs text-app-muted">{progress?.filename ?? progress?.status ?? t('common.downloading')}</span>
+            <span className="text-xs text-app-muted">{formatPercent(activeProgress)}</span>
+            <div className="flex gap-1.5">
+              <Button variant="secondary" size="sm" className="whitespace-nowrap" onClick={isPaused ? onResume : onPause}>
+                {isPaused ? <Play className="size-4" /> : <Pause className="size-4" />}
+                {isPaused ? t('common.resume') : t('common.pause')}
+              </Button>
+              <Button variant="danger" size="sm" className="whitespace-nowrap" onClick={onStop}>
+                <Square className="size-4" />
+                {t('common.stop')}
+              </Button>
+            </div>
           </div>
           <Progress value={activeProgress} />
         </div>
@@ -204,7 +203,7 @@ export function ModelListRow({
       {error && (
         <LocalizedTechnicalMessage
           message={localizedErrorPresentation(new Error(error), locale)}
-          className="rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]"
+          className={`rounded-lg border border-[color:var(--app-danger)] bg-[var(--app-danger-soft)] px-3 py-2 text-xs text-[var(--app-danger)]${isActive ? ' col-span-full' : ''}`}
         />
       )}
       {introOpen && (

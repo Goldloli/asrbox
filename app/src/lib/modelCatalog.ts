@@ -26,6 +26,9 @@ export function modelDescription(model: ModelStatus, locale: Locale) {
   if (model.model_name === 'faster-whisper-small') return zh ? '速度和效果比较均衡，适合日常转写。' : 'Balanced speed and quality for daily transcription.';
   if (model.model_name === 'mlx-whisper-turbo') return zh ? '苹果芯片优先选择，速度快，适合本机使用。' : 'Best first pick on Apple Silicon, fast for local work.';
   if (model.model_name === 'sensevoice-small') return zh ? '中文和中英混合场景友好，依赖 FunASR；时间轴为近似值。' : 'Good for Chinese and mixed Chinese-English audio, requires FunASR; timeline is approximate.';
+  if (model.model_name === 'paraformer-zh') return zh ? '中文转写带原生字级时间戳，FunASR 生态成熟，适合中文字幕。' : 'Chinese ASR with native per-char timestamps on the mature FunASR stack; good for Chinese subtitles.';
+  if (model.model_name === 'fun-asr-nano') return zh ? '通义 2025 新模型，多语种（含方言），依赖 FunASR；时间轴为近似值。' : 'Tongyi 2025 multilingual model (dialect-friendly) on FunASR; timeline is approximate.';
+  if (model.model_name === 'faster-whisper-distil-large-v3') return zh ? '英文专用，速度约为 Large V3 的两倍、精度接近，适合英文批量转写。' : 'English-only at about twice the speed of Large V3 with near-Large quality; great for English batch jobs.';
   if (model.model_name === 'moss-transcribe-diarize') return zh
     ? '端到端转写 + 说话人分离一次完成，输出 [S01]/[S02] 标签；INTERSPEECH 2026 MLC-SLM 冠军模型，Apache 2.0。'
     : 'End-to-end transcription with speaker diarization in one pass, emitting [S01]/[S02] labels. INTERSPEECH 2026 MLC-SLM winner, Apache 2.0.';
@@ -53,8 +56,16 @@ export interface ModelLadderResult extends ModelLadderEntry {
 //   accuracy: S <=5%, A <=10%, B <=20%, C >20% (CER agreement with large-v3)
 //   language coverage: whisper family and MOSS (50+ languages) S, qwen3-asr (13) A,
 //   sensevoice (5) B.
+// Phase-1 additions graded from the 2026-09-19 macOS Apple Silicon CPU run
+// (90-second clips, agreement vs faster-whisper-large-v3-turbo; evidence:
+// backend/real_tests/results/asrbox-real-video-benchmark-20260919*.md):
+//   paraformer-zh 10.5s/8.3% CER (zh), fun-asr-nano 27.5s/6.8% CER (zh),
+//   distil-large-v3 14.1s/4.8% WER on its English domain (18:05 real video).
 export const MODEL_LADDER: Record<string, ModelLadderEntry> = {
   'sensevoice-small': { speed: 'S', accuracy: 'A', languages: 'B' }, // 15.3s, 8.4%
+  'paraformer-zh': { speed: 'S', accuracy: 'A', languages: 'B' }, // 10.5s, 8.3% CER, timestamped
+  'fun-asr-nano': { speed: 'C', accuracy: 'A', languages: 'B' }, // 27.5s, 6.8% CER
+  'faster-whisper-distil-large-v3': { speed: 'S', accuracy: 'S', languages: 'B' }, // 14.1s, 2.9-4.8% WER (English domain)
   'faster-whisper-base': { speed: 'S', accuracy: 'C', languages: 'S' }, // 15.3s, 38.7%
   'whisper-base': { speed: 'A', accuracy: 'C', languages: 'S' }, // 18.4s, 40.2%
   'whisper-large-v3-turbo': { speed: 'A', accuracy: 'A', languages: 'S' }, // 18.4s, 7.4%
@@ -105,12 +116,13 @@ function estimateModelLadder(model: ModelStatus): ModelLadderResult {
 export function isApproximateTimelineModel(modelName: string | null | undefined) {
   // Mirrors the registry's supports_timestamps=False local models: their cue times
   // are spread across each chunk's audio window instead of measured.
-  return Boolean(modelName) && (modelName!.startsWith('qwen3-asr') || modelName === 'sensevoice-small');
+  return Boolean(modelName) && (modelName!.startsWith('qwen3-asr') || modelName === 'sensevoice-small' || modelName === 'fun-asr-nano');
 }
 
 export function modelBestFor(model: ModelStatus, locale: Locale) {
   const zh = locale === 'zh';
   if (model.model_name === 'moss-transcribe-diarize') return zh ? '多人会议、说话人区分' : 'meetings, speaker separation';
+  if (model.model_name.includes('distil')) return zh ? '英文快速转写' : 'fast English transcription';
   if (model.model_name.includes('large')) return zh ? '高精度、长音频' : 'high accuracy, long audio';
   if (model.model_name.includes('turbo')) return zh ? '速度优先' : 'speed first';
   if (model.engine === 'mlx_whisper') return zh ? 'Apple Silicon' : 'Apple Silicon';
@@ -354,6 +366,48 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
       languages: 'Auto-detect plus Chinese (including Cantonese), English, Japanese, and Korean',
       bestFor: ['Chinese and mixed Chinese-English audio', 'Fast local transcription'],
       limitations: ['Approximate timeline: the model emits no timestamps, so cue times are spread across the audio', 'Limited language coverage (Chinese, English, Japanese, Korean, Cantonese)', 'Requires the FunASR runtime'],
+    },
+  },
+  'paraformer-zh': {
+    zh: {
+      capabilities: ['段级时间戳（由原生字级时间戳聚合）', '中文与英文识别'],
+      languages: '中文、英文',
+      bestFor: ['需要精确时间轴的中文字幕', '长音频（默认启用 VAD 切分）'],
+      limitations: ['无词级时间戳', '标点依赖后处理，原始输出无标点', '依赖 FunASR 运行时'],
+    },
+    en: {
+      capabilities: ['Segment timestamps (aggregated from native per-char timestamps)', 'Chinese and English recognition'],
+      languages: 'Chinese and English',
+      bestFor: ['Chinese subtitles that need a measured timeline', 'Long audio (VAD segmentation enabled by default)'],
+      limitations: ['No word-level timestamps', 'Raw output has no punctuation; punctuation relies on post-processing', 'Requires the FunASR runtime'],
+    },
+  },
+  'fun-asr-nano': {
+    zh: {
+      capabilities: ['多语言识别（含中文方言）'],
+      languages: '中（含方言）、英、日、韩、粤语',
+      bestFor: ['中文方言与多语种内容', '2025 通义新架构'],
+      limitations: ['时间轴为近似值：模型不输出时间戳，字幕时间按音频均摊', '体积较大（约 2 GB）', '依赖 FunASR 运行时'],
+    },
+    en: {
+      capabilities: ['Multilingual recognition (including Chinese dialects)'],
+      languages: 'Chinese (with dialects), English, Japanese, Korean, and Cantonese',
+      bestFor: ['Chinese dialects and multilingual audio', '2025 Tongyi architecture'],
+      limitations: ['Approximate timeline: the model emits no timestamps, so cue times are spread across the audio', 'Larger download (about 2 GB)', 'Requires the FunASR runtime'],
+    },
+  },
+  'faster-whisper-distil-large-v3': {
+    zh: {
+      capabilities: ['段级时间戳', '词级时间戳', '英文识别'],
+      languages: '仅英文',
+      bestFor: ['英文批量与长音频转写', '速度优先（约为 Large V3 两倍）'],
+      limitations: ['仅支持英文，不能用于中文等其它语言', '精度略低于 Large V3'],
+    },
+    en: {
+      capabilities: ['Segment timestamps', 'Word-level timestamps', 'English recognition'],
+      languages: 'English only',
+      bestFor: ['English batch and long-audio transcription', 'Speed first (about twice as fast as Large V3)'],
+      limitations: ['English only; not usable for Chinese or other languages', 'Slightly less accurate than Large V3'],
     },
   },
 };

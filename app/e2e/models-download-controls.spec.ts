@@ -240,3 +240,56 @@ test('transcription model selector shows compact CPU and GPU support', async ({ 
   await expect(page.getByRole('option', { name: /MLX Whisper Turbo · GPU only/ })).toBeVisible();
   await expect(modelField.getByText('The device actually used depends on this computer and the available runtime.')).toHaveCount(0);
 });
+
+test('downloading model row keeps progress, controls, and real errors on full-width rows', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
+  });
+  await page.route('**/models/status', (route) => route.fulfill({
+    json: {
+      models: [
+        modelStatus({
+          downloading: true,
+          compatible: false,
+          compatibility_error: 'Model whisper-base is not downloaded',
+          compatibility_error_code: 'model_not_downloaded',
+        }),
+        modelStatus({
+          model_name: 'faster-whisper-small',
+          display_name: 'Faster Whisper Small',
+          engine: 'faster_whisper',
+          model_size: 'small',
+          downloading: true,
+          download_error: 'temporary network failure',
+        }),
+      ],
+    },
+  }));
+  await page.route('**/models/active-downloads', (route) => route.fulfill({
+    json: [
+      { model_name: 'whisper-base', current: 25, total: 100, progress: 25, filename: 'model.safetensors', status: 'downloading', timestamp: new Date().toISOString() },
+      { model_name: 'faster-whisper-small', current: 10, total: 100, progress: 10, filename: 'model.bin', status: 'downloading', timestamp: new Date().toISOString() },
+    ],
+  }));
+  await page.route('**/models/storage', (route) => route.fulfill({
+    json: { models_dir: '/tmp/asrbox/models', used_bytes: 0, free_bytes: 0, total_bytes: 0, models: [] },
+  }));
+
+  await page.goto('/models');
+
+  const downloading = page.locator('[data-testid="model-row"]').filter({ hasText: 'Whisper Base' }).first();
+  const rowBox = await downloading.boundingBox();
+  const progressBox = await downloading.locator('div.col-span-full').first().boundingBox();
+  expect(progressBox?.width).toBeGreaterThan((rowBox?.width ?? 0) * 0.9);
+  await expect(downloading.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect(downloading.getByRole('button', { name: 'Stop' })).toBeVisible();
+  await expect(downloading.getByText('Model files are not downloaded yet.')).toHaveCount(0);
+
+  const failed = page.locator('[data-testid="model-row"]').filter({ hasText: 'Faster Whisper Small' }).first();
+  const failedRowBox = await failed.boundingBox();
+  const errorBox = await failed
+    .getByText('Details', { exact: true })
+    .locator('xpath=ancestor::div[1]')
+    .boundingBox();
+  expect(errorBox?.width).toBeGreaterThan((failedRowBox?.width ?? 0) * 0.9);
+});

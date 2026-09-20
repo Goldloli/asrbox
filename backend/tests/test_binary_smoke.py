@@ -26,6 +26,14 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
         binary = binary / ("asrbox-server.exe" if os.name == "nt" else "asrbox-server")
     assert binary.is_file()
 
+    bundle = binary.parent / "_internal"
+    vad_assets = sorted((bundle / "faster_whisper" / "assets").glob("*.onnx")) if (bundle / "faster_whisper" / "assets").is_dir() else []
+    assert vad_assets, "faster-whisper VAD assets are missing from the frozen bundle"
+    from backend.build_binary import _funasr_torchscript_sources
+
+    for source, destination in _funasr_torchscript_sources():
+        assert (bundle / destination / source.name).is_file(), f"funasr TorchScript source is missing from the frozen bundle: {destination / source.name}"
+
     if sys.platform == "darwin" and os.environ.get("ASRBOX_BINARY_MLX") == "1":
         mlx_check = subprocess.run(
             [str(binary), "--runtime-check", "mlx"],
@@ -67,6 +75,14 @@ def test_frozen_binary_health_runtime_and_shutdown() -> None:
         assert runtime_data["funasr_available"] is True, capability_detail
         assert runtime_data["moss_transcribe_diarize_available"] is True, capability_detail
         assert time.time() - start < 180
+
+        models = requests.get(f"http://127.0.0.1:{port}/models/status", timeout=30)
+        assert models.status_code == 200
+        frozen_models = {item["model_name"]: item for item in models.json()["models"]}
+        assert {"paraformer-zh", "fun-asr-nano", "faster-whisper-distil-large-v3"} <= set(frozen_models)
+        assert frozen_models["paraformer-zh"]["supports_timestamps"] is True
+        assert frozen_models["fun-asr-nano"]["supports_timestamps"] is False
+        assert frozen_models["faster-whisper-distil-large-v3"]["languages"] == ["en"]
 
         shutdown = requests.post(f"http://127.0.0.1:{port}/shutdown", timeout=30)
         assert shutdown.status_code == 200

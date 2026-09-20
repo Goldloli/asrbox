@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox registers 15 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox registers 18 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -40,11 +40,14 @@ Sizes are registry estimates, not exact download promises.
 | `faster-whisper-large-v3-turbo` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 1,600 MB | Yes |
 | `mlx-whisper-turbo` | MLX Whisper | Apple GPU (MLX; Apple Silicon only) | ModelScope, then Hugging Face | 1,600 MB | Yes |
 | `sensevoice-small` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope | 900 MB | No |
+| `paraformer-zh` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 850 MB | No |
+| `fun-asr-nano` | FunASR | CPU, NVIDIA GPU (CUDA) | ModelScope | 2,050 MB | No |
+| `faster-whisper-distil-large-v3` | Faster Whisper / CTranslate2 | CPU, NVIDIA GPU (CUDA) | Hugging Face | 1,450 MB | Yes |
 | `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 1,600 MB | No |
 | `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 3,900 MB | No |
 | `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 1,900 MB | No |
 
-The estimates add up to roughly 28.2 GiB. A real all-model installation may use more or less space.
+The estimates add up to roughly 32.4 GiB. A real all-model installation may use more or less space.
 
 These device labels describe the execution paths supported by each ASRbox engine; they do not assert that the listed accelerator is present or active on the current machine. The runtime keeps its existing automatic selection and fallback behavior, so the device actually used depends on available hardware and runtime support.
 
@@ -55,13 +58,16 @@ These device labels describe the execution paths supported by each ASRbox engine
 - Apple Silicon optimized path: `mlx-whisper-turbo`.
 - Docker/Linux CPU quick start: `faster-whisper-base` or `faster-whisper-small`; MLX is unavailable.
 - Chinese, Cantonese, English, Japanese, or Korean with a compact model: `sensevoice-small`.
+- Chinese subtitles that need a measured timeline: `paraformer-zh`. It aggregates the model's native per-character timestamps into segment cue times and enables VAD segmentation by default; raw output has no punctuation, so punctuation relies on post-processing.
+- Chinese dialects and multilingual audio: `fun-asr-nano` (Tongyi 2025, Apache 2.0). It emits no timestamps, so its cue times are approximate.
+- English-only batch or long audio: `faster-whisper-distil-large-v3`, roughly twice as fast as Large V3 with near-Large quality. It cannot transcribe Chinese or other languages.
 - Broad multilingual Qwen path: `qwen3-asr-0.6b`; use `qwen3-asr-1.7b` when additional model capacity is worth the memory and disk cost.
 - End-to-end speaker diarization without `HF_TOKEN` or a separate diarization model: `moss-transcribe-diarize`. It emits timestamped segments with `[S01]`-style speaker labels in one pass, supports 50+ languages and up to roughly 90 minutes of audio per run, and is Apache 2.0 licensed. It has no word-level timestamps and runs slowly on CPU for long recordings.
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
 
-Timeline note: `qwen3-asr-*` and `sensevoice-small` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model or `moss-transcribe-diarize` when precise timing matters.
+Timeline note: `qwen3-asr-*`, `sensevoice-small`, and `fun-asr-nano` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model, `paraformer-zh`, or `moss-transcribe-diarize` when precise timing matters.
 
 ## Transcription Safeguards
 
@@ -98,6 +104,14 @@ The Linux Docker runtime excludes Apple-only `mlx` and `mlx-whisper` packages. T
 ## Verification Status
 
 The 14 models registered as of 2026-07-13 completed transcription of a real MP4 excerpt in the maintainer's macOS Apple Silicon environment on that date. Each run returned non-empty text and segments. `moss-transcribe-diarize` completed a real 6.8-minute two-person interview MP4 on 2026-07-25 in the same environment, returning 161 timestamped segments with three native speaker labels (`S01`–`S03`). Automated API tests cover download status, source fallback, pause/resume/stop/retry, compatibility, storage totals, and duplicate-weight filtering.
+
+On 2026-09-19 the three models added by the phase-1 catalog expansion were verified the same way: `paraformer-zh` transcribed a real 90-second Chinese WAV into 8 timestamped segments (VAD on, token-level timestamps aggregated, monotonic timeline), `fun-asr-nano` transcribed the same clip into 7 segments, and `faster-whisper-distil-large-v3` transcribed a real English WAV sample. Each run completed all six export formats and was deleted afterwards; results are recorded under `backend/real_tests/results/asrbox-real-models-20260919-*.md`.
+
+A second 2026-09-19 real-world benchmark ran a user-provided 18:05 English speech video (Trump Pentagon 9/11 memorial address) end-to-end through the production inference path, plus the 90-second Chinese ladder clip, on macOS Apple Silicon CPU with `faster-whisper-large-v3-turbo` as reference: `faster-whisper-distil-large-v3` was 10–25% faster than the reference with 2.9–4.8% WER on English; `paraformer-zh` was the fastest model in the catalog (RTF 0.107) with 8.3% CER on Chinese and 16.8–19.9% WER on English; `fun-asr-nano` reached 6.8% CER on Chinese and 6.6% WER on the full English video. The English-only model was also confirmed to hallucinate English on Chinese audio, validating the English-only catalog labeling. Evidence: `backend/real_tests/results/asrbox-real-video-benchmark-20260919*.md`.
+
+The same three models were then checked in the running models page itself (local backend over the repository `data/` directory, 2026-09-19): all three render like existing entries — downloaded badge, CPU/GPU support, speed and accuracy grades, capability badges, and a working "set as default" action; the ladder shows their measured grades (`S S B`, `S A B`, `C A B`) with no estimated `*` marker; the category filters group them as expected (`paraformer-zh` and `fun-asr-nano` under 中文优先, `faster-whisper-distil-large-v3` under Faster Whisper); and each detail panel states its own capability set and limitations. That pass also corrected two copy defects: the Distil entry's capability list had reused the shared Faster Whisper template and claimed multilingual recognition and automatic language detection while its language coverage said English only, and the ladder footnote attributed every measured grade to the Windows + RTX 5080 run. Both now describe what the models and the measurements actually are.
+
+The packaged desktop build was verified separately, because the frozen sidecar carries its own runtime copy of these engines. On 2026-09-20 a real 18:05 English speech video and real 90-second Chinese audio were transcribed end-to-end through `POST /transcriptions/path` on the frozen binary: `faster-whisper-distil-large-v3` returned 256 timestamped segments for the full English video and 21 for a 90-second excerpt, `paraformer-zh` returned 8 segments, and `fun-asr-nano` returned 7. Three packaging gaps surfaced and are fixed in that same change: faster-whisper's Silero VAD asset was not bundled (any faster-whisper transcription failed with `MODEL_LOAD_FAILED`); the funasr sources behind `@torch.jit.script` were absent from the bundle, which made TorchScript import fail and left the `Paraformer` model class unregistered (FunASR transcription with VAD failed); and the frozen runtime hook pinned `OMP_NUM_THREADS` to 1 for the whole process tree, so the transcription worker inherited a single-threaded CPU engine. The build now ships `faster_whisper` package data and every funasr source that TorchScript reads, the worker subprocess sets its own thread count, and the build-argument test plus the frozen-binary smoke test assert the bundled payload. That thread pin measured as 57–60 seconds for a 90-second English excerpt and 600.9 seconds for the full 18:05 video; after the fix the same binary returns 15.1 seconds and 129.6 seconds with byte-identical transcripts (256 segments, 10777 characters).
 
 This evidence verifies the tested dependency snapshot and machine. Docker build and smoke coverage verify runtime startup and compatibility reporting, not the accuracy or speed of all models on every Linux CPU. Future upstream revisions, media codecs, architectures, and hardware can behave differently.
 

@@ -54,6 +54,14 @@ Before adding a model to the catalog or bundling a model:
 5. Document required attribution.
 6. Avoid committing model weights to this repository.
 
+### Catalog model license record
+
+| Model | Source | License | Notes |
+| --- | --- | --- | --- |
+| Paraformer-large zh (`paraformer-zh`) | ModelScope `iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch`; HF mirror `funasr/paraformer-zh` | FunASR code MIT; model under the ModelScope Model License Agreement (verify before redistribution) | Commercial use permitted under the model agreement; ASRbox downloads on demand and never bundles the weights |
+| Fun-ASR-Nano (`fun-asr-nano`) | ModelScope `FunAudioLLM/Fun-ASR-Nano-2512` | Apache 2.0 (package and model) | No attribution obligation beyond notice retention |
+| Distil-Whisper large-v3 (`faster-whisper-distil-large-v3`) | HF `Systran/faster-distil-whisper-large-v3` (CTranslate2 conversion of `distil-whisper/distil-large-v3`) | MIT | English-only distillation of Whisper large-v3 |
+
 ## Release Checklist
 
 Before a public release:

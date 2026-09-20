@@ -604,6 +604,20 @@ def _local_worker_command(request_path: Path, result_path: Path) -> list[str]:
     return command
 
 
+def _local_worker_environment(concurrency: int) -> dict[str, str]:
+    """Lift the frozen runtime's startup thread cap for the inference worker.
+
+    The PyInstaller runtime hook pins OMP_NUM_THREADS to 1 so the desktop startup
+    stays cheap. A worker inheriting that pin runs CPU engines such as
+    CTranslate2 single-threaded, which measured roughly four times slower than
+    the same work in a development environment.
+    """
+    threads = max(1, (os.cpu_count() or 4) // max(1, concurrency))
+    environment = os.environ.copy()
+    environment["OMP_NUM_THREADS"] = str(threads)
+    return environment
+
+
 def _read_worker_state(path: Path) -> dict[str, Any] | None:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -779,7 +793,14 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
             return ""
 
     try:
-        process = subprocess.Popen(_local_worker_command(request_path, result_path), stdout=subprocess.DEVNULL, stderr=stderr_file, text=True, **no_window_kwargs())
+        process = subprocess.Popen(
+            _local_worker_command(request_path, result_path),
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_file,
+            text=True,
+            env=_local_worker_environment(settings.max_concurrent_local_tasks),
+            **no_window_kwargs(),
+        )
         while True:
             if task_runtime.is_cancelled(row.id):
                 _terminate_worker(process)

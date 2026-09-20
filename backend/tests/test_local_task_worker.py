@@ -81,6 +81,19 @@ def test_local_worker_command_supports_source_and_frozen_runtimes(tmp_path: Path
     assert frozen_command[-4:] == ["--local-worker-request", str(request_path), "--local-worker-result", str(result_path)]
 
 
+def test_local_worker_environment_lifts_the_frozen_thread_cap(monkeypatch) -> None:
+    from backend.services import tasks
+
+    monkeypatch.setenv("OMP_NUM_THREADS", "1")
+    monkeypatch.setattr(tasks.os, "cpu_count", lambda: 16)
+
+    assert tasks._local_worker_environment(1)["OMP_NUM_THREADS"] == "16"
+    assert tasks._local_worker_environment(4)["OMP_NUM_THREADS"] == "4"
+
+    monkeypatch.setattr(tasks.os, "cpu_count", lambda: 3)
+    assert tasks._local_worker_environment(4)["OMP_NUM_THREADS"] == "1"
+
+
 def test_combining_local_chunks_filters_overlap_and_offsets_timestamps() -> None:
     from backend.services.tasks import _combine_local_worker_results
 
@@ -162,7 +175,7 @@ def test_stalled_local_worker_is_terminated_and_reported(tmp_path: Path, monkeyp
     monkeypatch.setattr(
         tasks.settings_service,
         "get_settings",
-        lambda db: SimpleNamespace(vad=False, word_timestamps=False),
+        lambda db: SimpleNamespace(vad=False, word_timestamps=False, max_concurrent_local_tasks=1),
     )
     monkeypatch.setattr(
         tasks,

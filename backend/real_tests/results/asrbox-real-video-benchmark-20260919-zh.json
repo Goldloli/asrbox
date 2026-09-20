@@ -1,0 +1,26 @@
+{
+  "faster-whisper-large-v3-turbo": {
+    "wall_seconds": 22.69,
+    "rtf": 0.2521,
+    "text": "我想跟我的粉丝和观众们说其实大家都是很优秀的只是还没有完全感受到AI的能力和边界没关系慢慢来因为大家有的都是用AI不久有的用AI变成也不是很长时间也没有很深度知己知彼你如果说是尽量把尽早的把AI的人力和邊界都摸清楚的话其实万别不离其中这些东西不会差得很远其实最终底下都是这么个事没有什么太大的新的东西接下来我讲的两个AI的特性任何人使用AI的时候一定要时刻记在心里首先就是AI的上架文和注意力上枪文太满关键的信息会被淹没虽然现在很多模型我们都知道上枷文窗口可以达到1兆的token能读非常多的文档但这也不是代表AI就能稳定调用所有文桓里的每一个规则因为它不是数据库不是说你把所有文挥进去它就会像插表一样稳定的记住每一条规则如果你一开始就让AI读取全部的项目文档然后再说我又开发一个新的功能或者我又维护某个模块虽然文桓信息都在上下文里但模型在写代码生成每一步输出的时候并不会同等重视所有的内容它会根据当前任务最近的指令还有一些报线信息来动态决定哪些信息更重要所以文框看到但不等于能稳订用上上下门文桂太多的时候光线的信息",
+    "segment_count": 43
+  },
+  "faster-whisper-distil-large-v3": {
+    "wall_seconds": 25.01,
+    "rtf": 0.2779,
+    "text": "I want to my fans and people Actually, everyone is very Goods But it's not even when we're all right now. It doesn't really There are many long time And there isn't a lot of times Not too Evening-toeat You if you If you can't To get in the early The AI's ability or binnety Aller actually one may be From these things will come to far away actually, at the there's just a lot of things. Next to the other than two A. A. R. T.'s that people use AA when you need always is AI's eyeingly and attentionity. The Xanxiawant too much, the key will be emmered. So now many models we know on the front door can't allow an e-zodeled token can do very much more than but this also means it doesn't mean that way or even if they're able to maintain down using all the world in every new but when it's not When we can't even if you're long as well enough",
+    "segment_count": 36
+  },
+  "paraformer-zh": {
+    "wall_seconds": 10.5,
+    "rtf": 0.1167,
+    "text": "我想跟我的粉丝和观众们说其实大家都是很优秀的只是还没有完全感受到 AI 的能力和边界没关系慢慢来因为大家有的都是用 AI 不久有有的用 AI 编程也不是很长时间也没有很深度嗯知己知彼你如果说是尽量把尽早的把 AI 的能力和边界都摸清楚的话其实万变不离其宗这些东西不会差的很远其实最终说是都是这么个事没没有什么太大的新的东西接下来我讲的两个 AI 的特性任何人使用 AI 的时候一定要时刻记在心里首先就是 AI 的上下文和注意力上下文太满关键的信息会被淹没虽然现在很多模型我们都知道上下文窗口可以达到一兆的 token 能读非常多的文档但这也不是代表 AI 就能稳定调用所有文档里的没的规则因为它不是数据库不是说你把所有文档喂进去它就会像查表一样稳定的记住每一条规则如果你一开始就让 AI 读取全部的项目文档然后再说我又开发一个新的功能或者我用我用某个模块所有文档信息都在上下文里当模型在写代码生成每一步输出的时候并不会同等重视所有的内容他会根据当前任务最近的指令还有一些报错信息来动态决定哪些信息更重要所以文档看到但不等于能稳定用上上下文文档太多的时候关键的信息",
+    "segment_count": 8
+  },
+  "fun-asr-nano": {
+    "wall_seconds": 27.51,
+    "rtf": 0.3057,
+    "text": "我想跟我的粉丝和观众们说，其实大家都是很优秀的，只是还没有完全感受到 AI 的能力和边界。没关系，慢慢来，因为大家有的都是用 AI 不久，有有的用 AI 编程也不是很长时间，也没有很深度。嗯，知己知彼。你如果说是尽量把尽早的把 AI 的能力和边界都摸清楚的话，其实万倍不离其中，这些东西不会差的很远。其实最终底下都是这么个事，没 没有什么太大的新的东西。接下来我讲的两个AI的特性，任何人使用AI的时候一定要时刻记在心里。首先就是AI的上下文和注意力，上下文太满，关键的信息会被淹没。虽然现在很多模型我们都知道上下文窗口可以达到一兆的TOKEN，能读非常多的文档，但这也不是代表AI就能稳定调用所有文档里的每一条规则，因为它不是数据库。不是说你把所有文档喂进去，它就会像查表一样。 稳定的记住每一条规则。 如果你一开始就让AI读取全部的项目文档。 然后再说，我又开发一个新的功能。 或者我要维护某个模块。 虽然文档信息都在上下文里。 当模型在写代码生成每一步输出的时候。 并不会同等重视所有的内容。 它会根据当前任务最近的指令。 还有一些报错信息。 来动态决定哪些信息更重要。 所以文档看到，但不等于能稳定用上。 上下文文档太多的时候。 光线的信息。",
+    "segment_count": 1
+  }
+}

@@ -206,6 +206,9 @@ def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Pa
         "qwen3-asr-1.7b",
         "mlx-whisper-turbo",
         "sensevoice-small",
+        "paraformer-zh",
+        "fun-asr-nano",
+        "faster-whisper-distil-large-v3",
     } <= names
     by_name = {model["model_name"]: model for model in response.json()["models"]}
     assert by_name["whisper-base"]["downloaded"] is False
@@ -214,6 +217,14 @@ def test_models_status_includes_whisper_and_chinese_enhanced_models(tmp_path: Pa
     assert by_name["qwen3-asr-1.7b"]["source"] == "modelscope"
     assert by_name["qwen3-asr-1.7b"]["source_candidates"][0]["source"] == "modelscope"
     assert by_name["qwen3-asr-1.7b"]["source_candidates"][0]["repo_id"] == "Qwen/Qwen3-ASR-1.7B-hf"
+    assert by_name["paraformer-zh"]["preferred_source"] == "modelscope"
+    assert by_name["paraformer-zh"]["supports_timestamps"] is True
+    assert by_name["paraformer-zh"]["supports_word_timestamps"] is False
+    assert by_name["fun-asr-nano"]["supports_timestamps"] is False
+    assert by_name["fun-asr-nano"]["downloaded"] is False
+    assert by_name["faster-whisper-distil-large-v3"]["languages"] == ["en"]
+    assert by_name["faster-whisper-distil-large-v3"]["preferred_source"] == "huggingface"
+    assert by_name["faster-whisper-distil-large-v3"]["supports_word_timestamps"] is True
     assert by_name["mlx-whisper-turbo"]["preferred_source"] == "modelscope"
 
 
@@ -2514,11 +2525,11 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert "mlx.core" in command
     assert "mlx._reprlib_fix" in command
     assert command[command.index("--collect-binaries") + 1] == "mlx"
-    assert command.count("--collect-data") == 3
-    assert command[command.index("--collect-data", command.index("--collect-data") + 1) + 1] == "mlx"
-    assert command[command.index("--collect-data") + 1] == "funasr"
-    mlx_data_index = command.index("--collect-data", command.index("--collect-data", command.index("--collect-data") + 1) + 1)
-    assert command[mlx_data_index + 1] == "mlx_whisper"
+    assert command.count("--collect-data") == 4
+    collect_data = [command[index + 1] for index, token in enumerate(command) if token == "--collect-data"]
+    assert collect_data == ["funasr", "faster_whisper", "mlx", "mlx_whisper"]
+    add_data = [command[index + 1] for index, token in enumerate(command) if token == "--add-data"]
+    assert any(entry.endswith("cif_predictor.py:funasr/models/paraformer") for entry in add_data)
     assert "--copy-metadata" not in command
     assert command[command.index("--exclude-module") + 1] == "torchcodec"
 

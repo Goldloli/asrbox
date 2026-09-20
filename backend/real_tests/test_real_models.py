@@ -104,12 +104,18 @@ def _wait_for_model(client: TestClient, model_name: str, timeout_s: int) -> dict
         response = client.get("/models/status")
         assert response.status_code == 200
         last = next(item for item in response.json()["models"] if item["model_name"] == model_name)
-        if last["downloaded"] and last.get("compatible") is True:
+        # Catalog compatibility is rendered without heavyweight runtime imports,
+        # so a downloaded model may report compatible=None (probe pending). The
+        # authoritative runtime check runs before task execution, so None is an
+        # acceptable wait state while an explicit False is a hard failure.
+        if last["downloaded"] and last.get("compatible") is False:
+            raise AssertionError(f"{model_name} runtime incompatible: {last.get('compatibility_error')}")
+        if last["downloaded"] and last.get("compatible") is not False:
             return last
         if last.get("download_error") or last.get("error"):
             raise AssertionError(f"{model_name} download failed: {last.get('download_error') or last.get('error')}")
         time.sleep(2)
-    raise AssertionError(f"{model_name} did not become downloaded+compatible before timeout; last={last}")
+    raise AssertionError(f"{model_name} did not become downloaded before timeout; last={last}")
 
 
 def _wait_for_task(client: TestClient, task_id: str, timeout_s: int) -> dict:
@@ -154,12 +160,12 @@ def test_every_local_model_real_transcription(model_config) -> None:
 
             status = next(item for item in status_response.json()["models"] if item["model_name"] == model_config.model_name)
             result_record["preferred_source"] = status.get("preferred_source")
-            if not status["downloaded"] or status.get("compatible") is not True:
+            if not status["downloaded"] or status.get("compatible") is False:
                 download = client.post("/models/download", json={"model_name": model_config.model_name})
                 assert download.status_code == 200
                 status = _wait_for_model(client, model_config.model_name, download_timeout)
             assert status["downloaded"] is True
-            assert status.get("compatible") is True
+            assert status.get("compatible") is not False
             result_record["installed_source"] = status.get("installed_source")
             result_record["installed_repo_id"] = status.get("installed_repo_id")
 

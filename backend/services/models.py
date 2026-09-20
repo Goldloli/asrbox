@@ -352,7 +352,7 @@ def check_model_compatibility(
         if not _has_any(model_dir, ("config.json",)):
             missing.append("config.json")
     elif engine == "funasr":
-        for required in ("config.yaml", "model.pt", "am.mvn"):
+        for required in model_config.required_files or ("config.yaml", "model.pt", "am.mvn"):
             if not _has_any(model_dir, (required,)):
                 missing.append(required)
         torchaudio_ready = _runtime_capability(runtime_snapshot, "torchaudio_available", torchaudio_available)

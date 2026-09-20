@@ -35,6 +35,25 @@ BASE_HIDDEN_IMPORTS = [
 ]
 
 
+def _funasr_torchscript_sources() -> list[tuple[Path, Path]]:
+    """Collect funasr sources that TorchScript reads at import time.
+
+    PyInstaller imports funasr from its PYZ archive, so the source files behind
+    `@torch.jit.script` functions do not exist in the frozen bundle and those
+    modules fail to import. funasr then never registers the model class, and the
+    VAD pipeline (which resolves models by registry name) cannot load it.
+    """
+    import funasr
+
+    package_root = Path(funasr.__file__).resolve().parent
+    sources: list[tuple[Path, Path]] = []
+    for path in sorted(package_root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "torch.jit.script" in text or "@torch.jit." in text:
+            sources.append((path, path.parent.relative_to(package_root.parent)))
+    return sources
+
+
 def _write_funasr_module_manifest(build_root: Path) -> Path:
     """Record every funasr submodule for the frozen runtime hook.
 
@@ -71,6 +90,8 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "funasr",
         "--collect-submodules",
         "funasr",
+        "--collect-data",
+        "faster_whisper",
         "--add-data",
         f"{funasr_manifest}:.",
         "--add-data",
@@ -86,6 +107,8 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         "--runtime-hook",
         str(root / "pyi_rth_funasr.py"),
     ]
+    for source, destination in _funasr_torchscript_sources():
+        args.extend(["--add-data", f"{source}:{destination}"])
     imports = list(BASE_HIDDEN_IMPORTS)
     if cuda:
         imports.extend(["nvidia", "torch.cuda"])

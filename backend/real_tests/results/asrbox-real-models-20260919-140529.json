@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-09-19T14:05:29.890305+00:00",
+  "total": 2,
+  "passed": 2,
+  "failed": 0,
+  "items": [
+    {
+      "model_name": "paraformer-zh",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "3ecceace-b925-45d2-9f0b-d1907b842a4a",
+      "text_length": 481,
+      "segments_count": 8
+    },
+    {
+      "model_name": "fun-asr-nano",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "FunAudioLLM/Fun-ASR-Nano-2512",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "71af9018-b4e6-42b0-9004-2973fad8b285",
+      "text_length": 525,
+      "segments_count": 7
+    }
+  ]
+}

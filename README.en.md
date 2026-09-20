@@ -24,7 +24,7 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 ## Highlights
 
 - Preflight and transcribe one or many audio/video files.
-- Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Qwen3-ASR, or an online ASR provider.
+- Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Paraformer, Fun-ASR-Nano, Qwen3-ASR, or an online ASR provider.
 - Three-column task center: task list, waveform player with linked transcript, and status/exports on one screen.
 - Edit segment text directly in the Edit subtitles mode; one save creates exactly one new immutable version.
 - Preserve transcription, retranscription, manual edit, restore, post-processing, and AI-applied versions.

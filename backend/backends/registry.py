@@ -32,6 +32,7 @@ class ASRModelConfig:
     supports_streaming: bool = False
     allow_patterns: list[str] | None = None
     source_candidates: list[ModelSourceCandidate] = field(default_factory=list)
+    required_files: list[str] | None = None
 
 
 HF_ASR_ALLOW_PATTERNS = [
@@ -73,7 +74,7 @@ def _whisper_config(model_size: str, repo_id: str, size_mb: int, display_suffix:
     )
 
 
-def _faster_whisper_config(model_size: str, repo_id: str, size_mb: int, display_suffix: str | None = None) -> ASRModelConfig:
+def _faster_whisper_config(model_size: str, repo_id: str, size_mb: int, display_suffix: str | None = None, languages: list[str] | None = None) -> ASRModelConfig:
     suffix = display_suffix or model_size.replace("-", " ").title()
     return ASRModelConfig(
         model_name=f"faster-whisper-{model_size}",
@@ -84,7 +85,7 @@ def _faster_whisper_config(model_size: str, repo_id: str, size_mb: int, display_
         model_size=model_size,
         size_mb=size_mb,
         supported_devices=["cpu", "cuda"],
-        languages=COMMON_WHISPER_LANGUAGES,
+        languages=languages or COMMON_WHISPER_LANGUAGES,
         runtime="ctranslate2",
         supports_word_timestamps=True,
         allow_patterns=HF_ASR_ALLOW_PATTERNS,
@@ -196,6 +197,51 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             supports_timestamps=False,
             supports_word_timestamps=False,
             source_candidates=[ModelSourceCandidate("modelscope", "iic/SenseVoiceSmall", priority=0, verified=True)],
+        ),
+        ASRModelConfig(
+            model_name="paraformer-zh",
+            display_name="Paraformer Large 中文",
+            engine="funasr",
+            source="modelscope",
+            repo_id="iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            model_size="large",
+            size_mb=850,
+            supported_devices=["cpu", "cuda"],
+            languages=["zh", "en"],
+            runtime="funasr",
+            supports_timestamps=True,
+            supports_word_timestamps=False,
+            # The HF mirror is downloaded with allow_patterns (ModelScope ignores
+            # them), so the list must name this repo's actual files explicitly:
+            # the shared HF_ASR_ALLOW_PATTERNS would skip model.pt/config.yaml.
+            allow_patterns=["config.yaml", "model.pt", "am.mvn", "seg_dict", "tokens.json", "configuration.json"],
+            source_candidates=[
+                ModelSourceCandidate("modelscope", "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch", priority=0, verified=True),
+                ModelSourceCandidate("huggingface", "funasr/paraformer-zh", priority=10, verified=True),
+            ],
+        ),
+        ASRModelConfig(
+            model_name="fun-asr-nano",
+            display_name="Fun-ASR-Nano",
+            engine="funasr",
+            source="modelscope",
+            repo_id="FunAudioLLM/Fun-ASR-Nano-2512",
+            model_size="nano",
+            size_mb=2050,
+            supported_devices=["cpu", "cuda"],
+            languages=["zh", "en", "ja", "ko", "yue"],
+            runtime="funasr",
+            supports_timestamps=False,
+            supports_word_timestamps=False,
+            source_candidates=[ModelSourceCandidate("modelscope", "FunAudioLLM/Fun-ASR-Nano-2512", priority=0, verified=True)],
+            required_files=["config.yaml", "model.pt", "multilingual.tiktoken", "Qwen3-0.6B/tokenizer.json"],
+        ),
+        _faster_whisper_config(
+            "distil-large-v3",
+            "Systran/faster-distil-whisper-large-v3",
+            1450,
+            "Distil Large V3",
+            languages=["en"],
         ),
     ]
 

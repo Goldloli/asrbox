@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-09-19T12:30:08.137203+00:00",
+  "total": 1,
+  "passed": 1,
+  "failed": 0,
+  "items": [
+    {
+      "model_name": "faster-whisper-distil-large-v3",
+      "ok": true,
+      "preferred_source": "huggingface",
+      "installed_source": "huggingface",
+      "installed_repo_id": "Systran/faster-distil-whisper-large-v3",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "8de9e435-4af8-45e9-a396-048f5ed8fabd",
+      "text_length": 153,
+      "segments_count": 3
+    }
+  ]
+}
