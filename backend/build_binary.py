@@ -108,7 +108,9 @@ def build_args(*, cuda: bool = False, mlx: bool = False) -> list[str]:
         str(root / "pyi_rth_funasr.py"),
     ]
     for source, destination in _funasr_torchscript_sources():
-        args.extend(["--add-data", f"{source}:{destination}"])
+        # as_posix keeps the argument identical on every platform; Windows Path
+        # separators would silently break the build-args assertion.
+        args.extend(["--add-data", f"{source}:{destination.as_posix()}"])
     imports = list(BASE_HIDDEN_IMPORTS)
     if cuda:
         imports.extend(["nvidia", "torch.cuda"])
