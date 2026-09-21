@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@asrbox/app": "file:../app",
-    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query": "^5.103.1",
     "@tanstack/react-router": "^1.170.36",
     "lucide-react": "^1.46.0",
     "react": "^19.3.0",
