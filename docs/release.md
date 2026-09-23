@@ -117,7 +117,8 @@ Before publishing or immediately after downloading the Release assets:
 9. Quit and confirm the backend releases port `17494`.
 10. From Settings → About, verify stable/prerelease selection, manual checking, the update-notification controls, and the expected new-version/no-update/error states.
 11. For a release newer than the test build, download the installer in-app, verify progress/cancel/retry, confirm the final file matches `SHA256SUMS.txt`, and confirm “Open installer” and “Open file location” target the verified file.
-12. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
+12. On Windows, install the new build over a previous version in the same directory and confirm the installer replaces the app's managed resources: no files from the earlier version remain under the install directory, and the packaged app's runtime health report shows no dependency-import failures.
+13. Build the Docker image and verify health, persistence, same-origin routing, token handling, and mobile-width rendering.
 
 ## Release Page Notes
 

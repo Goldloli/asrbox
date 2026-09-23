@@ -15,6 +15,10 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - transformers 从 git commit pin 升级到 PyPI `5.17.0`（原 pin 内容等于 v5.13.0），带来 Qwen3-ASR 解析修复与多项 Whisper 修复；新增轻量依赖 `mistral-common[audio]`（Voxtral processor 需要）。
 - 不支持自动语种检测的模型（Cohere Transcribe）在转写页不再提供"自动识别 / 中英混合"语言选项；强制语言缺失时任务以明确原因码失败并本地化提示。
 
+### Fixed
+
+- Windows 安装包升级安装不再残留上一版本的文件：安装器在复制新文件前清理自身管理的资源目录，避免旧依赖元数据（例如 `tokenizers-0.22.2.dist-info`）让升级后的应用无法导入 speech-LM 模型。
+
 ## [0.3.2] - 2026-09-20
 
 ### Added
