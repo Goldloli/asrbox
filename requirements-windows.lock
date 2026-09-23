@@ -13,7 +13,7 @@
 # wheel for Python 3.13+ and fails to compile under MSVC. The ASRbox model paths
 # do not use it, matching the Linux CPU Docker lock which also omits it. Further
 # routine pin drift: numpy 2.5.3 vs 2.4.6, onnxruntime 1.29.0 vs 1.27.0,
-# modelscope 1.40.0 vs 1.38.0.
+# modelscope 1.40.0 vs 1.38.0, mistral-common 1.12.0 vs 1.11.7.
 accelerate==1.15.0
 aiofile==3.12.3
 aiohappyeyeballs==2.7.1
@@ -107,6 +107,7 @@ matplotlib==3.11.1
 mcp==2.2.0
 mcp-types==2.2.0
 mdurl==0.1.2
+mistral_common==1.12.0
 modelscope==1.40.0
 modelscope-hub==0.4.1
 more-itertools==11.1.0
@@ -151,9 +152,11 @@ pyannote-database==6.1.1
 pyannote-metrics==4.1
 pyannote-pipeline==4.0.0
 pyannoteai-sdk==0.4.0
+pycountry==26.2.16
 pycparser==3.0
 pycryptodome==3.23.0
 pydantic==2.13.5
+pydantic-extra-types==2.11.1
 pydantic-settings==2.15.0
 pydantic_core==2.46.5
 Pygments==2.21.0
@@ -194,7 +197,7 @@ sympy==1.14.0
 tensorboardX==2.6.5
 threadpoolctl==3.6.0
 tiktoken==0.14.0
-tokenizers==0.22.2
+tokenizers==0.23.2
 torch==2.11.0
 torch-audiomentations==0.12.0
 torch-complex==0.4.4
@@ -203,7 +206,7 @@ torchaudio==2.11.0
 torchcodec==0.16.0
 torchmetrics==1.9.0
 tqdm==4.70.0
-transformers @ git+https://github.com/huggingface/transformers.git@09835700ac3db4a08762a0a6f6960c346ebf7365
+transformers==5.17.0
 truststore==0.10.4
 typer==0.27.2
 typing-inspection==0.4.4

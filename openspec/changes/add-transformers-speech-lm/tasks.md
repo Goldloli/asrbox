@@ -3,7 +3,7 @@
 ## 1. 依赖升级（前置门槛）
 
 - [x] 1.1 `requirements-runtime.in` / `requirements-docker.in` 把 transformers 从 git commit pin 改为 `transformers==5.17.0`，新增 `mistral-common[audio]>=1.8.1`；重新生成 `requirements-runtime.lock` 与 `requirements-docker.lock`，确认 lock 内 transformers/torch/moss-transcribe-diarize 版本一致且无冲突
-- [ ] 1.2 按 Windows + Python 3.14 流程同步冻结 `requirements-windows.lock`（含 transformers 5.17.0 与 mistral-common），在 Windows 环境安装验证 `pip check` 通过；无法本地完成时明确报告"未验证"，不得手工拼造
+- [x] 1.2 按 Windows + Python 3.14 流程同步冻结 `requirements-windows.lock`（含 transformers 5.17.0 与 mistral-common），在 Windows 环境安装验证 `pip check` 通过；无法本地完成时明确报告"未验证"，不得手工拼造
 - [x] 1.3 在新依赖环境跑全量后端测试（`npm run test:backend`）与 `scripts/check-versions.mjs`、依赖审计（`scripts/audit-dependencies.sh`），确认 Whisper/Qwen3/MOSS 既有路径无回归
 
 ## 2. 统一引擎重构（行为等价迁移）
