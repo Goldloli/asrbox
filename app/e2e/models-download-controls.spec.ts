@@ -96,7 +96,7 @@ test('model page expands detailed model intro for a natively diarizing model', a
         modelStatus({
           model_name: 'moss-transcribe-diarize',
           display_name: 'MOSS Transcribe Diarize 0.9B',
-          engine: 'moss_transcribe_diarize',
+          engine: 'transformers_speech_lm',
           source: 'modelscope',
           repo_id: 'OpenMOSS-Team/MOSS-Transcribe-Diarize',
           model_size: '0.9b',

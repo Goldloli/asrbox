@@ -35,6 +35,7 @@ const categoryLabelKeys = {
   chinese: 'models.categoryChinese',
   faster: 'models.categoryFaster',
   whisper: 'models.categoryWhisper',
+  speechlm: 'models.categorySpeechlm',
 } as const;
 
 export function createModelGroups(
@@ -104,8 +105,16 @@ export function ModelListRow({
   const compatibilityIssue = modelCompatibilityIssue(model, t, isActive);
   // A compatibility hint is already user-facing copy; running it through the
   // error mapper would replace it with the generic "operation failed" fallback.
+  const gatedRepoFailure = !progress?.error && model.download_error_code === 'GATED_REPO_ACCESS';
   const errorMessage = downloadError
-    ? localizedErrorPresentation(new Error(downloadError), locale)
+    ? gatedRepoFailure
+      ? {
+          summary: locale === 'zh'
+            ? '该模型仓库需要先在模型平台获得访问授权，当前可用的开放镜像源不可达。'
+            : 'This model repository requires access approval on the model platform; no open mirror is reachable right now.',
+          detail: downloadError,
+        }
+      : localizedErrorPresentation(new Error(downloadError), locale)
     : compatibilityIssue
       ? { summary: compatibilityIssue, detail: model.compatibility_error ?? '' }
       : model.error
@@ -226,6 +235,17 @@ export function ModelListRow({
             <ModelIntroSection title={t('models.detailLimitations')} items={details.limitations} />
           </div>
           <p className="text-xs leading-5 text-app-muted">{t('models.deviceSupportHint')}</p>
+          {model.license && (
+            <p className="text-xs leading-5 text-app-muted">
+              {t('models.licenseLabel')}: {model.license}
+            </p>
+          )}
+          {model.attribution && (
+            <div className="rounded-lg border app-border bg-[var(--app-control-strong)] p-3 text-xs leading-5 text-app-soft">
+              {t('models.attributionLabel')}
+              <div className="mt-1 whitespace-pre-line">{model.attribution}</div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t app-border pt-3">
             <div className="flex flex-wrap gap-2">
               {model.languages.map((language) => <Badge key={language}>{language}</Badge>)}

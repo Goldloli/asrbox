@@ -24,7 +24,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 ## 主要功能
 
 - 拖入单个或多个音频、视频，预检音轨、格式、时长和分段策略。
-- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Paraformer、Fun-ASR-Nano、Qwen3-ASR，或在线 ASR Provider 转写。
+- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Paraformer、Fun-ASR-Nano、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini，或在线 ASR Provider 转写。
 - 三栏任务中心：任务列表、波形播放器与转写结果、状态与导出同屏联动。
 - 在"编辑字幕"模式中直接修改分段文字，批量保存为一个新的不可变版本。
 - 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本。

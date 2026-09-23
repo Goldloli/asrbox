@@ -86,6 +86,9 @@ class ASRModelStatus(BaseModel):
     error: str | None = None
     size_on_disk_mb: float | None = None
     download_error: str | None = None
+    download_error_code: str | None = None
+    license: str | None = None
+    attribution: str | None = None
     compatible: bool | None = None
     compatibility_error: str | None = None
     compatibility_error_code: str | None = None
@@ -552,6 +555,10 @@ class RuntimeStatusResponse(BaseModel):
     qwen3_asr_available: bool = False
     transformers_qwen3_asr_available: bool = False
     moss_transcribe_diarize_available: bool = False
+    granite_speech_available: bool = False
+    granite_speech_plus_available: bool = False
+    cohere_asr_available: bool = False
+    voxtral_available: bool = False
     data_dir: str
     models_dir: str
     free_disk_bytes: int | None = None

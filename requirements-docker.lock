@@ -54,7 +54,9 @@ audioread==3.1.0
 authlib==1.7.2
     # via fastmcp-slim
 av==18.0.0
-    # via faster-whisper
+    # via
+    #   faster-whisper
+    #   moss-transcribe-diarize
 beartype==0.22.9
     # via py-key-value-aio
 cachetools==7.1.4
@@ -108,7 +110,9 @@ email-validator==2.3.0
 exceptiongroup==1.3.1
     # via fastmcp-slim
 fastapi==0.139.2
-    # via -r requirements-docker.in
+    # via
+    #   -r requirements-docker.in
+    #   moss-transcribe-diarize
 faster-whisper==1.2.1
     # via -r requirements-docker.in
 fastmcp==3.4.4
@@ -213,7 +217,9 @@ joserfc==1.7.4
 jsonref==1.1.0
     # via fastmcp-slim
 jsonschema==4.26.0
-    # via mcp
+    # via
+    #   mcp
+    #   mistral-common
 jsonschema-path==0.5.0
     # via fastmcp-slim
 jsonschema-specifications==2025.9.1
@@ -229,7 +235,9 @@ kiwisolver==1.5.0
 lazy-loader==0.5
     # via librosa
 librosa==0.11.0
-    # via funasr
+    # via
+    #   funasr
+    #   moss-transcribe-diarize
 lightning==2.6.5
     # via pyannote-audio
 lightning-utilities==0.15.3
@@ -256,6 +264,8 @@ mcp==1.28.1
     # via fastmcp-slim
 mdurl==0.1.2
     # via markdown-it-py
+mistral-common==1.11.7
+    # via -r requirements-docker.in
 modelscope==1.38.1
     # via
     #   -r requirements-docker.in
@@ -284,6 +294,7 @@ numba==0.66.0
     # via
     #   -r requirements-docker.in
     #   librosa
+    #   moss-transcribe-diarize
     #   pynndescent
     #   umap-learn
 numpy==2.4.6
@@ -297,6 +308,8 @@ numpy==2.4.6
     #   kaldiio
     #   librosa
     #   matplotlib
+    #   mistral-common
+    #   moss-transcribe-diarize
     #   numba
     #   onnxruntime
     #   optuna
@@ -368,6 +381,7 @@ packaging==26.2
     #   lightning-utilities
     #   matplotlib
     #   modelscope
+    #   moss-transcribe-diarize
     #   onnxruntime
     #   optuna
     #   pooch
@@ -385,7 +399,9 @@ pandas==3.0.3
 pathable==0.6.0
     # via jsonschema-path
 pillow==12.3.0
-    # via matplotlib
+    # via
+    #   matplotlib
+    #   mistral-common
 platformdirs==4.11.0
     # via
     #   fastmcp-slim
@@ -427,6 +443,8 @@ pyannote-pipeline==4.0.0
     # via pyannote-audio
 pyannoteai-sdk==0.4.0
     # via pyannote-audio
+pycountry==26.2.16
+    # via pydantic-extra-types
 pycparser==3.0
     # via cffi
 pycryptodome==3.23.0
@@ -437,10 +455,14 @@ pydantic==2.13.4
     #   fastapi
     #   fastmcp-slim
     #   mcp
+    #   mistral-common
     #   openapi-pydantic
+    #   pydantic-extra-types
     #   pydantic-settings
 pydantic-core==2.46.4
     # via pydantic
+pydantic-extra-types==2.11.1
+    # via mistral-common
 pydantic-settings==2.14.2
     # via
     #   fastmcp-slim
@@ -470,6 +492,7 @@ python-multipart==0.0.32
     #   -r requirements-docker.in
     #   fastmcp-slim
     #   mcp
+    #   moss-transcribe-diarize
 pytorch-lightning==2.6.5
     # via lightning
 pytorch-metric-learning==2.9.0
@@ -505,6 +528,7 @@ requests==2.34.2
     # via
     #   -r requirements-docker.in
     #   funasr
+    #   mistral-common
     #   modelscope
     #   modelscope-hub
     #   opentelemetry-exporter-otlp-proto-http
@@ -529,6 +553,7 @@ safetensors==0.8.0
     # via
     #   accelerate
     #   funasr
+    #   moss-transcribe-diarize
     #   pyannote-audio
     #   transformers
 scikit-learn==1.9.0
@@ -567,8 +592,13 @@ soundfile==0.14.0
     # via
     #   funasr
     #   librosa
+    #   mistral-common
+    #   moss-transcribe-diarize
 soxr==1.1.0
-    # via librosa
+    # via
+    #   librosa
+    #   mistral-common
+    #   moss-transcribe-diarize
 sqlalchemy==2.0.51
     # via
     #   -r requirements-docker.in
@@ -601,8 +631,10 @@ tensorboardx==2.6.5
 threadpoolctl==3.6.0
     # via scikit-learn
 tiktoken==0.13.0
-    # via funasr
-tokenizers==0.22.2
+    # via
+    #   funasr
+    #   mistral-common
+tokenizers==0.23.2
     # via
     #   faster-whisper
     #   transformers
@@ -653,10 +685,11 @@ tqdm==4.69.0
     #   pytorch-metric-learning
     #   transformers
     #   umap-learn
-transformers @ git+https://github.com/huggingface/transformers.git@09835700ac3db4a08762a0a6f6960c346ebf7365
+transformers==5.17.0
     # via
     #   -r requirements-docker.in
     #   funasr
+    #   moss-transcribe-diarize
 typer==0.27.0
     # via transformers
 typing-extensions==4.16.0
@@ -671,6 +704,7 @@ typing-extensions==4.16.0
     #   lightning
     #   lightning-utilities
     #   mcp
+    #   mistral-common
     #   opentelemetry-api
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
@@ -679,6 +713,7 @@ typing-extensions==4.16.0
     #   py-key-value-aio
     #   pydantic
     #   pydantic-core
+    #   pydantic-extra-types
     #   pytorch-lightning
     #   soundfile
     #   sqlalchemy
@@ -704,6 +739,7 @@ uvicorn==0.51.0
     #   -r requirements-docker.in
     #   fastmcp-slim
     #   mcp
+    #   moss-transcribe-diarize
 watchfiles==1.2.0
     # via fastmcp-slim
 websockets==16.1.1

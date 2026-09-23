@@ -530,43 +530,213 @@ def _qwen_language(language: str | None) -> str | None:
     return language
 
 
-class Qwen3ASRBackend:
-    def __init__(self) -> None:
-        self._models: dict[str, object] = {}
-        self._processors: dict[str, object] = {}
+class SpeechLMLanguageRequiredError(RuntimeError):
+    """A model without language detection was run without an explicit language."""
 
-    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
-        processor = self._processors.get(model_config.model_name)
-        model = self._models.get(model_config.model_name)
-        if processor is None or model is None:
-            try:
-                from transformers import AutoModelForMultimodalLM, AutoProcessor
-            except Exception as exc:
-                raise RuntimeError("transformers with Qwen3-ASR support is required") from exc
 
-            model_dir = _model_path(model_config.model_name)
-            with local_hf_files_only():
-                try:
-                    processor = AutoProcessor.from_pretrained(str(model_dir))
-                except Exception as exc:
-                    raise RuntimeError(f"failed to load Qwen3-ASR processor: {exc}") from exc
-                try:
-                    model = AutoModelForMultimodalLM.from_pretrained(
-                        str(model_dir),
-                        torch_dtype="auto",
-                        device_map="auto",
-                    )
-                except TypeError:
-                    model = AutoModelForMultimodalLM.from_pretrained(str(model_dir))
-                except Exception as exc:
-                    raise RuntimeError(f"transformers with Qwen3-ASR support is required: {exc}") from exc
-            self._processors[model_config.model_name] = processor
-            self._models[model_config.model_name] = model
+class SpeechLMChunkOutput:
+    """One chunk's parsed output; segment/word times are absolute already."""
 
-        language = _qwen_language(options.get("language"))
+    def __init__(
+        self,
+        text: str = "",
+        language: str | None = None,
+        segments: list[TranscriptSegment] | None = None,
+        words: list[dict] | None = None,
+    ) -> None:
+        self.text = text
+        self.language = language
+        self.segments = segments or []
+        self.words = words or []
+
+
+_FSMN_VAD_CHUNK_MODEL = None
+
+
+def _fsmn_vad_speech_spans(audio_path: str) -> list[tuple[float, float]] | None:
+    global _FSMN_VAD_CHUNK_MODEL
+    try:
+        _ensure_funasr_auto_model()
+        if AutoModel is None:
+            return None
+        if _FSMN_VAD_CHUNK_MODEL is None:
+            _FSMN_VAD_CHUNK_MODEL = AutoModel(model="fsmn-vad", disable_update=True)
+        raw = _FSMN_VAD_CHUNK_MODEL.generate(input=audio_path)
+    except Exception:
+        return None
+    spans: list[tuple[float, float]] = []
+    for item in raw if isinstance(raw, list) else [raw]:
+        if not isinstance(item, dict):
+            continue
+        for span in item.get("value") or []:
+            if isinstance(span, (list, tuple)) and len(span) == 2:
+                spans.append((_seconds(span[0]) / 1000.0, _seconds(span[1]) / 1000.0))
+    return spans
+
+
+def _plan_speech_lm_chunks(
+    adapter: "BaseSpeechLMAdapter",
+    audio_path: str,
+    audio,
+) -> list[tuple[object, float]]:
+    max_seconds = adapter.max_chunk_seconds
+    if max_seconds is None:
+        return [(audio, 0.0)]
+    duration = len(audio) / 16000.0
+    if duration <= max_seconds:
+        return [(audio, 0.0)]
+    spans = _fsmn_vad_speech_spans(audio_path)
+    if not spans:
+        raise RuntimeError(
+            "this model accepts at most "
+            f"{int(max_seconds)}s of audio per pass and fsmn-vad chunking is unavailable"
+        )
+    chunks: list[tuple[object, float]] = []
+    for start, end in spans:
+        span_len = max(end - start, 0.0)
+        pieces = max(1, math.ceil(span_len / max_seconds))
+        for index in range(pieces):
+            piece_start = start + span_len * index / pieces
+            piece_end = start + span_len * (index + 1) / pieces
+            chunk = audio[int(piece_start * 16000) : int(piece_end * 16000)]
+            if len(chunk) > 0:
+                chunks.append((chunk, piece_start))
+    return chunks or [(audio, 0.0)]
+
+
+def _offset_speech_lm_segments(segments: list[TranscriptSegment], offset: float) -> list[TranscriptSegment]:
+    return [
+        TranscriptSegment(
+            id=segment.id,
+            start=segment.start + offset,
+            end=segment.end + offset,
+            text=segment.text,
+            speaker=segment.speaker,
+        )
+        for segment in segments
+    ]
+
+
+def _offset_speech_lm_words(words: list[dict], offset: float) -> list[dict]:
+    return [
+        {
+            **word,
+            "start": float(word.get("start") or 0.0) + offset,
+            "end": float(word.get("end") or 0.0) + offset,
+        }
+        for word in words
+    ]
+
+
+class BaseSpeechLMAdapter:
+    key: str = ""
+    max_chunk_seconds: float | None = None
+    requires_explicit_language: bool = False
+    runtime_probe_key: str | None = None
+    runtime_missing_label: str | None = None
+    requires_remote_code_files: bool = False
+    tokenizer_files: tuple[str, ...] = ("tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt")
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        raise NotImplementedError
+
+    def transcribe(self, processor: object, model: object, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        return self.transcribe_chunked(processor, model, audio_path, model_config, options)
+
+    def transcribe_chunk(self, processor: object, model: object, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        raise NotImplementedError
+
+    def resolve_language(self, options: dict) -> str | None:
+        language = options.get("language")
+        if self.requires_explicit_language and (not language or language == "auto"):
+            raise SpeechLMLanguageRequiredError("this model requires an explicit language selection")
+        if not language or language == "auto":
+            return None
+        return language
+
+    @staticmethod
+    def load_audio_16k(audio_path: str):
         from transformers.audio_utils import load_audio
 
-        audio = load_audio(str(Path(audio_path)), sampling_rate=16000, backend="librosa")
+        return load_audio(str(Path(audio_path)), sampling_rate=16000, backend="librosa")
+
+    @staticmethod
+    def _scaled_max_new_tokens(audio_seconds: float, options: dict, *, per_minute: int, floor: int, cap: int) -> int:
+        override = options.get("max_new_tokens")
+        if override:
+            return int(override)
+        return min(cap, max(floor, math.ceil(audio_seconds / 60.0 * per_minute)))
+
+    def transcribe_chunked(self, processor: object, model: object, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        language = self.resolve_language(options)
+        audio = self.load_audio_16k(audio_path)
+        planned = _plan_speech_lm_chunks(self, audio_path, audio)
+        outputs = [
+            self.transcribe_chunk(processor, model, chunk, offset, model_config, options, language)
+            for chunk, offset in planned
+        ]
+        segments: list[TranscriptSegment] = []
+        words: list[dict] = []
+        for output in outputs:
+            for segment in output.segments:
+                segments.append(
+                    TranscriptSegment(
+                        id=len(segments) + 1,
+                        start=segment.start,
+                        end=segment.end,
+                        text=segment.text,
+                        speaker=segment.speaker,
+                    )
+                )
+            words.extend(output.words)
+        parsed_language = next((output.language for output in outputs if output.language), language)
+        text = transcript_text_from_segments(segments)
+        return TranscriptionResult(
+            text=text,
+            language=parsed_language,
+            duration=segments[-1].end if segments else None,
+            segments=segments,
+            words=words,
+            model_name=model_config.model_name,
+            raw_result_summary={
+                "engine": "transformers_speech_lm",
+                "adapter": self.key,
+                "chunks": len(planned),
+            },
+        )
+
+
+class Qwen3SpeechLMAdapter(BaseSpeechLMAdapter):
+    key = "qwen3_asr"
+    runtime_probe_key = "qwen3_asr_available"
+    runtime_missing_label = "transformers Qwen3-ASR support"
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        try:
+            from transformers import AutoModelForMultimodalLM, AutoProcessor
+        except Exception as exc:
+            raise RuntimeError("transformers with Qwen3-ASR support is required") from exc
+
+        with local_hf_files_only():
+            try:
+                processor = AutoProcessor.from_pretrained(str(model_dir))
+            except Exception as exc:
+                raise RuntimeError(f"failed to load Qwen3-ASR processor: {exc}") from exc
+            try:
+                model = AutoModelForMultimodalLM.from_pretrained(
+                    str(model_dir),
+                    torch_dtype="auto",
+                    device_map="auto",
+                )
+            except TypeError:
+                model = AutoModelForMultimodalLM.from_pretrained(str(model_dir))
+            except Exception as exc:
+                raise RuntimeError(f"transformers with Qwen3-ASR support is required: {exc}") from exc
+        return processor, model
+
+    def transcribe(self, processor: object, model: object, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        language = _qwen_language(options.get("language"))
+        audio = self.load_audio_16k(audio_path)
         request_kwargs = {"audio": audio}
         if language:
             request_kwargs["language"] = language
@@ -609,16 +779,12 @@ class Qwen3ASRBackend:
             duration=None,
             segments=segments,
             model_name=model_config.model_name,
-            raw_result_summary={"engine": "qwen3_asr", "parsed": bool(parsed)},
+            raw_result_summary={
+                "engine": "transformers_speech_lm",
+                "adapter": self.key,
+                "parsed": bool(parsed),
+            },
         )
-
-    def is_loaded(self, model_name: str) -> bool:
-        return model_name in self._models
-
-    def unload(self, model_name: str) -> bool:
-        removed = self._models.pop(model_name, None) is not None
-        self._processors.pop(model_name, None)
-        return removed
 
 
 def _moss_max_new_tokens(audio_path: str, options: dict) -> int:
@@ -636,44 +802,39 @@ def _moss_max_new_tokens(audio_path: str, options: dict) -> int:
     return min(65536, max(4096, math.ceil(duration_minutes * 800)))
 
 
-class MossTranscribeDiarizeBackend:
-    """End-to-end transcription + diarization via MOSS-Transcribe-Diarize."""
+class MossTranscribeDiarizeSpeechLMAdapter(BaseSpeechLMAdapter):
+    key = "moss_transcribe_diarize"
+    runtime_probe_key = "moss_transcribe_diarize_available"
+    runtime_missing_label = "moss-transcribe-diarize runtime"
+    requires_remote_code_files = True
 
-    def __init__(self) -> None:
-        self._models: dict[str, object] = {}
-        self._processors: dict[str, object] = {}
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoProcessor
+            from moss_transcribe_diarize.inference_utils import resolve_device
+        except Exception as exc:
+            raise RuntimeError("transformers >= 5 and the moss-transcribe-diarize package are required") from exc
 
-    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
-        processor = self._processors.get(model_config.model_name)
-        model = self._models.get(model_config.model_name)
-        if processor is None or model is None:
+        device = resolve_device("auto")
+        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+        with local_hf_files_only():
             try:
-                import torch
-                from transformers import AutoModelForCausalLM, AutoProcessor
-                from moss_transcribe_diarize.inference_utils import resolve_device
+                processor = AutoProcessor.from_pretrained(str(model_dir), trust_remote_code=True)
             except Exception as exc:
-                raise RuntimeError("transformers >= 5 and the moss-transcribe-diarize package are required") from exc
+                raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize processor: {exc}") from exc
+            load_kwargs = {"trust_remote_code": True, "dtype": "auto"}
+            try:
+                model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
+            except TypeError:
+                load_kwargs["torch_dtype"] = load_kwargs.pop("dtype")
+                model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
+            except Exception as exc:
+                raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize model: {exc}") from exc
+        model = model.to(dtype=dtype).to(device).eval()
+        return processor, model
 
-            model_dir = _model_path(model_config.model_name)
-            device = resolve_device("auto")
-            dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
-            with local_hf_files_only():
-                try:
-                    processor = AutoProcessor.from_pretrained(str(model_dir), trust_remote_code=True)
-                except Exception as exc:
-                    raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize processor: {exc}") from exc
-                load_kwargs = {"trust_remote_code": True, "dtype": "auto"}
-                try:
-                    model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
-                except TypeError:
-                    load_kwargs["torch_dtype"] = load_kwargs.pop("dtype")
-                    model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
-                except Exception as exc:
-                    raise RuntimeError(f"failed to load MOSS-Transcribe-Diarize model: {exc}") from exc
-            model = model.to(dtype=dtype).to(device).eval()
-            self._processors[model_config.model_name] = processor
-            self._models[model_config.model_name] = model
-
+    def transcribe(self, processor: object, model: object, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
         from moss_transcribe_diarize import parse_transcript
         from moss_transcribe_diarize.inference_utils import build_transcription_messages, generate_transcription
 
@@ -712,8 +873,493 @@ class MossTranscribeDiarizeBackend:
             duration=None,
             segments=segments,
             model_name=model_config.model_name,
-            raw_result_summary={"engine": "moss_transcribe_diarize", "parsed_segments": len(segments)},
+            raw_result_summary={
+                "engine": "transformers_speech_lm",
+                "adapter": self.key,
+                "parsed_segments": len(segments),
+            },
         )
+
+
+def _speech_lm_device_map() -> str:
+    # The unified engine's catalog declares cpu/cuda only: keep MPS out of
+    # device_map="auto" resolution (granite_speech_plus is broken on MPS and
+    # the MPS path is unverified for the other adapters).
+    import torch
+
+    if torch.cuda.is_available():
+        return "auto"
+    return "cpu"
+
+
+def _load_native_speech_lm(
+    model_dir: Path,
+    *,
+    model_attr: str,
+    load_kwargs: dict,
+    processor_error_label: str,
+    model_error_label: str,
+    trust_remote_code: bool = False,
+) -> tuple[object, object]:
+    import transformers
+    from transformers import AutoProcessor
+
+    model_cls = getattr(transformers, model_attr)
+    processor_kwargs = {"trust_remote_code": True} if trust_remote_code else {}
+    if load_kwargs.get("device_map") == "auto":
+        load_kwargs = {**load_kwargs, "device_map": _speech_lm_device_map()}
+    with local_hf_files_only():
+        try:
+            processor = AutoProcessor.from_pretrained(str(model_dir), **processor_kwargs)
+        except Exception as exc:
+            raise RuntimeError(f"{processor_error_label}: {exc}") from exc
+        try:
+            model = model_cls.from_pretrained(str(model_dir), **load_kwargs)
+        except TypeError:
+            fallback = dict(load_kwargs)
+            if "dtype" not in fallback:
+                raise
+            fallback["torch_dtype"] = fallback.pop("dtype")
+            model = model_cls.from_pretrained(str(model_dir), **fallback)
+        except Exception as exc:
+            raise RuntimeError(f"{model_error_label}: {exc}") from exc
+    return processor, model
+
+
+class GraniteSpeechAdapter(BaseSpeechLMAdapter):
+    key = "granite_speech"
+    max_chunk_seconds = 180.0
+    runtime_probe_key = "granite_speech_available"
+    runtime_missing_label = "transformers Granite Speech support"
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        return _load_native_speech_lm(
+            model_dir,
+            model_attr="AutoModelForSpeechSeq2Seq",
+            load_kwargs={"dtype": "auto", "device_map": "auto"},
+            processor_error_label="failed to load Granite Speech processor",
+            model_error_label="failed to load Granite Speech model",
+        )
+
+    def transcribe_chunk(self, processor, model, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        tokenizer = processor.tokenizer
+        chat = [{"role": "user", "content": "<|audio|>transcribe the speech with proper punctuation and capitalization."}]
+        prompt = tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        device = getattr(model, "device", None)
+        inputs = processor(prompt, chunk_audio, return_tensors="pt")
+        if device is not None and hasattr(inputs, "to"):
+            inputs = inputs.to(device)
+        max_new_tokens = self._scaled_max_new_tokens(len(chunk_audio) / 16000, options, per_minute=320, floor=1024, cap=8192)
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False, num_beams=1)
+        new_tokens = outputs[0, inputs["input_ids"].shape[-1]:]
+        text = tokenizer.decode(new_tokens, add_special_tokens=False, skip_special_tokens=True).strip()
+        segments = (
+            [TranscriptSegment(id=1, start=offset, end=offset + len(chunk_audio) / 16000, text=text)]
+            if text
+            else []
+        )
+        return SpeechLMChunkOutput(text=text, language=language, segments=segments)
+
+
+_GRANITE_PLUS_SYSTEM_PROMPT = (
+    "Knowledge Cutoff Date: April 2024.\nToday's Date: December 19, 2024.\n"
+    "You are Granite, developed by IBM. You are a helpful AI assistant"
+)
+_GRANITE_PLUS_SAA_PROMPT = (
+    "<|audio|> Speaker attribution: Transcribe and denote who is speaking by "
+    "adding [Speaker 1]: and [Speaker 2]: tags before speaker turns."
+)
+_GRANITE_PLUS_TS_PROMPT = (
+    "<|audio|> Timestamps: Transcribe the speech. After each word, add a "
+    "timestamp tag showing the end time in centiseconds, e.g. hello [T:45] world [T:82]"
+)
+_GRANITE_PLUS_SPEAKER_RE = re.compile(r"\[Speaker (\d+)\]:")
+_GRANITE_PLUS_TAG_RE = re.compile(r"(\[Speaker \d+\]:)")
+
+
+def _parse_granite_plus_timestamps(text: str, offset: float) -> tuple[list[dict], list[TranscriptSegment]]:
+    """Granite plus emits `[T:N]` end-of-word tags in centiseconds, truncated to
+    three digits, so the counter wraps every 10 seconds and must be unwrapped."""
+    parts = re.split(r"\[T:(\d+)\]", text)
+    words: list[dict] = []
+    segments: list[TranscriptSegment] = []
+    cue_words: list[tuple[str, float, float]] = []
+    wrap = 0.0
+    last_end = offset
+    prev_end = offset
+
+    def flush() -> None:
+        nonlocal cue_words
+        if not cue_words:
+            return
+        segments.append(
+            TranscriptSegment(
+                id=len(segments) + 1,
+                start=cue_words[0][1],
+                end=cue_words[-1][2],
+                text=" ".join(word for word, _start, _end in cue_words),
+            )
+        )
+        cue_words = []
+
+    for word_text, tag in zip(parts[::2], parts[1::2]):
+        end = int(tag) / 100.0
+        while end + wrap < last_end:
+            wrap += 10.0
+        end += wrap
+        last_end = end
+        clean = word_text.strip()
+        if not clean or clean == "_":
+            flush()
+            prev_end = end
+            continue
+        words.append({"start": prev_end, "end": end, "word": clean})
+        cue_words.append((clean, prev_end, end))
+        if sum(len(word) for word, _start, _end in cue_words) >= 60:
+            flush()
+        prev_end = end
+    flush()
+    return words, segments
+
+
+def _parse_granite_plus_speakers(text: str) -> list[TranscriptSegment]:
+    segments: list[TranscriptSegment] = []
+    speaker: str | None = None
+    for part in _GRANITE_PLUS_TAG_RE.split(text):
+        clean = part.strip()
+        if not clean:
+            continue
+        match = _GRANITE_PLUS_SPEAKER_RE.fullmatch(clean)
+        if match:
+            speaker = f"S{int(match.group(1)):02d}"
+            continue
+        segments.append(
+            TranscriptSegment(
+                id=len(segments) + 1,
+                start=0.0,
+                end=0.0,
+                text=clean,
+                speaker=speaker,
+            )
+        )
+    return segments
+
+
+class GraniteSpeechPlusAdapter(BaseSpeechLMAdapter):
+    key = "granite_speech_plus"
+    max_chunk_seconds = 200.0
+    runtime_probe_key = "granite_speech_plus_available"
+    runtime_missing_label = "transformers Granite Speech plus support"
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        return _load_native_speech_lm(
+            model_dir,
+            model_attr="AutoModelForSpeechSeq2Seq",
+            load_kwargs={"dtype": "auto", "device_map": "auto"},
+            processor_error_label="failed to load Granite Speech plus processor",
+            model_error_label="failed to load Granite Speech plus model",
+        )
+
+    def transcribe_chunk(self, processor, model, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        tokenizer = processor.tokenizer
+        timestamps_mode = bool(options.get("word_timestamps"))
+        prompt_text = _GRANITE_PLUS_TS_PROMPT if timestamps_mode else _GRANITE_PLUS_SAA_PROMPT
+        chat = [
+            {"role": "system", "content": _GRANITE_PLUS_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt_text},
+        ]
+        prompt = tokenizer.apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+        device = getattr(model, "device", None)
+        inputs = processor(prompt, chunk_audio, return_tensors="pt")
+        if device is not None and hasattr(inputs, "to"):
+            inputs = inputs.to(device)
+        audio_seconds = len(chunk_audio) / 16000
+        if timestamps_mode:
+            max_new_tokens = self._scaled_max_new_tokens(audio_seconds, options, per_minute=10000, floor=2048, cap=65536)
+        else:
+            max_new_tokens = self._scaled_max_new_tokens(audio_seconds, options, per_minute=800, floor=1024, cap=8192)
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False, num_beams=1)
+        new_tokens = outputs[0, inputs["input_ids"].shape[-1]:]
+        text = tokenizer.decode(new_tokens, add_special_tokens=False, skip_special_tokens=True).strip()
+        if not text:
+            return SpeechLMChunkOutput(text="", language=language)
+        if timestamps_mode:
+            words, segments = _parse_granite_plus_timestamps(text, offset)
+            if not segments:
+                segments = [TranscriptSegment(id=1, start=offset, end=offset + audio_seconds, text=text)]
+            return SpeechLMChunkOutput(text=transcript_text_from_segments(segments), language=language, segments=segments, words=words)
+        parsed = _parse_granite_plus_speakers(text)
+        segments = parsed or [TranscriptSegment(id=1, start=0.0, end=0.0, text=text)]
+        return SpeechLMChunkOutput(text=text, language=language, segments=segments)
+
+
+class CohereTranscribeAdapter(BaseSpeechLMAdapter):
+    key = "cohere_transcribe"
+    requires_explicit_language = True
+    runtime_probe_key = "cohere_asr_available"
+    runtime_missing_label = "transformers Cohere Transcribe support"
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        return _load_native_speech_lm(
+            model_dir,
+            model_attr="CohereAsrForConditionalGeneration",
+            load_kwargs={"dtype": "auto", "device_map": "auto"},
+            processor_error_label="failed to load Cohere Transcribe processor",
+            model_error_label="failed to load Cohere Transcribe model",
+        )
+
+    def transcribe(self, processor, model, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        language = self.resolve_language(options)
+        audio = self.load_audio_16k(audio_path)
+        inputs = processor(audio, sampling_rate=16000, return_tensors="pt", language=language)
+        device = getattr(model, "device", None)
+        dtype = getattr(model, "dtype", None)
+        if hasattr(inputs, "to") and device is not None:
+            inputs = inputs.to(device, dtype) if dtype is not None else inputs.to(device)
+        max_new_tokens = self._scaled_max_new_tokens(len(audio) / 16000, options, per_minute=320, floor=1024, cap=8192)
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        chunk_index = inputs.get("audio_chunk_index") if hasattr(inputs, "get") else None
+        try:
+            decoded = processor.decode(
+                outputs,
+                skip_special_tokens=True,
+                audio_chunk_index=chunk_index,
+                language=language,
+            )
+        except TypeError:
+            decoded = processor.decode(outputs, skip_special_tokens=True)
+        text = str(decoded[0]).strip() if isinstance(decoded, list) else str(decoded).strip()
+        segments = [TranscriptSegment(id=1, start=0.0, end=0.0, text=text)] if text else []
+        return TranscriptionResult(
+            text=text,
+            language=language,
+            duration=None,
+            segments=segments,
+            model_name=model_config.model_name,
+            raw_result_summary={
+                "engine": "transformers_speech_lm",
+                "adapter": self.key,
+                "auto_chunked": chunk_index is not None,
+            },
+        )
+
+
+class ArkASRAdapter(BaseSpeechLMAdapter):
+    key = "ark_asr"
+    max_chunk_seconds = 30.0
+    requires_remote_code_files = True
+    runtime_missing_label = "transformers ARK-ASR support"
+
+    def __init__(self) -> None:
+        self._tokenizers: dict[int, object] = {}
+        self._bad_words: dict[int, list] = {}
+
+    def _tokenizer_for(self, processor: object) -> object:
+        tokenizer = self._tokenizers.get(id(processor))
+        if tokenizer is None:
+            tokenizer = getattr(processor, "tokenizer", None)
+        if tokenizer is None:
+            raise RuntimeError("ARK-ASR tokenizer is unavailable")
+        return tokenizer
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        import torch
+        from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
+
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+        with local_hf_files_only():
+            try:
+                processor = AutoProcessor.from_pretrained(str(model_dir), trust_remote_code=True)
+            except Exception as exc:
+                raise RuntimeError(f"failed to load ARK-ASR processor: {exc}") from exc
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(str(model_dir), trust_remote_code=True)
+            except Exception as exc:
+                raise RuntimeError(f"failed to load ARK-ASR tokenizer: {exc}") from exc
+            load_kwargs = {"trust_remote_code": True, "dtype": "auto", "attn_implementation": "sdpa"}
+            try:
+                model = AutoModelForCausalLM.from_pretrained(str(model_dir), **load_kwargs)
+            except TypeError:
+                fallback = dict(load_kwargs)
+                fallback["torch_dtype"] = fallback.pop("dtype")
+                model = AutoModelForCausalLM.from_pretrained(str(model_dir), **fallback)
+            except Exception as exc:
+                raise RuntimeError(f"failed to load ARK-ASR model: {exc}") from exc
+        model = model.to(dtype=dtype).to(device).eval()
+        self._tokenizers[id(processor)] = tokenizer
+        self._bad_words[id(processor)] = _ark_bad_words_ids(tokenizer)
+        return processor, model
+
+    def transcribe_chunk(self, processor, model, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        import tempfile
+
+        import soundfile
+
+        tokenizer = self._tokenizer_for(processor)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            temp_path = tmp.name
+        soundfile.write(temp_path, chunk_audio, 16000)
+        try:
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "audio", "path": temp_path},
+                        {"type": "text", "text": "Please transcribe this audio."},
+                    ],
+                }
+            ]
+            inputs = processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                sampling_rate=16000,
+                audio_padding="longest",
+                text_kwargs={"padding": "longest"},
+                audio_max_length=30 * 16000,
+            )
+            device = getattr(model, "device", None)
+            dtype = getattr(model, "dtype", None)
+            if device is not None and hasattr(inputs, "to"):
+                inputs = inputs.to(device)
+                if "audios" in inputs and dtype is not None:
+                    inputs["audios"] = inputs["audios"].to(dtype=dtype)
+            import torch
+
+            with torch.inference_mode():
+                outputs = model.generate(
+                    **inputs,
+                    do_sample=False,
+                    max_new_tokens=int(options.get("max_new_tokens") or 512),
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                    bad_words_ids=self._bad_words.get(id(processor)),
+                )
+            decoded = tokenizer.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
+            text = str(decoded[0]).strip() if decoded else ""
+        finally:
+            try:
+                import os
+
+                os.unlink(temp_path)
+            except OSError:
+                pass
+        segments = (
+            [TranscriptSegment(id=1, start=offset, end=offset + len(chunk_audio) / 16000, text=text)]
+            if text
+            else []
+        )
+        return SpeechLMChunkOutput(text=text, language=language, segments=segments)
+
+
+def _ark_bad_words_ids(tokenizer: object) -> list:
+    eos_ids = tokenizer.eos_token_id
+    keep_ids = {eos_ids} if isinstance(eos_ids, int) else set(eos_ids or [])
+    bad_ids = set(tokenizer.all_special_ids) - keep_ids
+    bad_ids.update(
+        token_id
+        for token, token_id in tokenizer.get_added_vocab().items()
+        if token.startswith("<") and token.endswith(">") and token_id not in keep_ids
+    )
+    return [[token_id] for token_id in sorted(bad_ids)]
+
+
+class VoxtralMiniAdapter(BaseSpeechLMAdapter):
+    key = "voxtral_mini"
+    max_chunk_seconds = 1800.0
+    runtime_probe_key = "voxtral_available"
+    runtime_missing_label = "transformers Voxtral support"
+    # Mistral ships its Tekken tokenizer instead of the classic tokenizer files.
+    tokenizer_files = ("tokenizer.json", "tekken.json")
+
+    def load(self, model_dir: Path) -> tuple[object, object]:
+        return _load_native_speech_lm(
+            model_dir,
+            model_attr="VoxtralForConditionalGeneration",
+            load_kwargs={"dtype": "auto", "device_map": "auto"},
+            processor_error_label="failed to load Voxtral processor",
+            model_error_label="failed to load Voxtral model",
+        )
+
+    def transcribe_chunk(self, processor, model, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        request_kwargs = {"audio": chunk_audio, "model_id": model_config.repo_id, "sampling_rate": 16000}
+        if language:
+            request_kwargs["language"] = language
+        try:
+            inputs = processor.apply_transcription_request(**request_kwargs)
+        except Exception:
+            import tempfile
+
+            import soundfile
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                temp_path = tmp.name
+            soundfile.write(temp_path, chunk_audio, 16000)
+            try:
+                inputs = processor.apply_transcription_request(audio=temp_path, model_id=model_config.repo_id, **({"language": language} if language else {}))
+            finally:
+                import os
+
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+        device = getattr(model, "device", None)
+        dtype = getattr(model, "dtype", None)
+        if hasattr(inputs, "to") and device is not None:
+            inputs = inputs.to(device, dtype) if dtype is not None else inputs.to(device)
+        max_new_tokens = self._scaled_max_new_tokens(len(chunk_audio) / 16000, options, per_minute=320, floor=1024, cap=16384)
+        outputs = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        decoded = processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
+        text = str(decoded[0]).strip() if decoded else ""
+        segments = (
+            [TranscriptSegment(id=1, start=offset, end=offset + len(chunk_audio) / 16000, text=text)]
+            if text
+            else []
+        )
+        return SpeechLMChunkOutput(text=text, language=language, segments=segments)
+
+
+_SPEECH_LM_ADAPTERS: dict[str, BaseSpeechLMAdapter] = {
+    Qwen3SpeechLMAdapter.key: Qwen3SpeechLMAdapter(),
+    MossTranscribeDiarizeSpeechLMAdapter.key: MossTranscribeDiarizeSpeechLMAdapter(),
+    GraniteSpeechAdapter.key: GraniteSpeechAdapter(),
+    GraniteSpeechPlusAdapter.key: GraniteSpeechPlusAdapter(),
+    CohereTranscribeAdapter.key: CohereTranscribeAdapter(),
+    ArkASRAdapter.key: ArkASRAdapter(),
+    VoxtralMiniAdapter.key: VoxtralMiniAdapter(),
+}
+
+
+def speech_lm_compat_spec(adapter_key: str | None) -> dict | None:
+    adapter = _SPEECH_LM_ADAPTERS.get(adapter_key or "")
+    if adapter is None:
+        return None
+    return {
+        "runtime_probe_key": adapter.runtime_probe_key,
+        "runtime_missing_label": adapter.runtime_missing_label,
+        "requires_remote_code_files": adapter.requires_remote_code_files,
+        "tokenizer_files": list(adapter.tokenizer_files),
+    }
+
+
+class TransformersSpeechLMBackend:
+    def __init__(self) -> None:
+        self._models: dict[str, object] = {}
+        self._processors: dict[str, object] = {}
+
+    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        adapter = _SPEECH_LM_ADAPTERS.get(model_config.adapter or "")
+        if adapter is None:
+            raise RuntimeError(f"no speech-LM adapter registered for {model_config.model_name}")
+        processor = self._processors.get(model_config.model_name)
+        model = self._models.get(model_config.model_name)
+        if processor is None or model is None:
+            processor, model = adapter.load(_model_path(model_config.model_name))
+            self._processors[model_config.model_name] = processor
+            self._models[model_config.model_name] = model
+        return adapter.transcribe(processor, model, audio_path, model_config, options)
 
     def is_loaded(self, model_name: str) -> bool:
         return model_name in self._models
@@ -729,8 +1375,7 @@ _backends: dict[str, LocalASRBackend] = {
     "faster_whisper": FasterWhisperBackend(),
     "funasr": FunASRBackend(),
     "mlx_whisper": MLXWhisperBackend(),
-    "qwen3_asr": Qwen3ASRBackend(),
-    "moss_transcribe_diarize": MossTranscribeDiarizeBackend(),
+    "transformers_speech_lm": TransformersSpeechLMBackend(),
 }
 
 

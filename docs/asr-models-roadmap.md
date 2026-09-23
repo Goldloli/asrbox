@@ -28,8 +28,8 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 
 | 阶段 | 内容 | 新增 runtime | 状态 |
 |---|---|---|---|
-| 1 | FunASR 系扩展（Paraformer、Fun-ASR-Nano）+ Distil-Whisper | 无（复用 funasr / faster_whisper） | 已实现并通过真机验证（change：`add-funasr-paraformer-distil`，见 `openspec/changes/`；归档后链接回写此处） |
-| 2 | transformers speech-LM 统一引擎重构 + Cohere Transcribe / Granite Speech 4.1 / MOSS-Transcribe-preview-2B / ARK-ASR / Belle-2 / Voxtral Mini | 无新 runtime，需 transformers 版本审计 | 未开始 |
+| 1 | FunASR 系扩展（Paraformer、Fun-ASR-Nano）+ Distil-Whisper | 无（复用 funasr / faster_whisper） | 已实现并通过真机验证（change：`add-funasr-paraformer-distil`，见 `openspec/changes/archive/2026-09-20-add-funasr-paraformer-distil/`） |
+| 2 | transformers speech-LM 统一引擎重构 + Cohere Transcribe / Granite Speech 4.1 / ARK-ASR / Voxtral Mini | 无新 runtime；transformers 升级 PyPI 5.17.0 + 轻量依赖 mistral-common[audio] | 已实现（change：`add-transformers-speech-lm`；Windows lock 冻结与 Cohere/Voxtral 真机冒烟收尾中，见 `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`） |
 | 3 | FireRedASR2-AED + 通用 forced-alignment 时间戳后处理 | FireRedASR 官方推理代码（vendored 最小集） | 未开始 |
 | 4 | NeMo 引擎（Parakeet TDT v3 / Canary-Qwen / Canary-1B-Flash 等），仅 Docker/server 构建 | nemo_toolkit（不进桌面二进制） | 未开始 |
 
@@ -57,16 +57,22 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 
 **动机**：`Qwen3ASRBackend` 与 `MossTranscribeDiarizeBackend` 已重复"加载 processor/model → 构造输入 → generate → 解析输出"逻辑。抽成 `transformers_speech_lm` 引擎 + 每模型小 adapter（prompt 构造 / 输出解析），后续模型只需 registry 条目 + adapter。
 
-**候选模型**（落地前逐个核实 transformers 版本要求与仓库可用性）：
+**候选模型**（2026-09-20 已逐一核实并落地）：
 
-- Cohere Transcribe 2B（Apache 2.0；无时间戳/无语种检测，HF gated repo 需处理 401 与 token 引导）
-- IBM Granite Speech 4.1 2B 与 `-plus`（Apache 2.0；plus 带词级时间戳 + 说话人归属）
-- MOSS-Transcribe-preview-2B（Apache 2.0）
-- ARK-ASR-3B / 0.6B（Apache 2.0）
-- Belle-2（中文增强，Qwen3-ASR 底座）
-- Voxtral Mini 3B 离线版（Apache 2.0）
+- Granite Speech 4.1 2B（Apache 2.0；en/fr/de/es/pt/ja；无时间戳）
+- Granite Speech 4.1 2B Plus（Apache 2.0；词级时间戳与说话人归属为两种互斥 prompt 模式，按任务词级时间戳选项切换；不支持标点/大小写）
+- Cohere Transcribe 2B（Apache 2.0；14 语言含 zh；无时间戳、需显式语言；HF gated=auto，ModelScope 镜像主源 + 401 失败引导）
+- ARK-ASR 3B / 0.6B（Apache 2.0；19 语言含中英；`trust_remote_code`）
+- Voxtral Mini 3B 离线版（Apache 2.0；8 语言；30 分钟单遍；processor 依赖 `mistral-common[audio]`）
 
-**实现程度**：引擎重构不改变 `TranscriptionResult` 契约；transformers 版本升级需同步两个 runtime lock 并通过依赖审计；CC-BY-4.0 模型（如后续引入 Parakeet/Canary/Scribe）的署名展示在本阶段一并设计。
+**核查剔除**（2026-09-20）：
+
+- Belle-2——"Qwen3-ASR 底座的 Belle-2"不存在：HF `BELLE-2` org 实为 Whisper 中文微调系列（2024），前提不成立。
+- MOSS-Transcribe-preview-2B——仅英语、`trust_remote_code`、无输出时间戳/说话人证明，相对 Distil-Whisper + MOSS-Diarize 无边际价值。
+
+**后续候选线索**（未评估）：Granite Speech 5（CTC，transformers ≥5.16）、granite-speech-4.1-2b-nar（非自回归高吞吐，需 remote code + flash attention）、Voxtral Small 24B、Canary-1B-v2（transformers 5.17 新增）。
+
+**实现程度**：引擎重构不改变 `TranscriptionResult` 契约；transformers 升级到 PyPI 5.17.0 并同步两个 runtime lock（Windows lock 需在 Windows 环境按流程冻结）；CC-BY-4.0 署名展示的数据管道（registry `license`/`attribution` 字段 + 详情渲染）已随本阶段落地，阶段 4 引入 CC-BY 模型时直接声明数据即可。
 
 ## 阶段 3：FireRedASR2-AED + 通用对齐后处理
 

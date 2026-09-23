@@ -4,6 +4,17 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- 本地模型目录新增六个 speech-LM 模型（路线图阶段 2）：**Granite Speech 4.1 2B / 2B Plus**（欧洲语种；Plus 单遍输出说话人归属或词级时间戳，两种模式按任务的词级时间戳选项切换）、**Cohere Transcribe 2B**（14 语言含中文，需手动选择语言；Hugging Face 源受限时下载以明确原因码提示访问授权）、**ARK-ASR 0.6B / 3B**（中英 + 17 个欧洲语种）、**Voxtral Mini 3B**（8 语种自动检测，单遍最长 30 分钟）。有单条输入上限的模型自动按 VAD 切分长音频并保持时间轴连续。
+- 模型详情新增许可信息展示（数据来自模型状态接口），并为需要署名的许可预留署名展示位（为阶段 4 CC-BY 类模型铺路）。
+
+### Changed
+
+- Qwen3-ASR 与 MOSS-Transcribe-Diarize 迁移到统一的 `transformers_speech_lm` 引擎（每模型 adapter），行为不变；后续新增 speech-LM 模型不再需要复制引擎代码。
+- transformers 从 git commit pin 升级到 PyPI `5.17.0`（原 pin 内容等于 v5.13.0），带来 Qwen3-ASR 解析修复与多项 Whisper 修复；新增轻量依赖 `mistral-common[audio]`（Voxtral processor 需要）。
+- 不支持自动语种检测的模型（Cohere Transcribe）在转写页不再提供"自动识别 / 中英混合"语言选项；强制语言缺失时任务以明确原因码失败并本地化提示。
+
 ## [0.3.2] - 2026-09-20
 
 ### Added

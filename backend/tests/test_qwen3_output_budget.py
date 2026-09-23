@@ -10,7 +10,8 @@ def _model_config() -> ASRModelConfig:
     return ASRModelConfig(
         model_name="test-qwen3",
         display_name="test",
-        engine="qwen3_asr",
+        engine="transformers_speech_lm",
+        adapter="qwen3_asr",
         source="test",
         repo_id=None,
         model_size="small",
@@ -33,7 +34,7 @@ class _FakeInputs(dict):
 
 
 def _run_backend(monkeypatch, audio_seconds: float, options: dict) -> dict:
-    from backend.backends.local_asr import Qwen3ASRBackend
+    from backend.backends.local_asr import TransformersSpeechLMBackend
 
     captured: list[dict] = []
 
@@ -58,7 +59,7 @@ def _run_backend(monkeypatch, audio_seconds: float, options: dict) -> dict:
     fake_audio_utils.load_audio = lambda *args, **kwargs: _FakeAudio(int(audio_seconds * 16000))
     monkeypatch.setitem(sys.modules, "transformers.audio_utils", fake_audio_utils)
 
-    backend = Qwen3ASRBackend()
+    backend = TransformersSpeechLMBackend()
     backend._processors["test-qwen3"] = FakeProcessor()
     backend._models["test-qwen3"] = FakeModel()
     result = backend.transcribe("audio.wav", _model_config(), options)

@@ -14,7 +14,8 @@ import { cn } from '../lib/cn';
 import { useI18n } from '../lib/i18n';
 import {
   backendLanguage,
-  languageOptions,
+  languageOptionsForModel,
+  modelSupportsAutoLanguage,
   normalizeLanguageValue,
   postprocessOptions,
   type TranscriptionLanguage,
@@ -100,6 +101,13 @@ export function TranscribePage() {
     const current = models.find((model) => model.model_name === modelName);
     if (firstDownloaded && (!current || current.compatible === false)) setModelName(firstDownloaded);
   }, [modelName, models]);
+
+  useEffect(() => {
+    if (backend !== 'local') return;
+    if ((language === 'auto' || language === 'mixed') && !modelSupportsAutoLanguage(selectedModel?.languages)) {
+      setLanguage('zh-Hans');
+    }
+  }, [backend, language, selectedModel]);
 
   useEffect(() => {
     const firstProvider = providers.find((provider) => provider.enabled)?.id ?? providers[0]?.id ?? '';
@@ -407,7 +415,7 @@ export function TranscribePage() {
                   defaultsDirtyRef.current.language = true;
                   setLanguage(normalizeLanguageValue(value));
                 }}
-                options={languageOptions(locale)}
+                options={languageOptionsForModel(locale, backend === 'local' ? selectedModel?.languages : undefined)}
               />
             </Field>
             <Field label={locale === 'zh' ? '更多设置' : 'More settings'}>

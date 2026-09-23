@@ -27,6 +27,18 @@ export function languageOptions(locale: Locale) {
   }));
 }
 
+export function languageOptionsForModel(locale: Locale, modelLanguages?: string[] | null) {
+  const options = languageOptions(locale);
+  if (!modelLanguages || modelLanguages.includes('auto')) return options;
+  // 'mixed' also maps to the backend's auto value, so models without language
+  // detection lose both options.
+  return options.filter((option) => option.value !== 'auto' && option.value !== 'mixed');
+}
+
+export function modelSupportsAutoLanguage(modelLanguages?: string[] | null) {
+  return !modelLanguages || modelLanguages.includes('auto');
+}
+
 export function normalizeLanguageValue(value?: string | null): TranscriptionLanguage {
   if (value === 'en') return 'en';
   if (value === 'zh-Hant' || value === 'zh-TW' || value === 'traditional') return 'zh-Hant';

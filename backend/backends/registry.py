@@ -33,6 +33,9 @@ class ASRModelConfig:
     allow_patterns: list[str] | None = None
     source_candidates: list[ModelSourceCandidate] = field(default_factory=list)
     required_files: list[str] | None = None
+    adapter: str | None = None
+    license: str = ""
+    attribution: str | None = None
 
 
 HF_ASR_ALLOW_PATTERNS = [
@@ -70,6 +73,7 @@ def _whisper_config(model_size: str, repo_id: str, size_mb: int, display_suffix:
         runtime="torch",
         supports_word_timestamps=False,
         allow_patterns=HF_ASR_ALLOW_PATTERNS,
+        license="Apache-2.0",
         source_candidates=[ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True)],
     )
 
@@ -89,6 +93,7 @@ def _faster_whisper_config(model_size: str, repo_id: str, size_mb: int, display_
         runtime="ctranslate2",
         supports_word_timestamps=True,
         allow_patterns=HF_ASR_ALLOW_PATTERNS,
+        license="MIT",
         source_candidates=[ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True)],
     )
 
@@ -97,7 +102,8 @@ def _qwen3_asr_config(model_size: str, repo_id: str, size_mb: int, display_suffi
     return ASRModelConfig(
         model_name=f"qwen3-asr-{model_size}",
         display_name=f"Qwen3-ASR {display_suffix}",
-        engine="qwen3_asr",
+        engine="transformers_speech_lm",
+        adapter="qwen3_asr",
         source="modelscope",
         repo_id=repo_id,
         model_size=model_size,
@@ -124,10 +130,55 @@ def _qwen3_asr_config(model_size: str, repo_id: str, size_mb: int, display_suffi
         supports_timestamps=False,
         supports_word_timestamps=False,
         allow_patterns=HF_ASR_ALLOW_PATTERNS,
+        license="Apache-2.0",
         source_candidates=[
             ModelSourceCandidate("modelscope", repo_id, priority=0, verified=True),
             ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True),
         ],
+    )
+
+
+def _speech_lm_config(
+    model_name: str,
+    display_name: str,
+    adapter: str,
+    repo_id: str,
+    size_mb: int,
+    model_size: str,
+    languages: list[str],
+    *,
+    supports_timestamps: bool = False,
+    supports_word_timestamps: bool = False,
+    supports_diarization: bool = False,
+    hf_only: bool = False,
+    license: str = "Apache-2.0",
+) -> ASRModelConfig:
+    source_candidates = (
+        [ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True)]
+        if hf_only
+        else [
+            ModelSourceCandidate("modelscope", repo_id, priority=0, verified=True),
+            ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True),
+        ]
+    )
+    return ASRModelConfig(
+        model_name=model_name,
+        display_name=display_name,
+        engine="transformers_speech_lm",
+        adapter=adapter,
+        source=source_candidates[0].source,
+        repo_id=repo_id,
+        model_size=model_size,
+        size_mb=size_mb,
+        supported_devices=["cpu", "cuda"],
+        languages=languages,
+        runtime="transformers",
+        supports_timestamps=supports_timestamps,
+        supports_word_timestamps=supports_word_timestamps,
+        supports_diarization=supports_diarization,
+        license=license,
+        allow_patterns=HF_ASR_ALLOW_PATTERNS,
+        source_candidates=source_candidates,
     )
 
 
@@ -148,7 +199,8 @@ def get_all_model_configs() -> list[ASRModelConfig]:
         ASRModelConfig(
             model_name="moss-transcribe-diarize",
             display_name="MOSS Transcribe Diarize 0.9B",
-            engine="moss_transcribe_diarize",
+            engine="transformers_speech_lm",
+            adapter="moss_transcribe_diarize",
             source="modelscope",
             repo_id="OpenMOSS-Team/MOSS-Transcribe-Diarize",
             model_size="0.9b",
@@ -159,6 +211,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             supports_timestamps=True,
             supports_word_timestamps=False,
             supports_diarization=True,
+            license="Apache-2.0",
             allow_patterns=HF_ASR_ALLOW_PATTERNS,
             source_candidates=[
                 ModelSourceCandidate("modelscope", "OpenMOSS-Team/MOSS-Transcribe-Diarize", priority=0, verified=True),
@@ -177,6 +230,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             languages=COMMON_WHISPER_LANGUAGES,
             runtime="mlx",
             supports_word_timestamps=True,
+            license="Apache-2.0",
             allow_patterns=HF_ASR_ALLOW_PATTERNS,
             source_candidates=[
                 ModelSourceCandidate("modelscope", "mlx-community/whisper-large-v3-turbo", priority=0, verified=True),
@@ -196,6 +250,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             runtime="funasr",
             supports_timestamps=False,
             supports_word_timestamps=False,
+            license="ModelScope Model License",
             source_candidates=[ModelSourceCandidate("modelscope", "iic/SenseVoiceSmall", priority=0, verified=True)],
         ),
         ASRModelConfig(
@@ -211,6 +266,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             runtime="funasr",
             supports_timestamps=True,
             supports_word_timestamps=False,
+            license="ModelScope Model License",
             # The HF mirror is downloaded with allow_patterns (ModelScope ignores
             # them), so the list must name this repo's actual files explicitly:
             # the shared HF_ASR_ALLOW_PATTERNS would skip model.pt/config.yaml.
@@ -233,6 +289,7 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             runtime="funasr",
             supports_timestamps=False,
             supports_word_timestamps=False,
+            license="Apache-2.0",
             source_candidates=[ModelSourceCandidate("modelscope", "FunAudioLLM/Fun-ASR-Nano-2512", priority=0, verified=True)],
             required_files=["config.yaml", "model.pt", "multilingual.tiktoken", "Qwen3-0.6B/tokenizer.json"],
         ),
@@ -242,6 +299,62 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             1450,
             "Distil Large V3",
             languages=["en"],
+        ),
+        _speech_lm_config(
+            "granite-speech-4.1-2b",
+            "Granite Speech 4.1 2B",
+            "granite_speech",
+            "ibm-granite/granite-speech-4.1-2b",
+            4945,
+            "2b",
+            ["en", "fr", "de", "es", "pt", "ja"],
+        ),
+        _speech_lm_config(
+            "granite-speech-4.1-2b-plus",
+            "Granite Speech 4.1 2B Plus",
+            "granite_speech_plus",
+            "ibm-granite/granite-speech-4.1-2b-plus",
+            4225,
+            "2b-plus",
+            ["en", "fr", "de", "es", "pt"],
+            supports_word_timestamps=True,
+            supports_diarization=True,
+        ),
+        _speech_lm_config(
+            "cohere-transcribe-2b",
+            "Cohere Transcribe 2B",
+            "cohere_transcribe",
+            "CohereLabs/cohere-transcribe-03-2026",
+            4130,
+            "2b",
+            ["en", "fr", "de", "it", "es", "pt", "el", "nl", "pl", "zh", "ja", "ko", "vi", "ar"],
+        ),
+        _speech_lm_config(
+            "ark-asr-0.6b",
+            "ARK-ASR 0.6B",
+            "ark_asr",
+            "Edge0/ARK-ASR-0.6B",
+            2600,
+            "0.6b",
+            ["auto", "zh", "en", "de", "ja", "fr", "ko", "es", "pl", "it", "ro", "hu", "cs", "nl", "fi", "hr", "sk", "sl", "et", "lt"],
+        ),
+        _speech_lm_config(
+            "ark-asr-3b",
+            "ARK-ASR 3B",
+            "ark_asr",
+            "Edge0/ARK-ASR-3B",
+            8130,
+            "3b",
+            ["auto", "zh", "en", "de", "ja", "fr", "ko", "es", "pl", "it", "ro", "hu", "cs", "nl", "fi", "hr", "sk", "sl", "et", "lt"],
+        ),
+        _speech_lm_config(
+            "voxtral-mini-3b",
+            "Voxtral Mini 3B",
+            "voxtral_mini",
+            "mistralai/Voxtral-Mini-3B-2507",
+            9360,
+            "3b",
+            ["auto", "en", "fr", "de", "es", "it", "pt", "nl", "hi"],
         ),
     ]
 

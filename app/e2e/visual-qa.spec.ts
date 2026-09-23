@@ -61,7 +61,7 @@ const modelStatus = (overrides: Record<string, unknown>) => ({
 const qwen3Model = modelStatus({
   model_name: 'qwen3-asr-0.6b',
   display_name: 'Qwen3 ASR 0.6B',
-  engine: 'qwen3_asr',
+  engine: 'transformers_speech_lm',
   repo_id: 'Qwen/Qwen3-ASR-0.6B',
   model_size: '0.6b',
   size_mb: 1200,

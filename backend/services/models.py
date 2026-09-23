@@ -13,17 +13,21 @@ from pathlib import Path
 from typing import Any
 
 from backend import config
-from backend.backends.local_asr import is_model_loaded, unload_model as unload_local_model
+from backend.backends.local_asr import is_model_loaded, speech_lm_compat_spec, unload_model as unload_local_model
 from backend.backends import ASRModelConfig, ModelSourceCandidate, get_all_model_configs, get_model_config
 from backend.models import ASRModelStatus, ModelRecommendationRequest, ModelRecommendationResponse
 from backend.services.errors import ASRboxError
 from backend.services import model_storage
 from backend.services.platform import (
+    cohere_asr_import_error,
     funasr_available,
+    granite_speech_import_error,
+    granite_speech_plus_import_error,
     moss_transcribe_diarize_available,
     qwen3_asr_available,
     runtime_mlx_import_error as mlx_runtime_import_error,
     torchaudio_available,
+    voxtral_import_error,
 )
 from backend.utils.hf_progress import track_hf_download
 from backend.utils.progress import get_progress_manager
@@ -32,6 +36,7 @@ _active_downloads: set[str] = set()
 _cancelled_downloads: set[str] = set()
 _paused_downloads: set[str] = set()
 _download_errors: dict[str, str] = {}
+_download_error_codes: dict[str, str] = {}
 _state_lock = threading.Lock()
 _download_queue: queue.Queue[ASRModelConfig] = queue.Queue()
 _download_worker_started = False
@@ -316,6 +321,23 @@ def _runtime_capability(
     return bool(runtime_snapshot.get(key))
 
 
+def _probe_fallback(probe_key: str):
+    if probe_key == "qwen3_asr_available":
+        return qwen3_asr_available
+    if probe_key == "moss_transcribe_diarize_available":
+        return moss_transcribe_diarize_available
+    import_error_by_key = {
+        "granite_speech_available": granite_speech_import_error,
+        "granite_speech_plus_available": granite_speech_plus_import_error,
+        "cohere_asr_available": cohere_asr_import_error,
+        "voxtral_available": voxtral_import_error,
+    }
+    import_error = import_error_by_key.get(probe_key)
+    if import_error is not None:
+        return lambda: import_error() is None
+    return None
+
+
 def check_model_compatibility(
     model_name: str,
     *,
@@ -367,34 +389,27 @@ def check_model_compatibility(
             missing.append("mlx weights")
         if not _has_any(model_dir, ("config.json", "tokenizer.json")):
             missing.append("config/tokenizer")
-    elif engine == "qwen3_asr":
-        if not _has_any(model_dir, ("config.json",)):
-            missing.append("config.json")
-        if not _has_any(model_dir, ("tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt")):
-            missing.append("tokenizer")
-        if not _has_any(model_dir, ("processor_config.json", "preprocessor_config.json", "chat_template.json")):
-            missing.append("processor/chat_template")
-        if not _has_weight_files(model_dir):
-            missing.append("weights")
-        qwen_ready = _runtime_capability(runtime_snapshot, "qwen3_asr_available", qwen3_asr_available)
-        runtime_pending = qwen_ready is None
-        if qwen_ready is False:
-            missing.append("transformers Qwen3-ASR support")
-    elif engine == "moss_transcribe_diarize":
-        if not _has_any(model_dir, ("config.json",)):
-            missing.append("config.json")
-        if not _has_any(model_dir, ("tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt")):
-            missing.append("tokenizer")
-        if not _has_any(model_dir, ("processor_config.json", "preprocessor_config.json", "chat_template.json", "chat_template.jinja")):
-            missing.append("processor/chat_template")
-        if not _has_glob(model_dir, ("*.py",)):
-            missing.append("remote code")
-        if not _has_weight_files(model_dir):
-            missing.append("weights")
-        moss_ready = _runtime_capability(runtime_snapshot, "moss_transcribe_diarize_available", moss_transcribe_diarize_available)
-        runtime_pending = moss_ready is None
-        if moss_ready is False:
-            missing.append("moss-transcribe-diarize runtime")
+    elif engine == "transformers_speech_lm":
+        spec = speech_lm_compat_spec(model_config.adapter)
+        if spec is None:
+            missing.append(f"unknown speech-LM adapter: {model_config.adapter}")
+        else:
+            if not _has_any(model_dir, ("config.json",)):
+                missing.append("config.json")
+            if not _has_any(model_dir, tuple(spec["tokenizer_files"])):
+                missing.append("tokenizer")
+            if not _has_any(model_dir, ("processor_config.json", "preprocessor_config.json", "chat_template.json", "chat_template.jinja")):
+                missing.append("processor/chat_template")
+            if spec["requires_remote_code_files"] and not _has_glob(model_dir, ("*.py",)):
+                missing.append("remote code")
+            if not _has_weight_files(model_dir):
+                missing.append("weights")
+            probe_key = spec["runtime_probe_key"]
+            if probe_key:
+                probe_ready = _runtime_capability(runtime_snapshot, probe_key, _probe_fallback(probe_key))
+                runtime_pending = probe_ready is None
+                if probe_ready is False:
+                    missing.append(spec["runtime_missing_label"])
     else:
         missing.append(f"unsupported engine: {engine}")
 
@@ -453,10 +468,11 @@ def _catalog_runtime_compatibility(
             missing.append("torchaudio runtime")
         if not runtime_snapshot.get("funasr_available"):
             missing.append("funasr runtime")
-    elif engine == "qwen3_asr" and not runtime_snapshot.get("qwen3_asr_available"):
-        missing.append("transformers Qwen3-ASR support")
-    elif engine == "moss_transcribe_diarize" and not runtime_snapshot.get("moss_transcribe_diarize_available"):
-        missing.append("moss-transcribe-diarize runtime")
+    elif engine == "transformers_speech_lm":
+        spec = speech_lm_compat_spec(model_config.adapter)
+        probe_key = spec["runtime_probe_key"] if spec else None
+        if probe_key and not runtime_snapshot.get(probe_key):
+            missing.append(spec["runtime_missing_label"])
     if missing:
         return False, f"Missing required files: {', '.join(missing)}"
     return True, None
@@ -510,6 +526,9 @@ def list_model_statuses() -> list[ASRModelStatus]:
                 error=error,
                 size_on_disk_mb=size_on_disk_mb,
                 download_error=error,
+                download_error_code=None if downloaded else _download_error_codes.get(item.model_name),
+                license=item.license or None,
+                attribution=item.attribution,
                 compatible=compatible,
                 compatibility_error=compatibility_error,
                 compatibility_error_code=compatibility_error_code,
@@ -591,12 +610,26 @@ def _download_modelscope_snapshot(model_config: ASRModelConfig, model_dir: Path)
         )
 
 
+def _is_gated_repo_error(exc: BaseException) -> bool:
+    try:
+        from huggingface_hub.utils import GatedRepoError, HfHubHTTPError
+    except Exception:
+        return False
+    if isinstance(exc, GatedRepoError):
+        return True
+    if isinstance(exc, HfHubHTTPError):
+        response = getattr(exc, "response", None)
+        return getattr(response, "status_code", None) in (401, 403)
+    return False
+
+
 def _run_download(model_config: ASRModelConfig) -> None:
     model_name = model_config.model_name
     model_dir = _model_dir(model_name)
     progress = get_progress_manager()
     stop_progress = threading.Event()
     progress_thread: threading.Thread | None = None
+    gated_hit = False
     try:
         model_storage.require_storage(writable=True)
         _download_checkpoint(model_name)
@@ -629,6 +662,8 @@ def _run_download(model_config: ASRModelConfig) -> None:
                 installed_config = candidate_config
                 break
             except Exception as exc:
+                if candidate.source == "huggingface" and _is_gated_repo_error(exc):
+                    gated_hit = True
                 errors.append(str(exc) if len(candidates) == 1 else f"{candidate.source}:{candidate.repo_id}: {exc}")
                 if index < len(candidates) - 1:
                     progress.update_progress(
@@ -674,6 +709,8 @@ def _run_download(model_config: ASRModelConfig) -> None:
         error = str(exc)
         with _state_lock:
             _download_errors[model_name] = error
+            if gated_hit:
+                _download_error_codes[model_name] = "GATED_REPO_ACCESS"
         progress.mark_error(model_name, error)
     finally:
         stop_progress.set()
@@ -723,6 +760,7 @@ def download_model(model_name: str) -> str:
         _cancelled_downloads.discard(model_name)
         _paused_downloads.discard(model_name)
         _download_errors.pop(model_name, None)
+        _download_error_codes.pop(model_name, None)
 
     progress = get_progress_manager()
     progress.update_progress(
@@ -768,6 +806,7 @@ def delete_model(model_name: str) -> None:
         _cancelled_downloads.discard(model_name)
         _paused_downloads.discard(model_name)
         _download_errors.pop(model_name, None)
+        _download_error_codes.pop(model_name, None)
     get_progress_manager().clear_progress(model_name)
 
 

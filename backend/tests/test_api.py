@@ -471,6 +471,51 @@ def test_model_download_error_is_reported_and_delete_clears_cache(tmp_path: Path
     assert status["error"] is None
 
 
+def test_gated_repo_download_failure_surfaces_machine_readable_code(tmp_path: Path, monkeypatch) -> None:
+    import requests as requests_lib
+    from huggingface_hub.utils import GatedRepoError
+
+    def failing_mirror(config, model_dir: Path) -> str:
+        raise RuntimeError("mirror unavailable")
+
+    response = requests_lib.Response()
+    response.status_code = 403
+
+    def gated_download(config, model_dir: Path) -> str:
+        raise GatedRepoError("Access to this repository is restricted", response=response)
+
+    monkeypatch.setattr("backend.services.models._download_modelscope_snapshot", failing_mirror)
+    monkeypatch.setattr("backend.services.models._download_huggingface_snapshot", gated_download)
+    client = make_client(tmp_path)
+
+    response = client.post("/models/download", json={"model_name": "cohere-transcribe-2b"})
+    assert response.status_code == 200
+    status = wait_for_model_status(client, "cohere-transcribe-2b", "downloading", False)
+
+    assert status["downloaded"] is False
+    assert status["download_error_code"] == "GATED_REPO_ACCESS"
+    assert "restricted" in status["download_error"]
+
+    retry = client.delete("/models/cohere-transcribe-2b")
+    assert retry.status_code == 200
+    status = wait_for_model_status(client, "cohere-transcribe-2b", "downloaded", False)
+    assert status["download_error_code"] is None
+
+
+def test_speech_lm_compatibility_accepts_tekken_tokenizer_layout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
+    model_dir = create_downloaded_model(tmp_path, "voxtral-mini-3b")
+    (model_dir / "tokenizer.json").unlink()
+    (model_dir / "tekken.json").write_text("{}", encoding="utf-8")
+    client = make_client(tmp_path)
+
+    compatibility = client.get("/models/voxtral-mini-3b/compatibility")
+    assert compatibility.status_code == 200
+    body = compatibility.json()
+    assert "tokenizer" not in body["missing"]
+    assert body["downloaded"] is True
+
+
 def test_model_compatibility_verify_and_recommendation(tmp_path: Path) -> None:
     client = make_client(tmp_path)
     incomplete = tmp_path / "models" / "faster-whisper-small"
@@ -1230,7 +1275,7 @@ class _FakeLength:
 
 
 def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path, monkeypatch) -> None:
-    from backend.backends.local_asr import Qwen3ASRBackend
+    from backend.backends.local_asr import TransformersSpeechLMBackend
     from backend.backends.registry import get_model_config
 
     model_dir = create_downloaded_model(tmp_path, "qwen3-asr-0.6b")
@@ -1288,7 +1333,7 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
 
     monkeypatch.setattr("transformers.audio_utils.load_audio", fake_load_audio)
 
-    backend = Qwen3ASRBackend()
+    backend = TransformersSpeechLMBackend()
     backend._processors["qwen3-asr-0.6b"] = FakeProcessor()
     backend._models["qwen3-asr-0.6b"] = FakeModel()
     result = backend.transcribe(
@@ -1307,7 +1352,7 @@ def test_qwen3_asr_backend_uses_processor_and_maps_transcription(tmp_path: Path,
 
 
 def test_moss_transcribe_diarize_backend_parses_speaker_segments(monkeypatch) -> None:
-    from backend.backends.local_asr import MossTranscribeDiarizeBackend
+    from backend.backends.local_asr import TransformersSpeechLMBackend
     from backend.backends.registry import get_model_config
 
     calls: dict[str, object] = {}
@@ -1324,7 +1369,7 @@ def test_moss_transcribe_diarize_backend_parses_speaker_segments(monkeypatch) ->
     monkeypatch.setattr("moss_transcribe_diarize.inference_utils.build_transcription_messages", fake_build_messages)
     monkeypatch.setattr("moss_transcribe_diarize.inference_utils.generate_transcription", fake_generate)
 
-    backend = MossTranscribeDiarizeBackend()
+    backend = TransformersSpeechLMBackend()
     backend._processors["moss-transcribe-diarize"] = object()
     backend._models["moss-transcribe-diarize"] = object()
     result = backend.transcribe("audio.wav", get_model_config("moss-transcribe-diarize"), {})

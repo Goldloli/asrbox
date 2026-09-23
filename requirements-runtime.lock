@@ -92,6 +92,7 @@ MarkupSafe==3.0.3
 matplotlib==3.11.0
 mcp==1.28.1
 mdurl==0.1.2
+mistral_common==1.11.7
 mlx==0.31.2 ; sys_platform == "darwin"
 mlx-metal==0.31.2 ; sys_platform == "darwin"
 mlx-whisper==0.4.3 ; sys_platform == "darwin"
@@ -137,9 +138,11 @@ pyannote-database==6.1.1
 pyannote-metrics==4.1
 pyannote-pipeline==4.0.0
 pyannoteai-sdk==0.4.0
+pycountry==26.2.16
 pycparser==3.0
 pycryptodome==3.23.0
 pydantic==2.13.4
+pydantic-extra-types==2.11.1
 pydantic-settings==2.14.2
 pydantic_core==2.46.4
 Pygments==2.20.0
@@ -180,7 +183,7 @@ sympy==1.14.0
 tensorboardX==2.6.5
 threadpoolctl==3.6.0
 tiktoken==0.13.0
-tokenizers==0.22.2
+tokenizers==0.23.2
 torch==2.11.0
 torch-audiomentations==0.12.0
 torch-complex==0.4.4
@@ -189,7 +192,7 @@ torchaudio==2.11.0
 torchcodec==0.14.0
 torchmetrics==1.9.0
 tqdm==4.68.3
-transformers @ git+https://github.com/huggingface/transformers.git@09835700ac3db4a08762a0a6f6960c346ebf7365
+transformers==5.17.0
 truststore==0.10.4
 typer==0.25.1
 typing-inspection==0.4.2

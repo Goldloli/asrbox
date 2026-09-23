@@ -147,6 +147,9 @@ export interface ModelStatus {
   compatibility_error?: string | null;
   compatibility_error_code?: 'model_not_downloaded' | 'missing_files' | 'unknown_model' | 'runtime_incompatible' | null;
   download_error?: string | null;
+  download_error_code?: string | null;
+  license?: string | null;
+  attribution?: string | null;
   size_on_disk_mb?: number | null;
   cache_detected?: boolean;
   cache_size_mb?: number | null;
@@ -590,6 +593,10 @@ export interface RuntimeStatus {
   qwen3_asr_available: boolean;
   transformers_qwen3_asr_available: boolean;
   moss_transcribe_diarize_available: boolean;
+  granite_speech_available: boolean;
+  granite_speech_plus_available: boolean;
+  cohere_asr_available: boolean;
+  voxtral_available: boolean;
   data_dir: string;
   models_dir: string;
   free_disk_bytes?: number | null;

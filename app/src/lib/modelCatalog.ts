@@ -1,13 +1,14 @@
 import type { ModelStatus } from './api';
 import type { Locale } from '../stores/uiStore';
 
-export type ModelCategory = 'recommended' | 'whisper' | 'faster' | 'apple' | 'chinese' | 'diarization';
+export type ModelCategory = 'recommended' | 'whisper' | 'faster' | 'apple' | 'chinese' | 'diarization' | 'speechlm';
 
 export function modelCategory(model: ModelStatus): Exclude<ModelCategory, 'recommended'> {
   if (model.supports_diarization) return 'diarization';
   if (model.engine === 'mlx_whisper') return 'apple';
-  if (model.engine === 'funasr' || model.model_name.startsWith('qwen3-asr')) return 'chinese';
+  if (model.engine === 'funasr' || model.model_name.startsWith('qwen3-asr') || model.model_name.startsWith('ark-asr')) return 'chinese';
   if (model.engine === 'faster_whisper') return 'faster';
+  if (model.engine === 'transformers_speech_lm') return 'speechlm';
   return 'whisper';
 }
 
@@ -33,6 +34,21 @@ export function modelDescription(model: ModelStatus, locale: Locale) {
     ? '端到端转写 + 说话人分离一次完成，输出 [S01]/[S02] 标签；INTERSPEECH 2026 MLC-SLM 冠军模型，Apache 2.0。'
     : 'End-to-end transcription with speaker diarization in one pass, emitting [S01]/[S02] labels. INTERSPEECH 2026 MLC-SLM winner, Apache 2.0.';
   if (model.model_name.startsWith('qwen3-asr')) return zh ? '中文能力强但依赖较新，适合愿意调环境的用户；时间轴为近似值。' : 'Strong Chinese ASR, but needs newer dependencies; timeline is approximate.';
+  if (model.model_name === 'granite-speech-4.1-2b') return zh
+    ? 'IBM 开源多语言模型，英法德西葡 + 日语转写与标点还原，适合欧洲语言字幕。'
+    : 'IBM open multilingual model with transcription and punctuation for English, French, German, Spanish, Portuguese, and Japanese.';
+  if (model.model_name === 'granite-speech-4.1-2b-plus') return zh
+    ? '单遍输出说话人归属或词级时间戳（按任务选项切换），欧洲 5 语种；无标点与大小写。'
+    : 'Speaker-attributed turns or word-level timestamps in one pass (switched by the task option), 5 European languages; no punctuation or casing.';
+  if (model.model_name === 'cohere-transcribe-2b') return zh
+    ? '2026 年 3 月英语榜第一的多语言模型（14 语言含中文），速度极快；需手动选择语言，无时间戳。'
+    : 'March-2026 English leaderboard champion covering 14 languages including Chinese, very fast; requires an explicit language and has no timestamps.';
+  if (model.model_name.startsWith('ark-asr')) return zh
+    ? '中英 + 17 个欧洲语种的高精度模型，语种跟随音频；无时间戳，长音频自动切分。'
+    : 'High-accuracy model for Chinese, English, and 17 more European languages, following the spoken language; no timestamps, long audio is auto-chunked.';
+  if (model.model_name === 'voxtral-mini-3b') return zh
+    ? 'Mistral 开源离线模型，8 语种自动检测，单遍最长 30 分钟；无中文、无时间戳。'
+    : 'Mistral open offline model with auto language detection across 8 languages, up to 30 minutes in one pass; no Chinese, no timestamps.';
   if (model.engine === 'faster_whisper') return zh ? 'CTranslate2 运行，通常比标准 Whisper 更省资源。' : 'CTranslate2 runtime, usually lighter than standard Whisper.';
   if (model.engine === 'whisper_transformers') return zh ? '标准 Whisper 系列，兼容稳定，越大越准也越占资源。' : 'Standard Whisper family, stable compatibility, larger means heavier.';
   return zh ? '通用转写模型，请按语言和运行时选择。' : 'General transcription model. Choose by language and runtime.';
@@ -103,7 +119,7 @@ function estimateModelLadder(model: ModelStatus): ModelLadderResult {
   const accuracy: Tier = accuracyScore >= 90 ? 'S' : accuracyScore >= 75 ? 'A' : accuracyScore >= 60 ? 'B' : 'C';
   const languages: Tier = model.engine === 'funasr'
     ? 'B'
-    : model.engine === 'qwen3_asr' || model.model_name.startsWith('qwen3-asr')
+    : model.model_name.startsWith('qwen3-asr')
       ? 'A'
       : model.languages.length >= 40
         ? 'S'
@@ -116,12 +132,25 @@ function estimateModelLadder(model: ModelStatus): ModelLadderResult {
 export function isApproximateTimelineModel(modelName: string | null | undefined) {
   // Mirrors the registry's supports_timestamps=False local models: their cue times
   // are spread across each chunk's audio window instead of measured.
-  return Boolean(modelName) && (modelName!.startsWith('qwen3-asr') || modelName === 'sensevoice-small' || modelName === 'fun-asr-nano');
+  const approximate = modelName?.startsWith('qwen3-asr')
+    || modelName === 'sensevoice-small'
+    || modelName === 'fun-asr-nano'
+    || modelName === 'granite-speech-4.1-2b'
+    || modelName === 'granite-speech-4.1-2b-plus'
+    || modelName === 'cohere-transcribe-2b'
+    || modelName?.startsWith('ark-asr')
+    || modelName === 'voxtral-mini-3b';
+  return Boolean(approximate);
 }
 
 export function modelBestFor(model: ModelStatus, locale: Locale) {
   const zh = locale === 'zh';
   if (model.model_name === 'moss-transcribe-diarize') return zh ? '多人会议、说话人区分' : 'meetings, speaker separation';
+  if (model.model_name === 'granite-speech-4.1-2b-plus') return zh ? '词级时间轴、说话人归属' : 'word-level timing, speaker attribution';
+  if (model.model_name === 'granite-speech-4.1-2b') return zh ? '欧洲语言字幕' : 'European-language subtitles';
+  if (model.model_name === 'cohere-transcribe-2b') return zh ? '英语与多语言精度' : 'English and multilingual accuracy';
+  if (model.model_name.startsWith('ark-asr')) return zh ? '中英多语种内容' : 'Chinese-English multilingual audio';
+  if (model.model_name === 'voxtral-mini-3b') return zh ? '超长音频单遍转写' : 'very long audio in one pass';
   if (model.model_name.includes('distil')) return zh ? '英文快速转写' : 'fast English transcription';
   if (model.model_name.includes('large')) return zh ? '高精度、长音频' : 'high accuracy, long audio';
   if (model.model_name.includes('turbo')) return zh ? '速度优先' : 'speed first';
@@ -139,6 +168,21 @@ export interface ModelDetails {
 }
 
 type LocalizedModelDetails = { zh: ModelDetails; en: ModelDetails };
+
+const ARK_ASR_DETAILS: LocalizedModelDetails = {
+  zh: {
+    capabilities: ['中英 + 17 欧洲语种', '语种跟随音频'],
+    languages: '自动跟随音频：中、英、德、日、法、韩、西、波兰、意、罗、匈、捷、荷、芬、克、斯洛伐克、斯洛文尼亚、爱沙尼亚、立陶宛',
+    bestFor: ['中英混合内容', '多语种欧洲内容'],
+    limitations: ['无时间戳，时间轴为近似值', '运行模型仓库自定义代码（trust_remote_code）'],
+  },
+  en: {
+    capabilities: ['Chinese, English + 17 European languages', 'Language follows the audio'],
+    languages: 'Auto-follows the audio: Chinese, English, German, Japanese, French, Korean, Spanish, Polish, Italian, Romanian, Hungarian, Czech, Dutch, Finnish, Croatian, Slovak, Slovenian, Estonian, Lithuanian',
+    bestFor: ['Mixed Chinese-English content', 'Multilingual European content'],
+    limitations: ['No timestamps; timeline is approximate', 'Runs the model repository custom code (trust_remote_code)'],
+  },
+};
 
 const WHISPER_CAPABILITIES = {
   zh: ['段级时间戳', '多语言识别', '自动语言检测'],
@@ -408,6 +452,64 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
       languages: 'English only',
       bestFor: ['English batch and long-audio transcription', 'Speed first (about twice as fast as Large V3)'],
       limitations: ['English only; not usable for Chinese or other languages', 'Slightly less accurate than Large V3'],
+    },
+  },
+  'granite-speech-4.1-2b': {
+    zh: {
+      capabilities: ['转写 + 标点与大小写', '英法德西葡 + 日语'],
+      languages: '英、法、德、西、葡、日（无中文，无自动语种声明）',
+      bestFor: ['欧洲语言字幕', '需要标点还原的转写'],
+      limitations: ['不支持中文', '无原生时间戳，时间轴为近似值'],
+    },
+    en: {
+      capabilities: ['Transcription with punctuation and casing', 'English, French, German, Spanish, Portuguese, Japanese'],
+      languages: 'English, French, German, Spanish, Portuguese, Japanese (no Chinese; no auto language detection declared)',
+      bestFor: ['European-language subtitles', 'Transcripts needing punctuation'],
+      limitations: ['No Chinese support', 'No native timestamps; timeline is approximate'],
+    },
+  },
+  'granite-speech-4.1-2b-plus': {
+    zh: {
+      capabilities: ['说话人归属（默认模式）', '词级时间戳（开启词级时间戳选项）'],
+      languages: '英、法、德、西、葡（无中文）',
+      bestFor: ['词级精确时间轴', '按说话人分段的转写'],
+      limitations: ['不支持中文', '不支持标点与大小写', '说话人与时间戳为两种互斥模式，长音频按块切分后说话人编号重新开始'],
+    },
+    en: {
+      capabilities: ['Speaker attribution (default mode)', 'Word-level timestamps (word-timestamps option)'],
+      languages: 'English, French, German, Spanish, Portuguese (no Chinese)',
+      bestFor: ['Precise word-level timing', 'Speaker-labelled transcripts'],
+      limitations: ['No Chinese support', 'No punctuation or casing', 'Speakers and timestamps are mutually exclusive modes; speaker numbering restarts per chunk on long audio'],
+    },
+  },
+  'cohere-transcribe-2b': {
+    zh: {
+      capabilities: ['14 语言转写', '长音频自动分块'],
+      languages: '英、法、德、意、西、葡、希腊、荷、波兰、中、日、韩、越、阿拉伯',
+      bestFor: ['英语高精度转写', '多语言内容'],
+      limitations: ['必须手动选择语言（不支持自动检测）', '无时间戳，时间轴为近似值', 'Hugging Face 源需申请访问，镜像源不可用时下载会失败并提示'],
+    },
+    en: {
+      capabilities: ['14-language transcription', 'Automatic long-audio chunking'],
+      languages: 'English, French, German, Italian, Spanish, Portuguese, Greek, Dutch, Polish, Chinese, Japanese, Korean, Vietnamese, Arabic',
+      bestFor: ['High-accuracy English transcription', 'Multilingual content'],
+      limitations: ['Requires an explicit language (no auto detection)', 'No timestamps; timeline is approximate', 'Hugging Face source needs access approval; downloads fail with guidance when no mirror is reachable'],
+    },
+  },
+  'ark-asr-0.6b': ARK_ASR_DETAILS,
+  'ark-asr-3b': ARK_ASR_DETAILS,
+  'voxtral-mini-3b': {
+    zh: {
+      capabilities: ['8 语种自动检测', '单遍最长 30 分钟'],
+      languages: '自动检测：英、法、德、西、意、葡、荷、印地语',
+      bestFor: ['超长音频单遍转写', '音频问答理解之外的纯转写'],
+      limitations: ['不支持中文', '无时间戳，时间轴为近似值', '下载体积约 9.4 GB'],
+    },
+    en: {
+      capabilities: ['8-language auto detection', 'Up to 30 minutes in one pass'],
+      languages: 'Auto-detected: English, French, German, Spanish, Italian, Portuguese, Dutch, Hindi',
+      bestFor: ['Very long audio in one pass', 'Pure transcription jobs'],
+      limitations: ['No Chinese support', 'No timestamps; timeline is approximate', 'About 9.4 GB download'],
     },
   },
 };

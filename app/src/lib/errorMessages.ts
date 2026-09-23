@@ -37,6 +37,14 @@ export function localizedErrorPresentation(error: unknown, locale: Locale): Erro
       detail,
     };
   }
+  if (code === 'LANGUAGE_REQUIRED') {
+    return {
+      summary: locale === 'zh'
+        ? '该模型不支持自动语种检测，请在任务设置中手动选择语言后重试。'
+        : 'This model has no automatic language detection. Pick an explicit language in the task settings and retry.',
+      detail,
+    };
+  }
   return {
     summary: locale === 'zh'
       ? '操作未能完成，请查看技术详情后重试。'

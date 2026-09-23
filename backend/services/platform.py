@@ -82,6 +82,51 @@ def moss_transcribe_diarize_available() -> bool:
     return bool(runtime_probe_snapshot()["moss_transcribe_diarize_available"])
 
 
+def _speech_lm_class_import_error(*modules: tuple[str, str]) -> str | None:
+    try:
+        for module_name, attr in modules:
+            module = __import__(module_name, fromlist=[attr])
+            if getattr(module, attr, None) is None:
+                return f"required class {attr} is unavailable"
+        return None
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
+def granite_speech_import_error() -> str | None:
+    if not module_available("transformers"):
+        return "transformers is not installed"
+    return _speech_lm_class_import_error(
+        ("transformers.models.granite_speech.modeling_granite_speech", "GraniteSpeechForConditionalGeneration"),
+    )
+
+
+def granite_speech_plus_import_error() -> str | None:
+    if not module_available("transformers"):
+        return "transformers is not installed"
+    return _speech_lm_class_import_error(
+        ("transformers.models.granite_speech_plus.modeling_granite_speech_plus", "GraniteSpeechPlusForConditionalGeneration"),
+    )
+
+
+def cohere_asr_import_error() -> str | None:
+    if not module_available("transformers"):
+        return "transformers is not installed"
+    return _speech_lm_class_import_error(
+        ("transformers.models.cohere_asr.modeling_cohere_asr", "CohereAsrForConditionalGeneration"),
+    )
+
+
+def voxtral_import_error() -> str | None:
+    if not module_available("transformers"):
+        return "transformers is not installed"
+    if not module_available("mistral_common"):
+        return "mistral-common is not installed"
+    return _speech_lm_class_import_error(
+        ("transformers.models.voxtral.modeling_voxtral", "VoxtralForConditionalGeneration"),
+    )
+
+
 def mlx_runtime_import_errors() -> tuple[str | None, str | None]:
     core_error = module_import_error("mlx.core") if module_available("mlx.core") else "mlx.core is not installed"
     whisper_error = module_import_error("mlx_whisper") if module_available("mlx_whisper") else "mlx_whisper is not installed"
@@ -165,6 +210,18 @@ def detect_runtime_in_process() -> dict[str, Any]:
     moss_runtime_available = moss_error is None
     if module_available("moss_transcribe_diarize") and moss_error is not None:
         warnings.append(f"MOSS-Transcribe-Diarize import failed: {moss_error}")
+    granite_speech_error = granite_speech_import_error()
+    granite_speech_plus_error = granite_speech_plus_import_error()
+    cohere_asr_error = cohere_asr_import_error()
+    voxtral_error = voxtral_import_error()
+    if granite_speech_error is not None:
+        warnings.append(f"Granite Speech import failed: {granite_speech_error}")
+    if granite_speech_plus_error is not None:
+        warnings.append(f"Granite Speech plus import failed: {granite_speech_plus_error}")
+    if cohere_asr_error is not None:
+        warnings.append(f"Cohere Transcribe import failed: {cohere_asr_error}")
+    if voxtral_error is not None:
+        warnings.append(f"Voxtral import failed: {voxtral_error}")
     mlx_import_error, mlx_whisper_import_error = mlx_runtime_import_errors()
     if mlx_import_error:
         warnings.append(f"MLX import failed: {mlx_import_error}")
@@ -206,6 +263,10 @@ def detect_runtime_in_process() -> dict[str, Any]:
         "qwen3_asr_available": qwen3_asr_runtime_available,
         "transformers_qwen3_asr_available": qwen3_asr_runtime_available,
         "moss_transcribe_diarize_available": moss_runtime_available,
+        "granite_speech_available": granite_speech_error is None,
+        "granite_speech_plus_available": granite_speech_plus_error is None,
+        "cohere_asr_available": cohere_asr_error is None,
+        "voxtral_available": voxtral_error is None,
         "warnings": warnings,
     }
 
@@ -348,5 +409,9 @@ def _failed_runtime_probe(error: str) -> dict[str, Any]:
         "qwen3_asr_available": False,
         "transformers_qwen3_asr_available": False,
         "moss_transcribe_diarize_available": False,
+        "granite_speech_available": False,
+        "granite_speech_plus_available": False,
+        "cohere_asr_available": False,
+        "voxtral_available": False,
         "warnings": [f"Runtime compatibility probe failed: {error}"],
     }

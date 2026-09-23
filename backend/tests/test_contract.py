@@ -252,6 +252,9 @@ def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:
         "compatible",
         "compatibility_error_code",
         "download_error",
+        "download_error_code",
+        "license",
+        "attribution",
         "cache_detected",
         "size_on_disk_mb",
         "loaded",
@@ -270,6 +273,14 @@ def test_model_status_contract_fields_are_stable(tmp_path: Path) -> None:
     devices_schema = client.app.openapi()["components"]["schemas"]["ASRModelStatus"]["properties"]["supported_devices"]
     assert devices_schema["type"] == "array"
     assert set(devices_schema["items"]["enum"]) == {"cpu", "cuda", "mps", "mlx"}
+    runtime_schema = client.app.openapi()["components"]["schemas"]["RuntimeStatusResponse"]["properties"]
+    for runtime_key in (
+        "granite_speech_available",
+        "granite_speech_plus_available",
+        "cohere_asr_available",
+        "voxtral_available",
+    ):
+        assert runtime_key in runtime_schema
 
 
 def test_model_storage_contract_is_typed(tmp_path: Path) -> None:

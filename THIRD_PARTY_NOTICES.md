@@ -61,6 +61,11 @@ Before adding a model to the catalog or bundling a model:
 | Paraformer-large zh (`paraformer-zh`) | ModelScope `iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch`; HF mirror `funasr/paraformer-zh` | FunASR code MIT; model under the ModelScope Model License Agreement (verify before redistribution) | Commercial use permitted under the model agreement; ASRbox downloads on demand and never bundles the weights |
 | Fun-ASR-Nano (`fun-asr-nano`) | ModelScope `FunAudioLLM/Fun-ASR-Nano-2512` | Apache 2.0 (package and model) | No attribution obligation beyond notice retention |
 | Distil-Whisper large-v3 (`faster-whisper-distil-large-v3`) | HF `Systran/faster-distil-whisper-large-v3` (CTranslate2 conversion of `distil-whisper/distil-large-v3`) | MIT | English-only distillation of Whisper large-v3 |
+| Granite Speech 4.1 2B (`granite-speech-4.1-2b`) | ModelScope mirror + HF `ibm-granite/granite-speech-4.1-2b` | Apache 2.0 | English, French, German, Spanish, Portuguese, Japanese; no native timestamps |
+| Granite Speech 4.1 2B Plus (`granite-speech-4.1-2b-plus`) | ModelScope mirror + HF `ibm-granite/granite-speech-4.1-2b-plus` | Apache 2.0 | Speaker attribution and word-level timestamps are two mutually exclusive prompt modes; 5 European languages, no punctuation or casing |
+| Cohere Transcribe 2B (`cohere-transcribe-2b`) | ModelScope mirror (primary); HF `CohereLabs/cohere-transcribe-03-2026` (gated: access approval required) | Apache 2.0 (per model card front-matter; the repo ships no standalone LICENSE file) | 14 languages including Chinese; explicit language required, no timestamps; HF downloads fail with a gated-repo state when no token is configured |
+| ARK-ASR 0.6B / 3B (`ark-asr-0.6b`, `ark-asr-3b`) | HF `Edge0/ARK-ASR-0.6B` / `Edge0/ARK-ASR-3B` (formerly `AutoArk-AI`; repo carries the Apache 2.0 tag) | Apache 2.0 | 19 languages including Chinese and English; runs the repository custom inference code (`trust_remote_code`) downloaded with the snapshot |
+| Voxtral Mini 3B (`voxtral-mini-3b`) | HF `mistralai/Voxtral-Mini-3B-2507` | Apache 2.0 | 8 languages (no Chinese); auto language detection; processor requires `mistral-common[audio] >= 1.8.1` |
 
 ## Release Checklist
 
