@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox registers 18 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox registers 24 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -46,8 +46,14 @@ Sizes are registry estimates, not exact download promises.
 | `qwen3-asr-0.6b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 1,600 MB | No |
 | `qwen3-asr-1.7b` | Qwen3-ASR / Transformers | CPU, NVIDIA GPU (CUDA), Apple GPU (MPS) | ModelScope, then Hugging Face | 3,900 MB | No |
 | `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 1,900 MB | No |
+| `granite-speech-4.1-2b` | Granite Speech / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,945 MB | No |
+| `granite-speech-4.1-2b-plus` | Granite Speech Plus / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,225 MB | Yes (task option) |
+| `cohere-transcribe-2b` | Cohere Transcribe / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face (gated) | 4,130 MB | No |
+| `ark-asr-0.6b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 2,600 MB | No |
+| `ark-asr-3b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 8,130 MB | No |
+| `voxtral-mini-3b` | Voxtral / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 9,360 MB | No |
 
-The estimates add up to roughly 32.4 GiB. A real all-model installation may use more or less space.
+The estimates add up to roughly 65 GiB. A real all-model installation may use more or less space.
 
 These device labels describe the execution paths supported by each ASRbox engine; they do not assert that the listed accelerator is present or active on the current machine. The runtime keeps its existing automatic selection and fallback behavior, so the device actually used depends on available hardware and runtime support.
 
@@ -63,11 +69,16 @@ These device labels describe the execution paths supported by each ASRbox engine
 - English-only batch or long audio: `faster-whisper-distil-large-v3`, roughly twice as fast as Large V3 with near-Large quality. It cannot transcribe Chinese or other languages.
 - Broad multilingual Qwen path: `qwen3-asr-0.6b`; use `qwen3-asr-1.7b` when additional model capacity is worth the memory and disk cost.
 - End-to-end speaker diarization without `HF_TOKEN` or a separate diarization model: `moss-transcribe-diarize`. It emits timestamped segments with `[S01]`-style speaker labels in one pass, supports 50+ languages and up to roughly 90 minutes of audio per run, and is Apache 2.0 licensed. It has no word-level timestamps and runs slowly on CPU for long recordings.
+- European-language subtitles with punctuation and casing (English, French, German, Spanish, Portuguese, Japanese): `granite-speech-4.1-2b`. It does not support Chinese, and its cue times are approximate.
+- Speaker-attributed turns or word-level timestamps in one pass (English, French, German, Spanish, Portuguese): `granite-speech-4.1-2b-plus`. The default mode emits `[Speaker N]:` turns; enabling the task's word-timestamps option switches to a timed-word mode whose centisecond tags are unwrapped into a real word timeline. The two modes are mutually exclusive, the model emits no punctuation or casing, and speaker numbering restarts per chunk on long audio.
+- High-accuracy English plus 13 more languages including Chinese, fast, with punctuation: `cohere-transcribe-2b`. It has no automatic language detection — an explicit language is required — and no timestamps; its cue times are approximate. Downloading prefers the open ModelScope mirror; the Hugging Face source needs access approval and fails with a specific gated-repository message when no mirror is reachable.
+- Chinese-English and 17 more European languages with language following the audio: `ark-asr-0.6b` or `ark-asr-3b` (the 3B is the more accurate one, Apache 2.0). No timestamps; long audio is automatically chunked.
+- Very long audio in a single pass (up to 30 minutes) across 8 auto-detected languages: `voxtral-mini-3b`. No Chinese, no timestamps; the processor requires the bundled `mistral-common` dependency.
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
 
-Timeline note: `qwen3-asr-*`, `sensevoice-small`, and `fun-asr-nano` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model, `paraformer-zh`, or `moss-transcribe-diarize` when precise timing matters.
+Timeline note: `qwen3-asr-*`, `sensevoice-small`, `fun-asr-nano`, `cohere-transcribe-2b`, `ark-asr-*`, `voxtral-mini-3b`, and `granite-speech-4.1-2b` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model, `paraformer-zh`, `moss-transcribe-diarize`, or `granite-speech-4.1-2b-plus` with the word-timestamps option when precise timing matters.
 
 ## Transcription Safeguards
 
@@ -114,6 +125,8 @@ The same three models were then checked in the running models page itself (local
 The packaged desktop build was verified separately, because the frozen sidecar carries its own runtime copy of these engines. On 2026-09-20 a real 18:05 English speech video and real 90-second Chinese audio were transcribed end-to-end through `POST /transcriptions/path` on the frozen binary: `faster-whisper-distil-large-v3` returned 256 timestamped segments for the full English video and 21 for a 90-second excerpt, `paraformer-zh` returned 8 segments, and `fun-asr-nano` returned 7. Three packaging gaps surfaced and are fixed in that same change: faster-whisper's Silero VAD asset was not bundled (any faster-whisper transcription failed with `MODEL_LOAD_FAILED`); the funasr sources behind `@torch.jit.script` were absent from the bundle, which made TorchScript import fail and left the `Paraformer` model class unregistered (FunASR transcription with VAD failed); and the frozen runtime hook pinned `OMP_NUM_THREADS` to 1 for the whole process tree, so the transcription worker inherited a single-threaded CPU engine. The build now ships `faster_whisper` package data and every funasr source that TorchScript reads, the worker subprocess sets its own thread count, and the build-argument test plus the frozen-binary smoke test assert the bundled payload. That thread pin measured as 57–60 seconds for a 90-second English excerpt and 600.9 seconds for the full 18:05 video; after the fix the same binary returns 15.1 seconds and 129.6 seconds with byte-identical transcripts (256 segments, 10777 characters).
 
 This evidence verifies the tested dependency snapshot and machine. Docker build and smoke coverage verify runtime startup and compatibility reporting, not the accuracy or speed of all models on every Linux CPU. Future upstream revisions, media codecs, architectures, and hardware can behave differently.
+
+The six models added by the phase-2 catalog expansion were verified the same way in the packaged desktop app on macOS Apple Silicon (2026-09-23) and on Windows x64 (2026-09-23/24). Each model was downloaded through the managed lifecycle and transcribed real media end-to-end: `ark-asr-0.6b` and `ark-asr-3b` on a 60-second Chinese clip (six segments each, with visibly different wording confirming each ran its own weights), `cohere-transcribe-2b` on the Chinese clip with an explicit language (five punctuation-preserving segments; an 18-minute sample re-transcribed identically on Windows), `granite-speech-4.1-2b` on a 30-second English excerpt (punctuated, cased), `granite-speech-4.1-2b-plus` in its default speaker-attribution mode (S01-labelled turns; the word-timestamp mode was verified separately in development with monotonic unwrapped timelines), and `voxtral-mini-3b` with its `tekken.json` tokenizer layout. The frozen binary smoke asserts the runtime probes for every engine family. Evidence: `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`.
 
 ## Model Sources and Licenses
 

@@ -24,7 +24,7 @@ Keep originals of important media and back up before upgrades. Provider secrets 
 ## Highlights
 
 - Preflight and transcribe one or many audio/video files.
-- Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Paraformer, Fun-ASR-Nano, Qwen3-ASR, Granite Speech, Cohere Transcribe, ARK-ASR, Voxtral Mini, or an online ASR provider.
+- Use Whisper, Faster Whisper, MLX Whisper, SenseVoice, Paraformer, Fun-ASR-Nano, Qwen3-ASR, Granite Speech, Cohere Transcribe, ARK-ASR, Voxtral Mini, MOSS-Transcribe-Diarize, or an online ASR provider.
 - Three-column task center: task list, waveform player with linked transcript, and status/exports on one screen.
 - Edit segment text directly in the Edit subtitles mode; one save creates exactly one new immutable version.
 - Preserve transcription, retranscription, manual edit, restore, post-processing, and AI-applied versions.
@@ -140,7 +140,7 @@ Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-mem
 4. Follow progress, logs, and results in the Task center.
 5. Edit text in Edit subtitles mode, or export SRT, VTT, ASS, TXT, JSON, or Markdown.
 
-ASRbox registers 15 local models, including MOSS-Transcribe-Diarize for end-to-end speaker diarization. Model pickers and the Models page mark whether each model supports CPU, NVIDIA GPU, or Apple GPU; this is capability, and the device actually used still depends on the computer and available runtimes. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md) for selection, sizes, sources, and licensing.
+ASRbox registers 24 local models covering the Whisper family, Faster Whisper, FunASR (SenseVoice / Paraformer / Fun-ASR-Nano), Qwen3-ASR, Granite Speech, Cohere Transcribe, ARK-ASR, Voxtral Mini, MLX Whisper, and the end-to-end speaker-diarization model MOSS-Transcribe-Diarize. Model pickers and the Models page mark whether each model supports CPU, NVIDIA GPU, or Apple GPU; this is capability, and the device actually used still depends on the computer and available runtimes. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md) for selection, sizes, sources, and licensing.
 
 ## AI subtitle proofreading
 

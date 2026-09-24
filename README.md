@@ -24,7 +24,7 @@ ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体�
 ## 主要功能
 
 - 拖入单个或多个音频、视频，预检音轨、格式、时长和分段策略。
-- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Paraformer、Fun-ASR-Nano、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini，或在线 ASR Provider 转写。
+- 使用 Whisper、Faster Whisper、MLX Whisper、SenseVoice、Paraformer、Fun-ASR-Nano、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini、MOSS-Transcribe-Diarize，或在线 ASR Provider 转写。
 - 三栏任务中心：任务列表、波形播放器与转写结果、状态与导出同屏联动。
 - 在"编辑字幕"模式中直接修改分段文字，批量保存为一个新的不可变版本。
 - 保留转写、重新转写、手工编辑、恢复、后处理和 AI 修改形成的不可变版本。
@@ -140,7 +140,7 @@ Windows 安装包未进行代码签名，运行时 SmartScreen 可能提示"Wind
 4. 提交后在"任务中心"查看进度、日志和转写结果。
 5. 在"编辑字幕"中修改文字，或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
 
-ASRbox 注册 15 个本地模型，其中包括端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和"模型"页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
+ASRbox 注册 24 个本地模型，覆盖 Whisper 系、Faster Whisper、FunASR（SenseVoice / Paraformer / Fun-ASR-Nano）、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini、MLX Whisper，以及端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和"模型"页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
 
 ## AI 字幕核对
 
