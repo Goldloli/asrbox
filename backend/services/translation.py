@@ -27,18 +27,29 @@ ACTIVE = {"queued", "running"}
 RESUMABLE = {"failed", "cancelled", "interrupted"}
 MAX_SEGMENTS = 100
 MAX_CHARACTERS = 6000
-# Local Ollama-protocol models use a compact ordered response. A larger first pass avoids
-# paying prompt/schema overhead dozens of times for short subtitle segments. Strict
-# validation and recursive splitting retain the safety boundary whenever a model truncates.
-LOCAL_MAX_SEGMENTS = 64
-LOCAL_MAX_CHARACTERS = 6000
+# Local Ollama-protocol models misalign large structured batches (sliding-window outputs) and
+# the per-request overhead is negligible (measured 0.04 s on a 4B model), so the small first pass
+# stays: detection-driven splitting costs far more time than the requests it replaces.
+LOCAL_MAX_SEGMENTS = 16
+LOCAL_MAX_CHARACTERS = 1600
 MAX_RESPONSE_BYTES = 1024 * 1024
-OVERLAP_MIN_CHARS = 25
-# Neighbour translations may legitimately mirror content their source segments already
-# share (repeated lines); only overlap well beyond the source overlap signals a sliding window.
-OVERLAP_SOURCE_MARGIN = 12
-BLOAT_RATIO = 2.2
-BLOAT_MIN_EXTRA_CHARS = 200
+# Content-sanity thresholds, calibrated to zero false positives over 55 real local-provider runs.
+# Every value is relative to the shorter text: absolute floors calibrated on English never fired
+# on compact scripts, where genuine drift repetitions are only a handful of characters long.
+ALIGNMENT_MIN_SHARED = 6
+ALIGNMENT_SHARED_FRACTION = 0.6
+ALIGNMENT_SOURCE_MARGIN = 3
+ALIGNMENT_SOURCE_MARGIN_FRACTION = 0.4
+ALIGNMENT_MIN_DUPLICATE = 4
+ALIGNMENT_MAX_DUPLICATE_PROBE = 64
+ALIGNMENT_MAX_REPAIRS = 32
+ALIGNMENT_SOURCE_DISSIMILAR = 0.8
+ALIGNMENT_DEGENERATE_SOURCE_MIN = 15
+ALIGNMENT_BLOAT_RATIO = 2.2
+ALIGNMENT_BLOAT_EXTRA_CHARS = 200
+ALIGNMENT_EDGE_PUNCTUATION = " \t\r\n.,!?;:、。，！？；：\"'“”‘’()（）[]【】-—…·"
+ALIGNMENT_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+ALIGNMENT_DIGIT_ESCAPE = re.compile(r"^[0-9\s\\nrtv]+$")
 
 
 class TranslationError(RuntimeError):
@@ -225,25 +236,90 @@ def parse_translations(content, target_ids):
         fail("TRANSLATION_INVALID_RESPONSE", "Provider response does not exactly cover the requested segments")
 
 
+def _normalized_text(text):
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _core_text(text):
+    return _normalized_text(text).strip(ALIGNMENT_EDGE_PUNCTUATION)
+
+
+def _shared_run(first, second):
+    return difflib.SequenceMatcher(None, first, second, autojunk=False).find_longest_match().size
+
+
+def _degenerate(text):
+    # A sentence covered by one character, a non-CJK single-character run ('a', '33', '\n'),
+    # or plain digit/escape filler. '谢谢' and other legitimate two-character words stay valid.
+    return (len(text) == 1
+            or (len(set(text)) <= 1 and not ALIGNMENT_CJK.search(text))
+            or (len(set(text)) <= 1 and len(text) >= 3)
+            or (ALIGNMENT_DIGIT_ESCAPE.match(text) and len(set(text)) <= 3))
+
+
+def alignment_hits(pairs):
+    """Cues whose translation fails content sanity, as sorted zero-based positions in `pairs`.
+    Structurally valid output can still misplace content: neighbours may share runs their
+    sources do not (sliding windows), one translation may be rendered at several unrelated
+    cues, a cue may degrade to filler, or the text may balloon past any cross-language ratio.
+    Pure and side-effect free so the same judgements serve the per-batch guard and the
+    pre-publish pass over the assembled version."""
+    hits = set()
+    cores = [_core_text(text) for _source, text in pairs]
+    sources = [_normalized_text(source) for source, _text in pairs]
+    for index in range(len(pairs) - 1):
+        first, second = cores[index], cores[index + 1]
+        if not first or not second:
+            continue
+        shortest = min(len(first), len(second))
+        shared = _shared_run(first, second)
+        if shared < max(ALIGNMENT_MIN_SHARED, ALIGNMENT_SHARED_FRACTION * shortest):
+            continue
+        source_shared = _shared_run(sources[index], sources[index + 1])
+        if shared - source_shared >= max(ALIGNMENT_SOURCE_MARGIN, ALIGNMENT_SOURCE_MARGIN_FRACTION * shortest):
+            hits.update((index, index + 1))
+    rendered: dict[str, list[int]] = {}
+    for index, core in enumerate(cores):
+        if len(core) >= ALIGNMENT_MIN_DUPLICATE:
+            rendered.setdefault(core, []).append(index)
+    for indexes in rendered.values():
+        if len(indexes) < 2:
+            continue
+        # A collapse can repeat one filler across thousands of cues; probing the first
+        # window keeps the pairwise comparison bounded while a genuine chorus line - whose
+        # sources repeat too - still fails the very first pair.
+        probe = indexes[:ALIGNMENT_MAX_DUPLICATE_PROBE]
+        distinct = all(sources[first] != sources[second] for first in probe for second in probe if first < second)
+        dissimilar = all(_shared_run(sources[first], sources[second]) < ALIGNMENT_SOURCE_DISSIMILAR * min(len(sources[first]), len(sources[second]))
+                         for first in probe for second in probe if first < second)
+        if distinct and dissimilar:
+            hits.update(indexes)
+    for index, (_source, text) in enumerate(pairs):
+        if len(sources[index]) >= ALIGNMENT_DEGENERATE_SOURCE_MIN and (not cores[index] or _degenerate(cores[index])):
+            hits.add(index)
+        if len(cores[index]) > ALIGNMENT_BLOAT_EXTRA_CHARS + ALIGNMENT_BLOAT_RATIO * len(sources[index]):
+            hits.add(index)
+    return sorted(hits)
+
+
+def alignment_bloated(pairs):
+    """True when the whole text balloons past any legitimate cross-language length difference.
+    No per-cue repair can fix that, so callers treat it as a version-level failure."""
+    source_chars = sum(len(_normalized_text(source)) for source, _text in pairs)
+    output_chars = sum(len(_core_text(text)) for _source, text in pairs)
+    return output_chars > ALIGNMENT_BLOAT_EXTRA_CHARS + ALIGNMENT_BLOAT_RATIO * source_chars
+
+
 def _content_misaligned(parsed, batch):
-    """Structurally valid batch outputs that still misplace content: sliding-window
-    translations share long substrings between neighbours that the sources do not share,
-    and bloated batches far exceed any legitimate cross-language length difference."""
+    """Batch-scope guard: a structurally valid multi-target response that misplaces content
+    is split deterministically instead of becoming a checkpoint."""
     if len(parsed) < 2:
         return False
-    texts = [item["text"] for item in parsed]
-    sources = [s["text"] for s in batch["targets"]]
-    pairs = zip(texts, texts[1:], sources, sources[1:])
-    for first, second, first_source, second_source in pairs:
-        shared = difflib.SequenceMatcher(None, first, second, autojunk=False).find_longest_match().size
-        if shared < OVERLAP_MIN_CHARS:
-            continue
-        source_shared = difflib.SequenceMatcher(None, first_source, second_source, autojunk=False).find_longest_match().size
-        if shared > source_shared + OVERLAP_SOURCE_MARGIN:
-            return True
-    source_chars = sum(len(text) for text in sources)
-    output_chars = sum(len(text) for text in texts)
-    return output_chars > BLOAT_MIN_EXTRA_CHARS + BLOAT_RATIO * source_chars
+    targets = batch["targets"]
+    if len(targets) != len(parsed):
+        return True
+    pairs = [(target["text"], item["text"]) for target, item in zip(targets, parsed, strict=True)]
+    return bool(alignment_hits(pairs)) or alignment_bloated(pairs)
 
 
 class _StaleRun(Exception):
@@ -433,6 +509,37 @@ def _fail_run(run_id, attempt, exc):
             db.commit()
 
 
+def _repair_alignment(db, provider, run_id, attempt, segments, parsed):
+    """Repetitions that straddle a batch boundary are invisible to the batch-scope guard, so the
+    assembled version is checked once more before becoming a version. Flagged cues are
+    retranslated alone, with neighbour context, and re-checked; anything still failing means the
+    run fails instead of publishing subtitles that do not line up with their source segments.
+    Paid protocols only repair after an explicit resume: an automatic repair there would be an
+    automatic paid request, which a run must never make on its own."""
+    pairs = [(segments[index]["text"], item["text"]) for index, item in enumerate(parsed)]
+    if alignment_bloated(pairs):
+        fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
+    flagged = alignment_hits(pairs)
+    if not flagged:
+        return {}
+    if len(flagged) > ALIGNMENT_MAX_REPAIRS:
+        # Spot repair is for localised drift. A collapse that touches dozens of cues is not
+        # recoverable one cue at a time, and retranslating them all would cost more than the
+        # run itself, so say so instead of burning requests.
+        fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
+    if attempt <= 1 and llm_compatibility.resolved(provider).protocol != "ollama":
+        fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
+    repairs = {}
+    for position in flagged:
+        translated = _translate_batch(db, provider, run_id, attempt, batch_payload(segments, position, position + 1))
+        repairs[segments[position]["id"]] = translated[0]["text"]
+    remaining = [(segments[index]["text"], repairs.get(item["segment_id"], item["text"]))
+                 for index, item in enumerate(parsed)]
+    if alignment_hits(remaining) or alignment_bloated(remaining):
+        fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
+    return repairs
+
+
 def execute_run(run_id, attempt):
     try:
         with database.SessionLocal() as db:
@@ -486,6 +593,25 @@ def execute_run(run_id, attempt):
                         fail("TRANSLATION_INCOMPLETE", "Translation is incomplete")
                     collected.extend(json.loads(row.translations_json))
                 parsed = parse_translations(json.dumps({"translations": collected}), [s["id"] for s in segments])
+                db.rollback()  # release the read transaction before any repair request
+            try:
+                repairs = _repair_alignment(db, provider, run_id, attempt, segments, parsed)
+            except _StaleRun:
+                return
+            with task_transition_lock:
+                run = _current(db, run_id, attempt)
+                if not run:
+                    return
+                get_task(db, run.task_id, writable=True)
+                if repairs:
+                    for row in db.query(TranslationBatch).filter_by(run_id=run_id):
+                        stored = json.loads(row.translations_json)
+                        replaced = [{"segment_id": item["segment_id"], "text": repairs[item["segment_id"]]}
+                                    if item["segment_id"] in repairs else item for item in stored]
+                        if replaced != stored:
+                            row.translations_json = json.dumps(replaced, ensure_ascii=False)
+                    parsed = [{"segment_id": item["segment_id"], "text": repairs.get(item["segment_id"], item["text"])}
+                              for item in parsed]
                 db.add(TranslationVersion(run_id=run_id, revision=1, version_type="translate", segments_json=json.dumps(parsed, ensure_ascii=False)))
                 run.status, run.completed_at, run.updated_at = "completed", datetime.now(UTC), datetime.now(UTC)
                 db.commit()
