@@ -29,7 +29,7 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 | 阶段 | 内容 | 新增 runtime | 状态 |
 |---|---|---|---|
 | 1 | FunASR 系扩展（Paraformer、Fun-ASR-Nano）+ Distil-Whisper | 无（复用 funasr / faster_whisper） | 已实现并通过真机验证（change：`add-funasr-paraformer-distil`，见 `openspec/changes/archive/2026-09-20-add-funasr-paraformer-distil/`） |
-| 2 | transformers speech-LM 统一引擎重构 + Cohere Transcribe / Granite Speech 4.1 / ARK-ASR / Voxtral Mini | 无新 runtime；transformers 升级 PyPI 5.17.0 + 轻量依赖 mistral-common[audio] | 已实现（change：`add-transformers-speech-lm`；Windows lock 冻结与 Cohere/Voxtral 真机冒烟收尾中，见 `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`） |
+| 2 | transformers speech-LM 统一引擎重构 + Cohere Transcribe / Granite Speech 4.1 / ARK-ASR / Voxtral Mini | 无新 runtime；transformers 升级 PyPI 5.17.0 + 轻量依赖 mistral-common[audio] | 已实现并通过 Windows 与 macOS 真机验证（change：`add-transformers-speech-lm`，见 `openspec/changes/archive/2026-09-24-add-transformers-speech-lm/`；验证记录 `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`） |
 | 3 | FireRedASR2-AED + 通用 forced-alignment 时间戳后处理 | FireRedASR 官方推理代码（vendored 最小集） | 未开始 |
 | 4 | NeMo 引擎（Parakeet TDT v3 / Canary-Qwen / Canary-1B-Flash 等），仅 Docker/server 构建 | nemo_toolkit（不进桌面二进制） | 未开始 |
 

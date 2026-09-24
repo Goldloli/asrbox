@@ -47,4 +47,4 @@
 
 - [x] 7.1 `npm run test:backend`、`npm run test:backend:contract`、`npm run test:frontend:unit`、`npm run test:e2e:maintained`、`npm run check:open-source` 全部通过
 - [x] 7.2 更新 `docs/asr-models-roadmap.md`：阶段 2 状态回写、Belle-2/MOSS-preview-2B 剔除及理由、后续候选线索（Granite Speech 5、granite-nar、Voxtral Small-24B/Realtime）；`openspec validate --changes add-transformers-speech-lm` 通过
-- [ ] 7.3 实现与验证完成后勾选全部任务，`openspec archive add-transformers-speech-lm --yes`，归档后确认主 spec 合并、`openspec validate --specs` 通过；Beads 任务 `asrbox-2h4` 关闭
+- [x] 7.3 实现与验证完成后勾选全部任务，`openspec archive add-transformers-speech-lm --yes`，归档后确认主 spec 合并、`openspec validate --specs` 通过；Beads 任务 `asrbox-2h4` 关闭

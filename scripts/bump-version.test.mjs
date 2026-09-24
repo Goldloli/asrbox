@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { pinBunWorkspaceVersions } from "./bump-version.mjs";
+import { pinBunWorkspaceVersions, rewriteReleaseGuide } from "./bump-version.mjs";
 
 test("pinBunWorkspaceVersions updates workspace version stamps only", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "asrbox-bump-"));
@@ -48,8 +48,7 @@ test("pinBunWorkspaceVersions updates workspace version stamps only", async () =
   }
 });
 
-test("pinBunWorkspaceVersions leaves unrelated versions untouched", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "asrbox-bump-"));
+test("pinBunWorkspaceVersions leaves unrelated versions untouched", async () => {  const root = await mkdtemp(path.join(tmpdir(), "asrbox-bump-"));
   try {
     const lock = `{
   "workspaces": {
@@ -75,4 +74,29 @@ test("pinBunWorkspaceVersions leaves unrelated versions untouched", async () => 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("rewriteReleaseGuide updates the current-release label and tag URL", () => {
+  const guide = [
+    "# Releasing",
+    "",
+    "Current release: [`v0.3.2`](https://github.com/Goldloli/asrbox/releases/tag/v0.3.2). Notes here.",
+    "",
+  ].join("\n");
+
+  const updated = rewriteReleaseGuide(guide, "0.3.3");
+
+  assert.equal(
+    updated,
+    [
+      "# Releasing",
+      "",
+      "Current release: [`v0.3.3`](https://github.com/Goldloli/asrbox/releases/tag/v0.3.3). Notes here.",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("rewriteReleaseGuide rejects a guide without the current-release anchor", () => {
+  assert.throws(() => rewriteReleaseGuide("# Releasing\n\nNo anchor here.\n", "0.3.3"), /anchor not found/);
 });

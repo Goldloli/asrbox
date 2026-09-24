@@ -4,6 +4,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-24
+
 ### Added
 
 - 本地模型目录新增六个 speech-LM 模型（路线图阶段 2）：**Granite Speech 4.1 2B / 2B Plus**（欧洲语种；Plus 单遍输出说话人归属或词级时间戳，两种模式按任务的词级时间戳选项切换）、**Cohere Transcribe 2B**（14 语言含中文，需手动选择语言；Hugging Face 源受限时下载以明确原因码提示访问授权）、**ARK-ASR 0.6B / 3B**（中英 + 17 个欧洲语种）、**Voxtral Mini 3B**（8 语种自动检测，单遍最长 30 分钟）。有单条输入上限的模型自动按 VAD 切分长音频并保持时间轴连续。
@@ -350,7 +352,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/Goldloli/asrbox/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Goldloli/asrbox/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Goldloli/asrbox/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Goldloli/asrbox/compare/v0.2.1...v0.3.0

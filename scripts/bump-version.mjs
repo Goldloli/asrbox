@@ -73,7 +73,7 @@ export async function bumpVersion(root, next, { regenLocks = true } = {}) {
   }
   const releaseGuidePath = path.join(root, "docs/release.md");
   const releaseGuide = await readFile(releaseGuidePath, "utf8");
-  await writeFile(releaseGuidePath, releaseGuide.replace(/releases\/tag\/v[^)\s]+/, `releases/tag/v${next}`));
+  await writeFile(releaseGuidePath, rewriteReleaseGuide(releaseGuide, next));
   edited.push("docs/release.md");
 
   await bumpChangelog(root, current, next);
@@ -96,6 +96,16 @@ export async function bumpVersion(root, next, { regenLocks = true } = {}) {
 
   const verified = await checkVersions(root);
   return { current, next: verified, edited };
+}
+
+export function rewriteReleaseGuide(contents, next) {
+  const releaseLabel = /(Current release:\s*\[`v)([^`]+)(`\])/i;
+  if (!releaseLabel.test(contents)) {
+    throw new Error("docs/release.md: current-release label anchor not found");
+  }
+  return contents
+    .replace(releaseLabel, `$1${next}$3`)
+    .replace(/releases\/tag\/v[^)\s]+/, `releases/tag/v${next}`);
 }
 
 async function bumpChangelog(root, current, next) {
