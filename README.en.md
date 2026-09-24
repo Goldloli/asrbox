@@ -8,7 +8,7 @@ ASRbox is a local-first audio/video transcription and subtitle workspace. It tur
 
 ## Status
 
-The current source version is `0.3.3`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.3.4`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -104,7 +104,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## Desktop
 
-Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.3) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
+Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.4) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the installer to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 
