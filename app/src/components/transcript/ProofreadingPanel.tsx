@@ -490,7 +490,7 @@ function buildReviewItems(segments: TranscriptSegment[], suggestions: Proofreadi
   let unchanged: TranscriptSegment[] = [];
   const flush = () => {
     if (unchanged.length === 0) return;
-    items.push({ type: 'unchanged', key: `unchanged-${unchanged[0].id}-${unchanged.at(-1)!.id}`, segments: unchanged });
+    items.push({ type: 'unchanged', key: `unchanged-${unchanged[0].id}-${unchanged[unchanged.length - 1].id}`, segments: unchanged });
     unchanged = [];
   };
   segments.forEach((segment) => {
