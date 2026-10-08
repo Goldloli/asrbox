@@ -4,6 +4,10 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+### Fixed
+
+- 更新间接依赖 source-map-js 到 1.2.2，修复 GHSA-68fv-2mgg-jv7q（高危：索引化 source-map section 偏移可造成事件循环拒绝服务），在保持现有依赖审计门禁的前提下解除对 CI 的阻塞。
+
 ## [0.3.3] - 2026-09-24
 
 ### Added
