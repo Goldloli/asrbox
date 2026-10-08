@@ -1,10 +1,21 @@
-![ASRbox 工作台首页](assets/asrbox-home.png)
+<div align="center">
 
 # ASRbox
 
-中文 | [English](README.en.md)
+**本地优先的音视频转写与字幕工作台**
 
-ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体转换为可编辑字幕，支持本地与在线 ASR、任务恢复、版本历史、多格式导出，并可让 Ollama 或 OpenAI 兼容 LLM 核对字幕中的错字、漏字和明显识别错误。
+把媒体变成可编辑字幕：本地与在线 ASR、任务恢复、不可变版本历史、多格式导出，<br>
+并可让 Ollama 或 OpenAI 兼容 LLM 核对与翻译字幕。开源、离线可用、数据归你。
+
+<p><a href="https://github.com/Goldloli/asrbox/releases"><img src="https://img.shields.io/github/package-json/v/Goldloli/asrbox?style=flat-square" alt="version"></a> <img src="https://img.shields.io/badge/platform-macOS_·_Windows_·_Docker-1f2937?style=flat-square" alt="platform"> <img src="https://img.shields.io/badge/stack-Tauri_2_·_FastAPI_·_React-0b84fe?style=flat-square" alt="stack"> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a> <img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="status"></p>
+
+<p><a href="http://asrbox.xiaokatake.com/"><img src="https://img.shields.io/badge/🌐_官网-asrbox.xiaokatake.com-5865F2?style=flat-square" alt="website"></a></p>
+
+<p><a href="http://asrbox.xiaokatake.com/">官网</a> · <a href="README.en.md">English</a> · <a href="docs/docker.md">Docker 部署</a> · <a href="CHANGELOG.md">更新日志</a> · <a href="CONTRIBUTING.md">贡献指南</a></p>
+
+</div>
+
+![ASRbox 工作台首页](assets/asrbox-home.png)
 
 ## 当前状态
 

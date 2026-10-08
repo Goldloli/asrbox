@@ -1,10 +1,21 @@
-![ASRbox home workspace](assets/asrbox-home.png)
+<div align="center">
 
 # ASRbox
 
-[中文](README.md) | English
+**A local-first audio/video transcription and subtitle workspace**
 
-ASRbox is a local-first audio/video transcription and subtitle workspace. It turns media into editable subtitles with local or online ASR, recoverable tasks, immutable transcript history, multiple export formats, and LLM-powered checks for typos, omissions, and obvious recognition errors.
+Turn media into editable subtitles with local & online ASR, recoverable tasks, immutable version history,<br>
+multi-format export, and LLM-powered proofreading and translation. Open source, offline-ready, and yours.
+
+<p><a href="https://github.com/Goldloli/asrbox/releases"><img src="https://img.shields.io/github/package-json/v/Goldloli/asrbox?style=flat-square" alt="version"></a> <img src="https://img.shields.io/badge/platform-macOS_·_Windows_·_Docker-1f2937?style=flat-square" alt="platform"> <img src="https://img.shields.io/badge/stack-Tauri_2_·_FastAPI_·_React-0b84fe?style=flat-square" alt="stack"> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a> <img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="status"></p>
+
+<p><a href="http://asrbox.xiaokatake.com/"><img src="https://img.shields.io/badge/🌐_Website-asrbox.xiaokatake.com-5865F2?style=flat-square" alt="website"></a></p>
+
+<p><a href="http://asrbox.xiaokatake.com/">Website</a> · <a href="README.md">中文</a> · <a href="docs/docker.en.md">Docker</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+
+</div>
+
+![ASRbox home workspace](assets/asrbox-home.png)
 
 ## Status
 
