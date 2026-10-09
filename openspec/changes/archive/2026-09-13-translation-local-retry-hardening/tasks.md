@@ -14,4 +14,4 @@
 ## 3. 文档与归档
 
 - [x] 3.1 `CHANGELOG.md` Unreleased → Fixed 增加条目（本地翻译 300 秒时限；超时与响应不完整自动拆批）。
-- [ ] 3.2 `openspec validate --changes translation-local-retry-hardening` 通过；实现完成后 `openspec archive translation-local-retry-hardening --yes` 并复核 `openspec validate --specs`。
+- [x] 3.2 `openspec validate --changes translation-local-retry-hardening` 通过；实现完成后 `openspec archive translation-local-retry-hardening --yes` 并复核 `openspec validate --specs`。

@@ -16,4 +16,4 @@
 
 - [x] 3.1 翻译等待/超时文案按提供商协议显示 300/90 秒（`TranslationPanel.tsx` + `translationI18n.ts`），e2e `app/e2e/llm-translation.spec.ts` 覆盖 Ollama 300 秒与线上 90 秒两种显示；`npm run typecheck` 通过。
 - [x] 3.2 `CHANGELOG.md` Unreleased → Fixed 增加条目（本地翻译批次收紧 + 内容错位自动拆批 + 时限显示修复）。
-- [ ] 3.3 `openspec validate --changes translation-output-sanity-guard` 通过；实现完成后 `openspec archive translation-output-sanity-guard --yes` 并复核 `openspec validate --specs`。
+- [x] 3.3 `openspec validate --changes translation-output-sanity-guard` 通过；实现完成后 `openspec archive translation-output-sanity-guard --yes` 并复核 `openspec validate --specs`。
