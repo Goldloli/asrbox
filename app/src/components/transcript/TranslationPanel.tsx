@@ -173,6 +173,7 @@ function errorLabel(code: string): DictionaryKey {
   if (code.includes('PARAMETERS_REJECTED') || code.includes('FORMAT_UNSUPPORTED')) return 'translation.errorCompatibility';
   if (code.includes('TRUNCATED') || code.includes('REFUSED')) return 'translation.errorIncomplete';
   if (code.includes('INVALID_RESPONSE')) return 'translation.errorStructure';
+  if (code.includes('ALIGNMENT_UNVERIFIED')) return 'translation.errorAlignment';
   if (code.includes('PROVIDER') || code.includes('API_KEY') || code.includes('MODEL_REQUIRED')) return 'translation.errorProvider';
   return 'translation.errorGeneric';
 }

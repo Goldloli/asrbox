@@ -1,14 +1,25 @@
-![ASRbox 工作台首页](assets/asrbox-home.png)
+<div align="center">
 
 # ASRbox
 
-中文 | [English](README.en.md)
+**本地优先的音视频转写与字幕工作台**
 
-ASRbox 是一个本地优先的音视频转写与字幕工作台。它把媒体转换为可编辑字幕，支持本地与在线 ASR、任务恢复、版本历史、多格式导出，并可让 Ollama 或 OpenAI 兼容 LLM 核对字幕中的错字、漏字和明显识别错误。
+把媒体变成可编辑字幕：本地与在线 ASR、任务恢复、不可变版本历史、多格式导出，<br>
+并可让 Ollama 或 OpenAI 兼容 LLM 核对与翻译字幕。开源、离线可用、数据归你。
+
+<p><a href="https://github.com/Goldloli/asrbox/releases"><img src="https://img.shields.io/github/package-json/v/Goldloli/asrbox?style=flat-square" alt="version"></a> <img src="https://img.shields.io/badge/platform-macOS_·_Windows_·_Docker-1f2937?style=flat-square" alt="platform"> <img src="https://img.shields.io/badge/stack-Tauri_2_·_FastAPI_·_React-0b84fe?style=flat-square" alt="stack"> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a> <img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="status"></p>
+
+<p><a href="http://asrbox.xiaokatake.com/"><img src="https://img.shields.io/badge/🌐_官网-asrbox.xiaokatake.com-5865F2?style=flat-square" alt="website"></a></p>
+
+<p><a href="http://asrbox.xiaokatake.com/">官网</a> · <a href="README.en.md">English</a> · <a href="docs/docker.md">Docker 部署</a> · <a href="CHANGELOG.md">更新日志</a> · <a href="CONTRIBUTING.md">贡献指南</a></p>
+
+</div>
+
+![ASRbox 工作台首页](assets/asrbox-home.png)
 
 ## 当前状态
 
-当前源码版本为 `0.3.3`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.3.4`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -104,7 +115,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## 桌面端
 
-从 [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.3) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
+从 [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.4) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
 
 桌面端也可在"设置 → 关于"中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把安装包下载到系统"下载"目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 

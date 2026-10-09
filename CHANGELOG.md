@@ -8,6 +8,15 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 - 更新间接依赖 source-map-js 到 1.2.2，修复 GHSA-68fv-2mgg-jv7q（高危：索引化 source-map section 偏移可造成事件循环拒绝服务），在保持现有依赖审计门禁的前提下解除对 CI 的阻塞。
 
+## [0.3.4] - 2026-09-24
+### Fixed
+
+- 翻译的跨段错位不再可能被静默发布：内容合理性校验改为按译文长度归一化（原阈值按英文长度标定，中文短句重复一律漏判），并在全部批次完成后、写入译文版本之前对完整结果再校验一次；命中的段先做一次定点重译，仍不通过则运行以 `TRANSLATION_ALIGNMENT_UNVERIFIED` 明确失败并保留已成功批次（界面有中英提示），不再发布与时间轴对不上的译文。
+
+### Changed
+
+- 本地 Ollama 提供商的初始翻译批次上限恢复为 16 段 / 1600 字符（实现此前偏离为 64 段 / 6000 字符，与既有规格不符）：实测每次请求的固定开销可忽略（4B 约 0.04 s），而大批次在长字幕上更容易触发拆分重译，反而更慢。
+
 ## [0.3.3] - 2026-09-24
 
 ### Added
@@ -356,7 +365,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/Goldloli/asrbox/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/Goldloli/asrbox/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Goldloli/asrbox/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Goldloli/asrbox/compare/v0.3.0...v0.3.1

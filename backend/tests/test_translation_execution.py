@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from backend.app import create_app
-from backend.database.models import TranslationRun, TranslationVersion
+from backend.database.models import TranslationBatch, TranslationRun, TranslationVersion
 from backend.services import translation as svc, llm_providers, llm_compatibility
 from backend.tests.test_translation_service import setup, create, complete
 
@@ -497,7 +497,7 @@ def test_create_run_uses_local_batch_limits_for_ollama_only(setup, monkeypatch):
     run = create(setup)
     shapes = [json.loads(row.target_ids_json) for row in
               db.query(svc.TranslationBatch).filter_by(run_id=run.id).order_by(svc.TranslationBatch.batch_index)]
-    assert [len(batch) for batch in shapes] == [40]
+    assert [len(batch) for batch in shapes] == [16, 16, 8]
 
     db.get(TranslationRun, run.id).status = 'failed'
     provider.preset = 'deepseek'
@@ -560,3 +560,264 @@ def test_ollama_translation_sends_schema_and_validates_complete_result(setup, mo
     db.expire_all()
     assert db.get(TranslationRun, run.id).status == 'completed'
     assert json.loads(svc.latest_version(db, run.id).segments_json) == expected
+
+
+CROSS_WORD_LINES = [
+    "A moving company was hired to", "relocate the entire laboratory", "from the old campus to a",
+    "new building across the river", "before the winter semester", "began, but the elevators in",
+    "the new building were not", "certified yet, so the freezers", "had to stay on the trucks",
+    "overnight, which cost the", "university an extra forty", "two thousand dollars and",
+    "delayed the sequencing run", "by almost three weeks.", "The facilities team then",
+    "proposed renting a refrigerated", "trailer, but the loading dock", "could only fit one vehicle",
+    "at a time, and the permits", "for overnight parking had", "already expired, so the",
+    "department ended up storing", "the samples in a rented", "warehouse two towns away",
+    "until the certification", "paperwork finally cleared", "in the middle of February.",
+    "Nobody had warned the", "graduate students that their", "experiments would be paused",
+    "for an entire season, so", "several of them lost", "precious cell cultures and",
+    "had to restart from frozen",
+]
+
+
+def cross_word_source(db, source, count):
+    segments = [{"id": index + 1, "start": index * 2, "end": index * 2 + 2, "text": text}
+                for index, text in enumerate(CROSS_WORD_LINES[:count])]
+    source.segments_json = json.dumps(segments)
+    db.commit()
+    return segments
+
+
+def ollama_reply(translations):
+    return httpx.Response(200, json={'message': {'content': json.dumps({'translations': translations})},
+                                     'done': True, 'done_reason': 'stop'})
+
+
+def batch_targets(calls, request):
+    data = json.loads(json.loads(request.content)['messages'][1]['content'])
+    calls.append([s['id'] for s in data['targets']])
+    return data['targets']
+
+
+def drifted_reply(targets, drift):
+    """True translations with `drift` (segment id -> text) substituted in."""
+    return ollama_reply([{'segment_id': target['id'], 'text': drift.get(target['id'], f'译 {target["text"]}')}
+                         for target in targets])
+
+
+def published_texts(db, run_id):
+    return [item['text'] for item in json.loads(svc.latest_version(db, run_id).segments_json)]
+
+
+def drifting_guard(setup, monkeypatch, drift, calls, full=12):
+    """Answer the first pass with `drift` substituted in, and any sub-batch or repair request
+    with the true translation, so the split recursion stays deterministic."""
+    def handler(request):
+        targets = batch_targets(calls, request)
+        if len(targets) != full:
+            return native_echo_reply(request)
+        return drifted_reply(targets, drift)
+    mock_transport(monkeypatch, handler)
+
+
+def test_repeated_short_tail_splits_and_publishes_aligned_text(setup, monkeypatch):
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {10: '联邦资助了整个项目。', 11: '联邦资助了整个项目。',
+                                        12: '联邦资助了整个项目。'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+
+
+def test_reused_opening_block_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {7: '译 A moving company was hired to', 8: '译 relocate the entire laboratory',
+                                        9: '译 from the old campus to a'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line}' for line in CROSS_WORD_LINES[:12]]
+
+
+def test_short_duplicate_phrase_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {4: '该资助项目', 9: '该资助项目'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line}' for line in CROSS_WORD_LINES[:12]]
+
+
+def test_degenerate_filler_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {6: '。'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line}' for line in CROSS_WORD_LINES[:12]]
+
+
+def test_single_cue_bloat_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch,
+                   {8: '（Note: this cue needs a careful reformulation of the passage. ' * 5}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line}' for line in CROSS_WORD_LINES[:12]]
+
+
+def test_legitimate_short_cjk_words_do_not_split(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 12)
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        return drifted_reply(targets, {2: '每次', 5: '所以'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13))]
+    texts = published_texts(db, run.id)
+    assert texts[1] == '每次' and texts[4] == '所以'
+
+
+def test_repeated_placeholder_labels_do_not_split(setup, monkeypatch):
+    db = setup[0]
+    segments = cross_word_source(db, setup[3], 12)
+    segments[2]['text'] = segments[3]['text'] = '[music]'
+    setup[3].segments_json = json.dumps(segments)
+    db.commit()
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        return drifted_reply(targets, {3: '[music]', 4: '[music]'})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13))]
+    assert published_texts(db, run.id)[2:4] == ['[music]', '[music]']
+
+
+def test_cross_batch_duplicate_is_repaired_before_publish(setup, monkeypatch):
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 20)
+    repeated = '联邦资助了整个项目。'
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        if len(targets) == 1:
+            return native_echo_reply(request)
+        drift = {target['id']: repeated for target in targets if target['id'] in (16, 20)}
+        return drifted_reply(targets, drift)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls[:2] == [list(range(1, 17)), list(range(17, 21))]
+    assert [16] in calls and [20] in calls
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+    stored = [json.loads(row.translations_json) for row in db.query(TranslationBatch).filter_by(run_id=run.id)]
+    assert [item['text'] for batch in stored for item in batch] == published_texts(db, run.id)
+
+
+def test_remote_provider_repairs_only_after_explicit_resume(setup, monkeypatch):
+    # A paid protocol must never issue an automatic extra request, so the first pass fails and
+    # the explicit resume carries the bounded repair.
+    db, task, provider, source = setup
+    lines = cross_word_source(db, setup[3], 20)
+    provider.preset, provider.default_model, provider.api_key_secret = 'deepseek', 'deepseek-chat', 'synthetic-key'
+    db.commit()
+    monkeypatch.setattr(svc, 'MAX_SEGMENTS', 10)
+    repeated = '联邦资助了整个项目。'
+    calls = []
+    def handler(request):
+        data = json.loads(json.loads(request.content)['messages'][1]['content'])
+        targets = data['targets']
+        calls.append([s['id'] for s in targets])
+        drifted = len(targets) > 1
+        texts = [{'segment_id': s['id'],
+                  'text': repeated if drifted and s['id'] in (10, 20) else f'译 {s["text"]}'} for s in targets]
+        return httpx.Response(200, json={'choices': [{'message': {'content': json.dumps({'translations': texts})}}]})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert (row.status, row.error_code) == ('failed', 'TRANSLATION_ALIGNMENT_UNVERIFIED')
+    assert calls == [list(range(1, 11)), list(range(11, 21))]
+    assert db.query(TranslationVersion).count() == 0
+    svc.retry_run(db, task.id, run.id)
+    db.expire_all()
+    resumed = db.get(TranslationRun, run.id)
+    svc.execute_run(run.id, resumed.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 11)), list(range(11, 21)), [10], [20]]
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+
+
+def test_widespread_collapse_fails_without_spot_repair(setup, monkeypatch):
+    # One collapsed cue per batch stays invisible to the batch guard, so the pre-publish
+    # pass sees three of them at once - more than the repair budget, so it must not start
+    # issuing one request per cue.
+    db = setup[0]
+    cross_word_source(db, setup[3], len(CROSS_WORD_LINES))
+    calls = []
+    monkeypatch.setattr(svc, 'ALIGNMENT_MAX_REPAIRS', 2)
+    def handler(request):
+        targets = batch_targets(calls, request)
+        return drifted_reply(targets, {target['id']: '没有内容' for target in targets if target['id'] in (3, 20, 33)})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert (row.status, row.error_code) == ('failed', 'TRANSLATION_ALIGNMENT_UNVERIFIED')
+    assert calls == [list(range(1, 17)), list(range(17, 33)), [33, 34]]
+    assert db.query(TranslationVersion).count() == 0
+
+
+def test_unrepairable_alignment_fails_without_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 20)
+    repeated = '联邦资助了整个项目。'
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        if len(targets) == 1:
+            return ollama_reply([{'segment_id': target['id'], 'text': repeated} for target in targets])
+        drift = {target['id']: repeated for target in targets if target['id'] in (16, 20)}
+        return drifted_reply(targets, drift)
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert (row.status, row.error_code) == ('failed', 'TRANSLATION_ALIGNMENT_UNVERIFIED')
+    assert db.query(TranslationVersion).count() == 0
+    assert [item.status for item in db.query(TranslationBatch).filter_by(run_id=run.id)] == ['completed', 'completed']

@@ -1,14 +1,25 @@
-![ASRbox home workspace](assets/asrbox-home.png)
+<div align="center">
 
 # ASRbox
 
-[中文](README.md) | English
+**A local-first audio/video transcription and subtitle workspace**
 
-ASRbox is a local-first audio/video transcription and subtitle workspace. It turns media into editable subtitles with local or online ASR, recoverable tasks, immutable transcript history, multiple export formats, and LLM-powered checks for typos, omissions, and obvious recognition errors.
+Turn media into editable subtitles with local & online ASR, recoverable tasks, immutable version history,<br>
+multi-format export, and LLM-powered proofreading and translation. Open source, offline-ready, and yours.
+
+<p><a href="https://github.com/Goldloli/asrbox/releases"><img src="https://img.shields.io/github/package-json/v/Goldloli/asrbox?style=flat-square" alt="version"></a> <img src="https://img.shields.io/badge/platform-macOS_·_Windows_·_Docker-1f2937?style=flat-square" alt="platform"> <img src="https://img.shields.io/badge/stack-Tauri_2_·_FastAPI_·_React-0b84fe?style=flat-square" alt="stack"> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="license"></a> <img src="https://img.shields.io/badge/status-beta-yellow?style=flat-square" alt="status"></p>
+
+<p><a href="http://asrbox.xiaokatake.com/"><img src="https://img.shields.io/badge/🌐_Website-asrbox.xiaokatake.com-5865F2?style=flat-square" alt="website"></a></p>
+
+<p><a href="http://asrbox.xiaokatake.com/">Website</a> · <a href="README.md">中文</a> · <a href="docs/docker.en.md">Docker</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="CONTRIBUTING.md">Contributing</a></p>
+
+</div>
+
+![ASRbox home workspace](assets/asrbox-home.png)
 
 ## Status
 
-The current source version is `0.3.3`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.3.4`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -104,7 +115,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## Desktop
 
-Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.3) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
+Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.4) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the installer to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 

@@ -114,12 +114,12 @@ def test_batch_limits_and_coverage():
 def test_local_batch_limits():
     segments = [{'id': i, 'text': 'x' * 50} for i in range(40)]
     batches = svc.make_batches(segments, local=True)
-    assert [len(b['targets']) for b in batches] == [40]
+    assert [len(b['targets']) for b in batches] == [16, 16, 8]
     assert [s['id'] for b in batches for s in b['targets']] == list(range(40))
     for b in batches:
-        assert sum(len(s['text']) for s in b['targets']) <= 6000
+        assert sum(len(s['text']) for s in b['targets']) <= 1600
     batches = svc.make_batches([{'id': 1, 'text': 'x' * 2000}, {'id': 2, 'text': 'x' * 50}], local=True)
-    assert [len(b['targets']) for b in batches] == [2]
+    assert [len(b['targets']) for b in batches] == [1, 1]
 
 
 def test_compact_provider_response_maps_translations_by_required_order():
@@ -177,7 +177,7 @@ def test_partial_failure_resumes_only_unfinished_batches(setup, monkeypatch):
     assert seen == [[0,1], [2,3], [2,3], [4]]
 
 
-def test_local_translation_uses_large_compact_first_pass_batches():
+def test_local_translation_uses_small_first_pass_batches():
     segments = [
         {"id": index, "start": index, "end": index + 1, "text": "x" * 50}
         for index in range(100)
@@ -185,9 +185,9 @@ def test_local_translation_uses_large_compact_first_pass_batches():
 
     batches = svc.make_batches(segments, local=True)
 
-    assert svc.LOCAL_MAX_SEGMENTS == 64
-    assert svc.LOCAL_MAX_CHARACTERS == 6000
-    assert [len(batch["targets"]) for batch in batches] == [64, 36]
+    assert svc.LOCAL_MAX_SEGMENTS == 16
+    assert svc.LOCAL_MAX_CHARACTERS == 1600
+    assert [len(batch["targets"]) for batch in batches] == [16, 16, 16, 16, 16, 16, 4]
 
 
 @pytest.mark.parametrize('action', ['cancel', 'delete'])
