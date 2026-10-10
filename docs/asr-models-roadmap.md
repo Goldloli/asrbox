@@ -85,7 +85,7 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 
 Parakeet TDT 0.6B v3、Canary-Qwen-2.5B、Canary-1B-Flash、IndicParakeet-7B。`nemo_toolkit` 体积大且 CUDA-only，**不进 PyInstaller 桌面二进制**，只注册到 server/Docker 构建；registry 以 `supported_devices=["cuda"]` 过滤，桌面端不可见。CC-BY-4.0 署名义务在此阶段随模型引入落地。
 
-**实现程度（2026-10-10）**：change `add-nemo-server-engine` 落地 **Parakeet TDT 0.6B v3**（25 个欧洲语言、词级时间戳、单遍长音频）与 **Canary 1B Flash**（英德法西、10 分钟分块）——`NemoASRBackend`（restore_from 本地 `.nemo` 权重、CUDA 显式选择、防御式输出归一、VAD 切分偏移）、registry 条目带 CC-BY-4.0 `attribution` 署名（模型详情渲染）、冻结桌面经 `sys.frozen` 过滤完全隐藏、`requirements-docker.in` 增加 `nemo-toolkit==3.0.0`（无 `[asr]` extra：其 one-logger 依赖在 Python 3.14 无发行版，已实测）、build_binary 静态断言 nemo 不进桌面二进制。**暂缓**：canary-qwen-2.5b（仓库仅 transformers 格式、无 `.nemo` 文件，restore_from 不适用）、IndicParakeet-7B（AI4B 仓库不可核实/需申请访问）。**移交项**：CUDA 真机验证（本仓库无 CUDA runner）与 `requirements-docker.lock` 再生成。
+**实现程度（2026-10-10）**：change `add-nemo-server-engine` 落地 **Parakeet TDT 0.6B v3**（25 个欧洲语言、词级时间戳、单遍长音频）与 **Canary 1B Flash**（英德法西、10 分钟分块）——`NemoASRBackend`（restore_from 本地 `.nemo` 权重、CUDA 显式选择、防御式输出归一、VAD 切分偏移）、registry 条目带 CC-BY-4.0 `attribution` 署名（模型详情渲染）、冻结桌面经 `sys.frozen` 过滤完全隐藏、`requirements-docker.in` 增加 `nemo-toolkit==3.0.0`（无 `[asr]` extra：其 one-logger 依赖在 Python 3.14 无发行版，已实测）、build_binary 静态断言 nemo 不进桌面二进制。**暂缓**：canary-qwen-2.5b（仓库仅 transformers 格式、无 `.nemo` 文件，restore_from 不适用）、IndicParakeet-7B（AI4B 仓库不可核实/需申请访问）。**移交项**：CUDA 真机验证（本仓库无 CUDA runner；`requirements-docker.lock` 已于 2026-10-10 再生成）。
 
 ## 明确排除项
 

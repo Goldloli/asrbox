@@ -19,7 +19,7 @@ multi-format export, and LLM-powered proofreading and translation. Open source, 
 
 ## Status
 
-The current source version is `0.3.4`. It is suitable for evaluation and feedback, not a stable release.
+The current source version is `0.4.0`. It is suitable for evaluation and feedback, not a stable release.
 
 | Runtime | Supported scope |
 | --- | --- |
@@ -115,7 +115,7 @@ See the [Docker guide](docs/docker.en.md) for upgrades, backups, Ollama connecti
 
 ## Desktop
 
-Download the installer for your platform from the [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.4) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
+Download the installer for your platform from the [`v0.4.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.4.0) (DMG for macOS Apple Silicon, NSIS installer for Windows x64) and verify `SHA256SUMS.txt`.
 
 Desktop can also check GitHub Releases under Settings → About. By default it checks about 10 seconds after startup and no more than once every 24 hours thereafter. Automatic checks and in-app notifications can be disabled, while manual checks remain available. When a newer release is found, ASRbox can download the installer to the system Downloads directory with progress, cancel, and retry controls. Only the matching asset from the official Release is accepted, and it must match that Release's `SHA256SUMS.txt` before it can be opened.
 
@@ -151,7 +151,7 @@ Desktop starts its bundled backend on `127.0.0.1:17494` with a per-launch in-mem
 4. Follow progress, logs, and results in the Task center.
 5. Edit text in Edit subtitles mode, or export SRT, VTT, ASS, TXT, JSON, or Markdown.
 
-ASRbox registers 24 local models covering the Whisper family, Faster Whisper, FunASR (SenseVoice / Paraformer / Fun-ASR-Nano), Qwen3-ASR, Granite Speech, Cohere Transcribe, ARK-ASR, Voxtral Mini, MLX Whisper, and the end-to-end speaker-diarization model MOSS-Transcribe-Diarize. Model pickers and the Models page mark whether each model supports CPU, NVIDIA GPU, or Apple GPU; this is capability, and the device actually used still depends on the computer and available runtimes. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md) for selection, sizes, sources, and licensing.
+ASRbox registers 25 local models covering the Whisper family, Faster Whisper, FunASR (SenseVoice / Paraformer / Fun-ASR-Nano), Qwen3-ASR, Granite Speech, Cohere Transcribe, ARK-ASR, Voxtral Mini, FireRedASR2, MLX Whisper, and the end-to-end speaker-diarization model MOSS-Transcribe-Diarize; Docker deployments additionally offer 2 server-only NeMo models (Parakeet TDT / Canary, requiring an NVIDIA GPU). Model pickers and the Models page mark whether each model supports CPU, NVIDIA GPU, or Apple GPU; this is capability, and the device actually used still depends on the computer and available runtimes. Docker is a Linux CPU runtime and does not support Apple-only MLX; the Models page marks MLX as incompatible and blocks its download. See the [model guide](docs/models.md) for selection, sizes, sources, and licensing.
 
 ## AI subtitle proofreading
 

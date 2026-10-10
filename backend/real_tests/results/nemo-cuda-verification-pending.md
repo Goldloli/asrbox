@@ -5,8 +5,8 @@
 但仓库 CI 无 CUDA runner、开发机无 NVIDIA GPU，以下门禁**未执行**，需在有
 NVIDIA GPU 的环境完成后方可宣称 NeMo 转写可用：
 
-1. `requirements-docker.lock` 再生成（`requirements-docker.in` 已含
-   `nemo-toolkit==3.0.0`；Python 3.13 与 3.14 容器 dry-run 解析均通过）。
+1. ~~`requirements-docker.lock` 再生成~~（已于 2026-10-10 随 v0.4.0 发布准备完成：
+   `nemo-toolkit==3.0.0` 已进入 lock，torch 基线保持 `2.11.0+cpu`）。
 2. Docker 镜像完整构建冒烟（`docker compose build`）。
 3. 冻结/容器运行时 `nemo_available` 探针为 true。
 4. 经 backend 真实分发路径各跑通一条真实转写：

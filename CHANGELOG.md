@@ -4,25 +4,22 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
 ### Added
 
 - 本地模型目录新增 **FireRedASR2 AED 1.1B**（路线图阶段 3 引擎部分）：小红书开源、中文公开基准第一（AISHELL-1 CER 0.57%），中英与语码切换、词级时间戳（聚合为句段时间轴），Apache-2.0。推理代码以最小集内置于 `backend/vendor/fireredasr2`，特征提取用 torchaudio 的 Kaldi 兼容 fbank 替代无 Windows 构建的上游库（数值等价已验证），零新增 Python 依赖；长音频经 VAD 切分（单次输入上限 60 秒）。已在 macOS 以真实模型经完整后端路径验证转写与六种导出。
-- server/Docker 构建新增 **NeMo 引擎**（路线图阶段 4，仅服务器部署）：`parakeet-tdt-0.6b-v3`（25 个欧洲语言、词级时间戳）与 `canary-1b-flash`（英德法西）两个 CC-BY-4.0 模型，署名在模型详情展示；CUDA-only、冻结桌面二进制完全隐藏该类条目且不打包 nemo_toolkit（静态断言防回归）。引擎为防御式输出解析 + VAD 长音频切分；**尚未在 CUDA 真机验证**（本仓库 CI 无 CUDA runner，已在文档与任务中如实标注移交项），Docker 依赖 lock 需在完整构建环境再生成。
-
-### Fixed
-
-- 本地转写 worker 增加活跃心跳：心跳证明推理仍在推进（进程 CPU 时间持续前进），慢 chunk 不再被停滞时限误杀，推理期间任务行时间戳周期性刷新以呈现存活（进度仍只按完成的音频块推进）；进程存活但心跳冻结、或超过硬性上限仍无产出时才判定停滞并终止，本地队列继续可用。心跳缺失时回退为仅按产出判定。
-- 翻译完整性校验新增三条逐段判据：整段译文回显源文（译文与源文一致、长度达标且文字系统与目标语言不兼容）、模型元评论外泄（括注内出现指向翻译指令的说明，如「（注意：根据要求…）」「(Note: …)」）、占位符译文（整段为「（无翻译）」类占位文本）。三类污染此前逃过全部批量判据仍被发布；名称/符号/已是目标语言的合法原样返回不受影响。
-- 更新间接依赖 source-map-js 到 1.2.2，修复 GHSA-68fv-2mgg-jv7q（高危：索引化 source-map section 偏移可造成事件循环拒绝服务），在保持现有依赖审计门禁的前提下解除对 CI 的阻塞。
-
-## [0.3.4] - 2026-09-24
-### Fixed
-
-- 翻译的跨段错位不再可能被静默发布：内容合理性校验改为按译文长度归一化（原阈值按英文长度标定，中文短句重复一律漏判），并在全部批次完成后、写入译文版本之前对完整结果再校验一次；命中的段先做一次定点重译，仍不通过则运行以 `TRANSLATION_ALIGNMENT_UNVERIFIED` 明确失败并保留已成功批次（界面有中英提示），不再发布与时间轴对不上的译文。
+- server/Docker 构建新增 **NeMo 引擎**（路线图阶段 4，仅服务器部署）：`parakeet-tdt-0.6b-v3`（25 个欧洲语言、词级时间戳）与 `canary-1b-flash`（英德法西）两个 CC-BY-4.0 模型，署名在模型详情展示；CUDA-only、冻结桌面二进制完全隐藏该类条目且不打包 nemo_toolkit（静态断言防回归）。引擎为防御式输出解析 + VAD 长音频切分；**尚未在 CUDA 真机验证**（本仓库 CI 无 CUDA runner，已在文档与任务中如实标注移交项）。
 
 ### Changed
 
 - 本地 Ollama 提供商的初始翻译批次上限恢复为 16 段 / 1600 字符（实现此前偏离为 64 段 / 6000 字符，与既有规格不符）：实测每次请求的固定开销可忽略（4B 约 0.04 s），而大批次在长字幕上更容易触发拆分重译，反而更慢。
+
+### Fixed
+
+- 翻译的跨段错位不再可能被静默发布：内容合理性校验改为按译文长度归一化（原阈值按英文长度标定，中文短句重复一律漏判），并在全部批次完成后、写入译文版本之前对完整结果再校验一次；命中的段先做一次定点重译，仍不通过则运行以 `TRANSLATION_ALIGNMENT_UNVERIFIED` 明确失败并保留已成功批次（界面有中英提示），不再发布与时间轴对不上的译文。
+- 本地转写 worker 增加活跃心跳：心跳证明推理仍在推进（进程 CPU 时间持续前进），慢 chunk 不再被停滞时限误杀，推理期间任务行时间戳周期性刷新以呈现存活（进度仍只按完成的音频块推进）；进程存活但心跳冻结、或超过硬性上限仍无产出时才判定停滞并终止，本地队列继续可用。心跳缺失时回退为仅按产出判定。
+- 翻译完整性校验新增三条逐段判据：整段译文回显源文（译文与源文一致、长度达标且文字系统与目标语言不兼容）、模型元评论外泄（括注内出现指向翻译指令的说明，如「（注意：根据要求…）」「(Note: …)」）、占位符译文（整段为「（无翻译）」类占位文本）。三类污染此前逃过全部批量判据仍被发布；名称/符号/已是目标语言的合法原样返回不受影响。
+- 更新间接依赖 source-map-js 到 1.2.2，修复 GHSA-68fv-2mgg-jv7q（高危：索引化 source-map section 偏移可造成事件循环拒绝服务），在保持现有依赖审计门禁的前提下解除对 CI 的阻塞。
 
 ## [0.3.3] - 2026-09-24
 
@@ -372,8 +369,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.3.4...HEAD
-[0.3.4]: https://github.com/Goldloli/asrbox/compare/v0.3.3...v0.3.4
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Goldloli/asrbox/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/Goldloli/asrbox/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Goldloli/asrbox/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/Goldloli/asrbox/compare/v0.3.0...v0.3.1

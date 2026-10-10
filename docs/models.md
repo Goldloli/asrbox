@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox registers 24 local speech-recognition models. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox registers 25 local speech-recognition models, plus 2 server-only NeMo models that appear only in Docker deployments. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -52,8 +52,11 @@ Sizes are registry estimates, not exact download promises.
 | `ark-asr-0.6b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 2,600 MB | No |
 | `ark-asr-3b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 8,130 MB | No |
 | `voxtral-mini-3b` | Voxtral / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 9,360 MB | No |
+| `firered-asr2-aed` | FireRedASR2 AED | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,400 MB | Yes |
 
-The estimates add up to roughly 65 GiB. A real all-model installation may use more or less space.
+The two server-only models run on the NeMo engine and require an NVIDIA GPU (CUDA); they are visible in Docker deployments and hidden in the desktop app: `parakeet-tdt-0.6b-v3` (25 European languages, word-level timestamps, 2,509 MB) and `canary-1b-flash` (English, German, French, Spanish, 3,541 MB). Both are CC-BY-4.0 with attribution shown in the model details, and neither has been verified on a CUDA machine yet.
+
+The estimates add up to roughly 69 GiB. A real all-model installation may use more or less space.
 
 These device labels describe the execution paths supported by each ASRbox engine; they do not assert that the listed accelerator is present or active on the current machine. The runtime keeps its existing automatic selection and fallback behavior, so the device actually used depends on available hardware and runtime support.
 
@@ -74,11 +77,12 @@ These device labels describe the execution paths supported by each ASRbox engine
 - High-accuracy English plus 13 more languages including Chinese, fast, with punctuation: `cohere-transcribe-2b`. It has no automatic language detection — an explicit language is required — and no timestamps; its cue times are approximate. Downloading prefers the open ModelScope mirror; the Hugging Face source needs access approval and fails with a specific gated-repository message when no mirror is reachable.
 - Chinese-English and 17 more European languages with language following the audio: `ark-asr-0.6b` or `ark-asr-3b` (the 3B is the more accurate one, Apache 2.0). No timestamps; long audio is automatically chunked.
 - Very long audio in a single pass (up to 30 minutes) across 8 auto-detected languages: `voxtral-mini-3b`. No Chinese, no timestamps; the processor requires the bundled `mistral-common` dependency.
+- Best open-benchmark Chinese accuracy, plus English and code-switching, with word-level timestamps: `firered-asr2-aed` (Xiaohongshu, Apache 2.0). Single inputs are capped at 60 seconds, so long audio is automatically VAD-chunked with the word timeline aggregated into segment cue times.
 - Maximum Whisper-family capacity: a Large V3 or Large V3 Turbo variant, subject to available RAM and startup time.
 
 Accuracy depends on language, recording quality, music/noise, speakers, and runtime. Benchmark representative media before choosing a default model.
 
-Timeline note: `qwen3-asr-*`, `sensevoice-small`, `fun-asr-nano`, `cohere-transcribe-2b`, `ark-asr-*`, `voxtral-mini-3b`, and `granite-speech-4.1-2b` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model, `paraformer-zh`, `moss-transcribe-diarize`, or `granite-speech-4.1-2b-plus` with the word-timestamps option when precise timing matters.
+Timeline note: `qwen3-asr-*`, `sensevoice-small`, `fun-asr-nano`, `cohere-transcribe-2b`, `ark-asr-*`, `voxtral-mini-3b`, and `granite-speech-4.1-2b` do not emit timestamps. Their subtitle cue times are approximate values spread across each chunk's audio window, so they are fine for reading order and rough seeking but not for frame-accurate editing; pick a Whisper-family model, `paraformer-zh`, `moss-transcribe-diarize`, `firered-asr2-aed`, or `granite-speech-4.1-2b-plus` with the word-timestamps option when precise timing matters.
 
 ## Transcription Safeguards
 
@@ -127,6 +131,8 @@ The packaged desktop build was verified separately, because the frozen sidecar c
 This evidence verifies the tested dependency snapshot and machine. Docker build and smoke coverage verify runtime startup and compatibility reporting, not the accuracy or speed of all models on every Linux CPU. Future upstream revisions, media codecs, architectures, and hardware can behave differently.
 
 The six models added by the phase-2 catalog expansion were verified the same way in the packaged desktop app on macOS Apple Silicon (2026-09-23) and on Windows x64 (2026-09-23/24). Each model was downloaded through the managed lifecycle and transcribed real media end-to-end: `ark-asr-0.6b` and `ark-asr-3b` on a 60-second Chinese clip (six segments each, with visibly different wording confirming each ran its own weights), `cohere-transcribe-2b` on the Chinese clip with an explicit language (five punctuation-preserving segments; an 18-minute sample re-transcribed identically on Windows), `granite-speech-4.1-2b` on a 30-second English excerpt (punctuated, cased), `granite-speech-4.1-2b-plus` in its default speaker-attribution mode (S01-labelled turns; the word-timestamp mode was verified separately in development with monotonic unwrapped timelines), and `voxtral-mini-3b` with its `tekken.json` tokenizer layout. The frozen binary smoke asserts the runtime probes for every engine family. Evidence: `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`.
+
+`firered-asr2-aed` was verified on 2026-10-10 on macOS Apple Silicon through the managed download path (ModelScope source) and the full backend transcription path: a real Chinese clip produced 27 word-timestamped segments (1118 characters) and exported cleanly in all six formats (TXT, SRT, VTT, ASS, JSON, Markdown). Evidence: `backend/real_tests/results/asrbox-real-models-firered-final.md`. The NeMo engine models (`parakeet-tdt-0.6b-v3`, `canary-1b-flash`) are covered by unit and contract tests against stub engines only; CUDA-hardware verification is still pending and tracked in `backend/real_tests/results/nemo-cuda-verification-pending.md`.
 
 ## Model Sources and Licenses
 

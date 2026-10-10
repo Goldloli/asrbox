@@ -19,7 +19,7 @@
 
 ## 当前状态
 
-当前源码版本为 `0.3.4`，适合试用和反馈，还不是稳定版。
+当前源码版本为 `0.4.0`，适合试用和反馈，还不是稳定版。
 
 | 运行方式 | 支持范围 |
 | --- | --- |
@@ -115,7 +115,7 @@ ASRBOX_API_TOKEN=使用-openssl-rand-hex-32-生成的长随机值
 
 ## 桌面端
 
-从 [`v0.3.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.3.4) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
+从 [`v0.4.0` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.4.0) 下载对应平台的安装包（macOS Apple Silicon 为 DMG，Windows x64 为 NSIS 安装程序），并校验 `SHA256SUMS.txt`。
 
 桌面端也可在"设置 → 关于"中检查 GitHub Release。默认会在启动约 10 秒后检查，此后最多每 24 小时自动检查一次；可以关闭自动检查或应用内通知，也可以随时手动检查。发现新版本后可在应用内把安装包下载到系统"下载"目录，查看进度并取消或重试。ASRbox 只接受官方 Release 中与当前平台匹配的资源，并根据同一 Release 的 `SHA256SUMS.txt` 校验；校验成功后才允许打开。
 
@@ -151,7 +151,7 @@ Windows 安装包未进行代码签名，运行时 SmartScreen 可能提示"Wind
 4. 提交后在"任务中心"查看进度、日志和转写结果。
 5. 在"编辑字幕"中修改文字，或导出 SRT、VTT、ASS、TXT、JSON、Markdown。
 
-ASRbox 注册 24 个本地模型，覆盖 Whisper 系、Faster Whisper、FunASR（SenseVoice / Paraformer / Fun-ASR-Nano）、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini、MLX Whisper，以及端到端说话人分离模型 MOSS-Transcribe-Diarize。运行参数的模型选择器和"模型"页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
+ASRbox 注册 25 个本地模型，覆盖 Whisper 系、Faster Whisper、FunASR（SenseVoice / Paraformer / Fun-ASR-Nano）、Qwen3-ASR、Granite Speech、Cohere Transcribe、ARK-ASR、Voxtral Mini、FireRedASR2、MLX Whisper，以及端到端说话人分离模型 MOSS-Transcribe-Diarize；Docker 部署额外提供 2 个仅服务器端的 NeMo 模型（Parakeet TDT / Canary，需要 NVIDIA GPU）。运行参数的模型选择器和"模型"页会标出每个模型支持 CPU、NVIDIA GPU 或 Apple GPU；这是支持能力，实际使用的设备仍取决于当前电脑与可用运行时。Docker 是 Linux CPU 运行时，不支持 Apple 专用的 MLX；模型页面会把 MLX 标为不兼容并阻止下载。模型选择、体积、来源和许可说明见[模型指南](docs/models.md)。
 
 ## AI 字幕核对
 
