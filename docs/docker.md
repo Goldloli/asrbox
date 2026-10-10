@@ -13,6 +13,8 @@ Docker 版把 React 网页、FastAPI 后端、Linux CPU ASR 运行库和 Debian 
 
 镜像支持 Linux CPU 推理，不包含 CUDA，也不支持 Apple MLX。Apple Silicon Mac 上的 Docker 仍是 Linux 容器，应选择 Faster Whisper、Transformers Whisper、SenseVoice 或 Qwen3-ASR。
 
+镜像额外内置 `nemo-toolkit`（路线图阶段 4，server/Docker 专属）：`parakeet-tdt-0.6b-v3` 与 `canary-1b-flash` 两个模型仅在带 NVIDIA GPU 的部署上可执行（CUDA-only），CPU 容器中目录可见但转写会给出需要 CUDA 的明确错误；该依赖会显著增大镜像体积，桌面二进制不包含它。NeMo 引擎尚未在 CUDA 真机上完成验证，条目描述如实标注。
+
 ## 启动
 
 ```bash

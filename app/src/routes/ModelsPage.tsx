@@ -152,6 +152,7 @@ export function ModelsPage() {
     { value: 'diarization', label: t('models.categoryDiarization') },
     { value: 'whisper', label: t('models.categoryWhisper') },
     { value: 'speechlm', label: t('models.categorySpeechlm') },
+    { value: 'server', label: t('models.categoryServer') },
   ];
   const guideItems: Array<{ value: GuidePreference; label: string }> = [
     { value: 'general', label: t('models.guideGeneral') },

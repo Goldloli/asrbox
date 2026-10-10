@@ -277,3 +277,35 @@ Qwen3-ASR 与 MOSS-Transcribe-Diarize 模型迁移到统一 speech-LM 引擎后�
 #### Scenario: 心跳缺失时回退既有判定
 - **WHEN** worker 未产出可读的心跳文件且长时间无 chunk 完成
 - **THEN** 停滞判定回退为仅按 chunk 完成进度（超过停滞时限即终止），与引入心跳前的行为一致
+
+### Requirement: FireRedASR AED 引擎行为
+
+`firered_asr` 引擎 SHALL 以 vendored 最小推理集（上游 Apache-2.0 代码，特征提取使用 torchaudio 的 Kaldi 兼容 fbank 替代无 Windows 构建的 kaldi_native_fbank，参数与上游对齐：80 mel、25ms/10ms、snip_edges、推理零 dither）执行推理，不引入新的 Python 依赖。加载设备 SHALL 按 registry 声明的设备集合显式选择（无 CUDA 时 CPU），不得经 `device_map="auto"` 落到 MPS。模型原生词级时间戳与置信度 SHALL 聚合为句段 `TranscriptSegment`（时间戳含上游 60ms 前移修正），词级数据 SHALL 随结果透出；时间轴经 VAD 块偏移后 SHALL 单调且覆盖全部语音块。fbank 替换的特征等价性 SHALL 由真实模型转写验证（中英样本文字与时间戳合理）后方可发布。
+
+#### Scenario: fbank 提取参数对齐上游
+- **WHEN** vendored 引擎提取音频特征
+- **THEN** 使用 torchaudio.compliance.kaldi.fbank 且参数与上游 kaldi_native_fbank 配置一致（80 mel bins、frame 25ms/10ms、snip_edges=True、dither=0），CMVN 从模型目录 `cmvn.ark` 读取并应用
+
+#### Scenario: 词级时间戳聚合为句段
+- **WHEN** 模型对单个语音块返回带词级时间戳的假设
+- **THEN** 词级时间戳按句读聚合成句段时间轴（沿用既有 Paraformer 聚合先例），句段时间轴随块偏移保持全局连续，词级数据保留在结果的 words 字段
+
+#### Scenario: 真实模型验证门禁
+- **WHEN** 该引擎或 vendored 代码发生变更
+- **THEN** 经 backend 真实分发路径的真实模型转写（`ASRBOX_RUN_REAL_MODELS=1` 门禁）须通过，冻结二进制上 `firered_asr_available` 探针为 true 且至少一条真实转写跑通
+
+### Requirement: NeMo 引擎行为
+
+`nemo` 引擎 SHALL 以 `nemo_toolkit` 的 `ASRModel.restore_from` 加载 registry 管理下载的本地 `.nemo` 权重（不经 `from_pretrained` 的隐式网络缓存），推理设备按声明的 `cuda` 显式选择，不得落到 CPU 或未声明设备。`nemo_toolkit` 不可导入时 SHALL 以运行时探针缺失失败并给出本地化提示，不在转写中途崩溃。模型输出的文本与词级时间戳 SHALL 映射到 `TranscriptionResult` 契约（时间戳聚合为句段时间轴并透出词级数据，解析对 NeMo 版本间的返回结构差异做防御性处理）；超过模型官方单次输入上限的长音频 SHALL 经既有 fsmn-vad 切分并偏移时间戳。引擎与时间戳解析 SHALL 具备 stub 级单元与分发路径测试；真实 CUDA 转写验证（探针 true + 至少一条真实转写）SHALL 作为显式移交项在完成前保持条目的「未验证」标注，不得在未验证时宣称可用。
+
+#### Scenario: restore_from 本地权重
+- **WHEN** 在含 nemo-toolkit 与 CUDA 的运行时以 NeMo 模型发起转写
+- **THEN** 引擎从 registry 下载目录加载 `.nemo` 权重，不触发隐式模型下载，输出映射到既有 TranscriptionResult 契约
+
+#### Scenario: 超长音频
+- **WHEN** 音频超过所选 NeMo 模型的官方单次输入上限
+- **THEN** 经 fsmn-vad 切分逐块转写并按块偏移合并时间轴；VAD 不可用时给出可操作错误
+
+#### Scenario: nemo_toolkit 缺失
+- **WHEN** 运行时未安装 nemo_toolkit（如桌面二进制旁路调用）
+- **THEN** 引擎以运行时缺失态失败并给出本地化提示，不产生半途崩溃或无诊断挂起

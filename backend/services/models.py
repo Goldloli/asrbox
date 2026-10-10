@@ -20,10 +20,12 @@ from backend.services.errors import ASRboxError
 from backend.services import model_storage
 from backend.services.platform import (
     cohere_asr_import_error,
+    firered_asr_available,
     funasr_available,
     granite_speech_import_error,
     granite_speech_plus_import_error,
     moss_transcribe_diarize_available,
+    nemo_available,
     qwen3_asr_available,
     runtime_mlx_import_error as mlx_runtime_import_error,
     torchaudio_available,
@@ -389,6 +391,35 @@ def check_model_compatibility(
             missing.append("mlx weights")
         if not _has_any(model_dir, ("config.json", "tokenizer.json")):
             missing.append("config/tokenizer")
+    elif engine == "firered_asr":
+        for required in model_config.required_files or ("model.pth.tar",):
+            if not _has_any(model_dir, (required,)):
+                missing.append(required)
+        probe_ready = _runtime_capability(runtime_snapshot, "firered_asr_available", firered_asr_available)
+        runtime_pending = probe_ready is None
+        if probe_ready is False:
+            missing.append("firered runtime")
+    elif engine == "nemo":
+        for required in model_config.required_files or ("*.nemo",):
+            if not _has_glob(model_dir, (required,)):
+                missing.append(required)
+        probe_ready = _runtime_capability(runtime_snapshot, "nemo_available", nemo_available)
+        runtime_pending = probe_ready is None
+        if probe_ready is False:
+            missing.append("nemo runtime (server/Docker builds only)")
+
+        def _cuda_probe() -> bool:
+            try:
+                import torch
+
+                return bool(torch.cuda.is_available())
+            except Exception:
+                return False
+
+        cuda_ready = _runtime_capability(runtime_snapshot, "torch_cuda_available", _cuda_probe)
+        runtime_pending = runtime_pending or cuda_ready is None
+        if cuda_ready is False:
+            missing.append("CUDA device")
     elif engine == "transformers_speech_lm":
         spec = speech_lm_compat_spec(model_config.adapter)
         if spec is None:

@@ -127,6 +127,38 @@ def voxtral_import_error() -> str | None:
     )
 
 
+def firered_asr_import_error() -> str | None:
+    try:
+        from backend.vendor.fireredasr2 import FireRedAsr2, FireRedAsr2Config
+
+        if all((FireRedAsr2, FireRedAsr2Config)):
+            return None
+        return "required FireRedASR classes are unavailable"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
+def nemo_import_error() -> str | None:
+    if not module_available("nemo"):
+        return "nemo_toolkit is not installed (server/Docker builds only)"
+    try:
+        from nemo.collections.asr.models import ASRModel
+
+        if ASRModel is not None:
+            return None
+        return "required NeMo ASR classes are unavailable"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
+def firered_asr_available() -> bool:
+    return bool(runtime_probe_snapshot()["firered_asr_available"])
+
+
+def nemo_available() -> bool:
+    return bool(runtime_probe_snapshot()["nemo_available"])
+
+
 def mlx_runtime_import_errors() -> tuple[str | None, str | None]:
     core_error = module_import_error("mlx.core") if module_available("mlx.core") else "mlx.core is not installed"
     whisper_error = module_import_error("mlx_whisper") if module_available("mlx_whisper") else "mlx_whisper is not installed"
@@ -214,6 +246,8 @@ def detect_runtime_in_process() -> dict[str, Any]:
     granite_speech_plus_error = granite_speech_plus_import_error()
     cohere_asr_error = cohere_asr_import_error()
     voxtral_error = voxtral_import_error()
+    firered_error = firered_asr_import_error()
+    nemo_error = nemo_import_error()
     if granite_speech_error is not None:
         warnings.append(f"Granite Speech import failed: {granite_speech_error}")
     if granite_speech_plus_error is not None:
@@ -222,6 +256,10 @@ def detect_runtime_in_process() -> dict[str, Any]:
         warnings.append(f"Cohere Transcribe import failed: {cohere_asr_error}")
     if voxtral_error is not None:
         warnings.append(f"Voxtral import failed: {voxtral_error}")
+    if firered_error is not None:
+        warnings.append(f"FireRedASR import failed: {firered_error}")
+    if nemo_error is not None:
+        warnings.append("NeMo runtime is unavailable (nemo_toolkit ships in server/Docker builds only)")
     mlx_import_error, mlx_whisper_import_error = mlx_runtime_import_errors()
     if mlx_import_error:
         warnings.append(f"MLX import failed: {mlx_import_error}")
@@ -267,6 +305,8 @@ def detect_runtime_in_process() -> dict[str, Any]:
         "granite_speech_plus_available": granite_speech_plus_error is None,
         "cohere_asr_available": cohere_asr_error is None,
         "voxtral_available": voxtral_error is None,
+        "firered_asr_available": firered_error is None,
+        "nemo_available": nemo_error is None,
         "warnings": warnings,
     }
 

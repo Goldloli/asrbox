@@ -36,6 +36,7 @@ const categoryLabelKeys = {
   faster: 'models.categoryFaster',
   whisper: 'models.categoryWhisper',
   speechlm: 'models.categorySpeechlm',
+  server: 'models.categoryServer',
 } as const;
 
 export function createModelGroups(

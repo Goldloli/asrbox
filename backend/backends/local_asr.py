@@ -575,11 +575,10 @@ def _fsmn_vad_speech_spans(audio_path: str) -> list[tuple[float, float]] | None:
 
 
 def _plan_speech_lm_chunks(
-    adapter: "BaseSpeechLMAdapter",
+    max_seconds: float | None,
     audio_path: str,
     audio,
 ) -> list[tuple[object, float]]:
-    max_seconds = adapter.max_chunk_seconds
     if max_seconds is None:
         return [(audio, 0.0)]
     duration = len(audio) / 16000.0
@@ -670,7 +669,7 @@ class BaseSpeechLMAdapter:
     def transcribe_chunked(self, processor: object, model: object, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
         language = self.resolve_language(options)
         audio = self.load_audio_16k(audio_path)
-        planned = _plan_speech_lm_chunks(self, audio_path, audio)
+        planned = _plan_speech_lm_chunks(self.max_chunk_seconds, audio_path, audio)
         outputs = [
             self.transcribe_chunk(processor, model, chunk, offset, model_config, options, language)
             for chunk, offset in planned
@@ -1321,6 +1320,255 @@ class VoxtralMiniAdapter(BaseSpeechLMAdapter):
         return SpeechLMChunkOutput(text=text, language=language, segments=segments)
 
 
+FIRERED_AED_MAX_CHUNK_SECONDS = 59.0
+FIRERED_SEGMENT_MAX_CHARS = 40
+FIRERED_SEGMENT_GAP_SECONDS = 0.8
+
+
+def _firered_segments_from_tokens(tokens: list, offset: float) -> tuple[list[TranscriptSegment], list[dict]]:
+    """Group the model's per-token timestamps into subtitle cues: a cue closes on a
+    speech gap or a length cap, mirroring the Paraformer character-aggregation idea
+    without native punctuation to split on."""
+    segments: list[TranscriptSegment] = []
+    words: list[dict] = []
+    current: list[list] = []
+
+    def flush() -> None:
+        if not current:
+            return
+        text = ""
+        for token, _start, _end in current:
+            token = str(token)
+            if not token:
+                continue
+            text = f"{text} {token}" if _needs_space(text, token) else f"{text}{token}"
+        text = text.strip()
+        if text:
+            segments.append(
+                TranscriptSegment(
+                    id=len(segments) + 1,
+                    start=offset + float(current[0][1]),
+                    end=offset + float(current[-1][2]),
+                    text=text,
+                )
+            )
+        current.clear()
+
+    for token, start, end in tokens:
+        text = str(token)
+        if not text.strip():
+            continue
+        words.append({"text": text, "start": offset + float(start), "end": offset + float(end)})
+        gap = float(start) - float(current[-1][2]) if current else 0.0
+        joined = sum(len(str(item)) for item, _s, _e in current) + len(text)
+        if current and (gap > FIRERED_SEGMENT_GAP_SECONDS or joined >= FIRERED_SEGMENT_MAX_CHARS):
+            flush()
+        current.append([text, start, end])
+    flush()
+    return segments, words
+
+
+class FireRedASRBackend:
+    def __init__(self) -> None:
+        self._models: dict[str, object] = {}
+
+    def _load(self, model_config: ASRModelConfig):
+        try:
+            import torch
+
+            from backend.vendor.fireredasr2 import FireRedAsr2, FireRedAsr2Config
+        except Exception as exc:
+            raise RuntimeError("FireRedASR runtime is not available (vendored package or its dependencies failed to import)") from exc
+        config = FireRedAsr2Config(
+            use_gpu=torch.cuda.is_available(),
+            use_half=False,
+            beam_size=3,
+            nbest=1,
+            return_timestamp=True,
+        )
+        model = FireRedAsr2.from_pretrained("aed", str(_model_path(model_config.model_name)), config)
+        self._models[model_config.model_name] = model
+        return model
+
+    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        model = self._models.get(model_config.model_name) or self._load(model_config)
+        import numpy as np
+
+        audio = BaseSpeechLMAdapter.load_audio_16k(audio_path)
+        # transformers' load_audio returns a float32 numpy array in [-1, 1]; the
+        # vendored extractor rescales to int16 magnitude itself.
+        audio_np = audio if isinstance(audio, np.ndarray) else audio.numpy()
+        audio_np = np.asarray(audio_np, dtype=np.float32).squeeze()
+        planned = _plan_speech_lm_chunks(FIRERED_AED_MAX_CHUNK_SECONDS, audio_path, audio_np)
+        segments: list[TranscriptSegment] = []
+        words: list[dict] = []
+        for chunk, chunk_offset in planned:
+            results = model.transcribe(["chunk"], [(16000, chunk)])
+            if not results:
+                continue
+            result = results[0]
+            chunk_segments, chunk_words = _firered_segments_from_tokens(
+                result.get("timestamp") or [], float(chunk_offset)
+            )
+            for segment in chunk_segments:
+                segments.append(
+                    TranscriptSegment(
+                        id=len(segments) + 1,
+                        start=segment.start,
+                        end=segment.end,
+                        text=segment.text,
+                        speaker=None,
+                    )
+                )
+            words.extend(chunk_words)
+        text = transcript_text_from_segments(segments)
+        return TranscriptionResult(
+            text=text,
+            language=None,
+            duration=segments[-1].end if segments else None,
+            segments=segments,
+            words=words,
+            model_name=model_config.model_name,
+            raw_result_summary={"engine": "firered_asr", "chunks": len(planned)},
+        )
+
+    def is_loaded(self, model_name: str) -> bool:
+        return model_name in self._models
+
+    def unload(self, model_name: str) -> bool:
+        return self._models.pop(model_name, None) is not None
+
+
+NEMO_CANARY_FLASH_MAX_CHUNK_SECONDS = 595.0
+
+
+def _nemo_transcribe_outputs(model, audio_path: str, language: str | None) -> list[dict]:
+    """NeMo's transcribe return shape varies across families and versions (bare strings,
+    dicts, or Hypothesis objects); normalize to {'text', 'words'} entries defensively."""
+    try:
+        kwargs: dict = {}
+        if language and language != "auto":
+            kwargs["source_lang"] = language
+            kwargs["target_lang"] = language
+        raw = model.transcribe([audio_path], **kwargs)
+    except TypeError:
+        # Older/family-specific signatures without language kwargs.
+        raw = model.transcribe([audio_path])
+    items = list(raw) if isinstance(raw, (list, tuple)) else [raw]
+
+    def normalize(item) -> dict:
+        if isinstance(item, str):
+            return {"text": item, "words": []}
+        if isinstance(item, dict):
+            text = str(item.get("text") or "")
+            words = []
+            timestamps = item.get("timestamps")
+            if isinstance(timestamps, dict):
+                entries = timestamps.get("word") or []
+            elif isinstance(timestamps, (list, tuple)):
+                entries = timestamps
+            else:
+                entries = []
+            for entry in entries:
+                if isinstance(entry, (list, tuple)) and len(entry) >= 3:
+                    words.append({"text": str(entry[2]), "start": float(entry[0]), "end": float(entry[1])})
+            return {"text": text, "words": words}
+        text = getattr(item, "text", None)
+        return {"text": str(text or ""), "words": []}
+
+    return [normalize(item) for item in items]
+
+
+class NemoASRBackend:
+    """Server/Docker-only engine: nemo_toolkit is too large for the desktop binary and
+    its inference is CUDA-only, so the registry hides these models on frozen desktop
+    runs and the backend refuses to run without a CUDA device."""
+
+    def __init__(self) -> None:
+        self._models: dict[str, object] = {}
+
+    def _load(self, model_config: ASRModelConfig):
+        import torch
+
+        if not torch.cuda.is_available():
+            raise RuntimeError("NeMo models require an NVIDIA CUDA runtime; they are not available on this machine")
+        try:
+            from nemo.collections.asr.models import ASRModel
+        except Exception as exc:
+            raise RuntimeError("nemo_toolkit is not installed in this runtime (server/Docker builds only)") from exc
+        model_dir = _model_path(model_config.model_name)
+        candidates = sorted(model_dir.glob("*.nemo"))
+        if not candidates:
+            raise RuntimeError(f"No .nemo weights found under {model_dir}")
+        model = ASRModel.restore_from(str(candidates[0]))
+        model.to("cuda")
+        self._models[model_config.model_name] = model
+        return model
+
+    def transcribe(self, audio_path: str, model_config: ASRModelConfig, options: dict) -> TranscriptionResult:
+        model = self._models.get(model_config.model_name) or self._load(model_config)
+        # Parakeet TDT v3 transcribes hours-long audio natively; Canary Flash caps at
+        # 10-minute chunks, so long audio goes through the shared VAD chunk planner.
+        max_seconds = None if model_config.model_name == "parakeet-tdt-0.6b-v3" else NEMO_CANARY_FLASH_MAX_CHUNK_SECONDS
+        language = options.get("language")
+        if max_seconds is None:
+            outputs = _nemo_transcribe_outputs(model, audio_path, language)
+        else:
+            audio = BaseSpeechLMAdapter.load_audio_16k(audio_path)
+            import numpy as np
+
+            audio_np = audio if isinstance(audio, np.ndarray) else audio.numpy()
+            audio_np = np.asarray(audio_np, dtype=np.float32).squeeze()
+            planned = _plan_speech_lm_chunks(max_seconds, audio_path, audio_np)
+            outputs = []
+            import soundfile
+            import tempfile
+
+            with tempfile.TemporaryDirectory(prefix="asrbox-nemo-") as chunk_dir:
+                for index, (chunk, chunk_offset) in enumerate(planned):
+                    chunk_path = str(Path(chunk_dir) / f"chunk-{index}.wav")
+                    soundfile.write(chunk_path, chunk, 16000, subtype="PCM_16")
+                    for output in _nemo_transcribe_outputs(model, chunk_path, language):
+                        for word in output["words"]:
+                            word["start"] += chunk_offset
+                            word["end"] += chunk_offset
+                        outputs.append(output)
+        segments: list[TranscriptSegment] = []
+        words: list[dict] = []
+        for output in outputs:
+            words.extend(output["words"])
+            text = output["text"].strip()
+            if not text and not output["words"]:
+                continue
+            start = output["words"][0]["start"] if output["words"] else 0.0
+            end = output["words"][-1]["end"] if output["words"] else 0.0
+            segments.append(
+                TranscriptSegment(
+                    id=len(segments) + 1,
+                    start=start,
+                    end=end,
+                    text=text,
+                    speaker=None,
+                )
+            )
+        text = transcript_text_from_segments(segments) or " ".join(output["text"].strip() for output in outputs if output["text"].strip())
+        return TranscriptionResult(
+            text=text,
+            language=language if language and language != "auto" else None,
+            duration=segments[-1].end if segments else None,
+            segments=segments,
+            words=words,
+            model_name=model_config.model_name,
+            raw_result_summary={"engine": "nemo", "chunks": 1 if max_seconds is None else len(planned)},
+        )
+
+    def is_loaded(self, model_name: str) -> bool:
+        return model_name in self._models
+
+    def unload(self, model_name: str) -> bool:
+        return self._models.pop(model_name, None) is not None
+
+
 _SPEECH_LM_ADAPTERS: dict[str, BaseSpeechLMAdapter] = {
     Qwen3SpeechLMAdapter.key: Qwen3SpeechLMAdapter(),
     MossTranscribeDiarizeSpeechLMAdapter.key: MossTranscribeDiarizeSpeechLMAdapter(),
@@ -1376,6 +1624,7 @@ _backends: dict[str, LocalASRBackend] = {
     "funasr": FunASRBackend(),
     "mlx_whisper": MLXWhisperBackend(),
     "transformers_speech_lm": TransformersSpeechLMBackend(),
+    "firered_asr": FireRedASRBackend(),
 }
 
 

@@ -1,12 +1,13 @@
 import type { ModelStatus } from './api';
 import type { Locale } from '../stores/uiStore';
 
-export type ModelCategory = 'recommended' | 'whisper' | 'faster' | 'apple' | 'chinese' | 'diarization' | 'speechlm';
+export type ModelCategory = 'recommended' | 'whisper' | 'faster' | 'apple' | 'chinese' | 'diarization' | 'speechlm' | 'server';
 
 export function modelCategory(model: ModelStatus): Exclude<ModelCategory, 'recommended'> {
   if (model.supports_diarization) return 'diarization';
+  if (model.engine === 'nemo') return 'server';
   if (model.engine === 'mlx_whisper') return 'apple';
-  if (model.engine === 'funasr' || model.model_name.startsWith('qwen3-asr') || model.model_name.startsWith('ark-asr')) return 'chinese';
+  if (model.engine === 'funasr' || model.model_name.startsWith('qwen3-asr') || model.model_name.startsWith('ark-asr') || model.model_name.startsWith('firered')) return 'chinese';
   if (model.engine === 'faster_whisper') return 'faster';
   if (model.engine === 'transformers_speech_lm') return 'speechlm';
   return 'whisper';
@@ -49,6 +50,15 @@ export function modelDescription(model: ModelStatus, locale: Locale) {
   if (model.model_name === 'voxtral-mini-3b') return zh
     ? 'Mistral 开源离线模型，8 语种自动检测，单遍最长 30 分钟；无中文、无时间戳。'
     : 'Mistral open offline model with auto language detection across 8 languages, up to 30 minutes in one pass; no Chinese, no timestamps.';
+  if (model.model_name.startsWith('firered')) return zh
+    ? '中文公开基准第一的小红书开源模型（AISHELL-1 CER 0.57%），词级时间戳，中英与语码切换；体积约 4.4GB。'
+    : 'Xiaohongshu open model topping public Chinese benchmarks (AISHELL-1 CER 0.57%) with word-level timestamps for Chinese, English, and code-switching; about 4.4GB.';
+  if (model.model_name === 'parakeet-tdt-0.6b-v3') return zh
+    ? 'NVIDIA Parakeet TDT v3：25 个欧洲语言、吞吐极高、单遍支持超长音频；仅 server/Docker 部署，需要 NVIDIA CUDA（尚未在 CUDA 真机验证）。'
+    : 'NVIDIA Parakeet TDT v3: 25 European languages with top throughput and native long-audio support; server/Docker deployments only, requires NVIDIA CUDA (not yet verified on a CUDA machine).';
+  if (model.model_name === 'canary-1b-flash') return zh
+    ? 'NVIDIA Canary 1B Flash：英德法西高速转写带词级时间戳，长音频按 10 分钟切分；仅 server/Docker 部署，需要 NVIDIA CUDA（尚未在 CUDA 真机验证）。'
+    : 'NVIDIA Canary 1B Flash: fast English/German/French/Spanish transcription with word-level timestamps, long audio chunked at 10 minutes; server/Docker deployments only, requires NVIDIA CUDA (not yet verified on a CUDA machine).';
   if (model.engine === 'faster_whisper') return zh ? 'CTranslate2 运行，通常比标准 Whisper 更省资源。' : 'CTranslate2 runtime, usually lighter than standard Whisper.';
   if (model.engine === 'whisper_transformers') return zh ? '标准 Whisper 系列，兼容稳定，越大越准也越占资源。' : 'Standard Whisper family, stable compatibility, larger means heavier.';
   return zh ? '通用转写模型，请按语言和运行时选择。' : 'General transcription model. Choose by language and runtime.';

@@ -4,6 +4,11 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+### Added
+
+- 本地模型目录新增 **FireRedASR2 AED 1.1B**（路线图阶段 3 引擎部分）：小红书开源、中文公开基准第一（AISHELL-1 CER 0.57%），中英与语码切换、词级时间戳（聚合为句段时间轴），Apache-2.0。推理代码以最小集内置于 `backend/vendor/fireredasr2`，特征提取用 torchaudio 的 Kaldi 兼容 fbank 替代无 Windows 构建的上游库（数值等价已验证），零新增 Python 依赖；长音频经 VAD 切分（单次输入上限 60 秒）。已在 macOS 以真实模型经完整后端路径验证转写与六种导出。
+- server/Docker 构建新增 **NeMo 引擎**（路线图阶段 4，仅服务器部署）：`parakeet-tdt-0.6b-v3`（25 个欧洲语言、词级时间戳）与 `canary-1b-flash`（英德法西）两个 CC-BY-4.0 模型，署名在模型详情展示；CUDA-only、冻结桌面二进制完全隐藏该类条目且不打包 nemo_toolkit（静态断言防回归）。引擎为防御式输出解析 + VAD 长音频切分；**尚未在 CUDA 真机验证**（本仓库 CI 无 CUDA runner，已在文档与任务中如实标注移交项），Docker 依赖 lock 需在完整构建环境再生成。
+
 ### Fixed
 
 - 本地转写 worker 增加活跃心跳：心跳证明推理仍在推进（进程 CPU 时间持续前进），慢 chunk 不再被停滞时限误杀，推理期间任务行时间戳周期性刷新以呈现存活（进度仍只按完成的音频块推进）；进程存活但心跳冻结、或超过硬性上限仍无产出时才判定停滞并终止，本地队列继续可用。心跳缺失时回退为仅按产出判定。

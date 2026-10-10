@@ -1,0 +1,27 @@
+{
+  "created_at": "2026-10-10T12:50:46.269078+00:00",
+  "total": 1,
+  "passed": 1,
+  "failed": 0,
+  "items": [
+    {
+      "model_name": "firered-asr2-aed",
+      "ok": true,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "xukaituo/FireRedASR2-AED",
+      "exports": [
+        "txt",
+        "srt",
+        "vtt",
+        "ass",
+        "json",
+        "markdown"
+      ],
+      "deleted": true,
+      "task_id": "a4b9ca35-2580-4f5b-96a8-cba93024034f",
+      "text_length": 1118,
+      "segments_count": 27
+    }
+  ]
+}

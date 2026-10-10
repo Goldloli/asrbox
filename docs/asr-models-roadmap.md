@@ -30,8 +30,8 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 |---|---|---|---|
 | 1 | FunASR 系扩展（Paraformer、Fun-ASR-Nano）+ Distil-Whisper | 无（复用 funasr / faster_whisper） | 已实现并通过真机验证（change：`add-funasr-paraformer-distil`，见 `openspec/changes/archive/2026-09-20-add-funasr-paraformer-distil/`） |
 | 2 | transformers speech-LM 统一引擎重构 + Cohere Transcribe / Granite Speech 4.1 / ARK-ASR / Voxtral Mini | 无新 runtime；transformers 升级 PyPI 5.17.0 + 轻量依赖 mistral-common[audio] | 已实现并通过 Windows 与 macOS 真机验证（change：`add-transformers-speech-lm`，见 `openspec/changes/archive/2026-09-24-add-transformers-speech-lm/`；验证记录 `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`） |
-| 3 | FireRedASR2-AED + 通用 forced-alignment 时间戳后处理 | FireRedASR 官方推理代码（vendored 最小集） | 未开始 |
-| 4 | NeMo 引擎（Parakeet TDT v3 / Canary-Qwen / Canary-1B-Flash 等），仅 Docker/server 构建 | nemo_toolkit（不进桌面二进制） | 未开始 |
+| 3 | FireRedASR2-AED + 通用 forced-alignment 时间戳后处理 | FireRedASR 官方推理代码（vendored 最小集） | 引擎部分已实现并通过 macOS 真机验证（change：`add-firered-asr2-aed`）；forced-alignment 通用后处理拆分为后续独立 change |
+| 4 | NeMo 引擎（Parakeet TDT v3 / Canary-Qwen / Canary-1B-Flash 等），仅 Docker/server 构建 | nemo_toolkit（不进桌面二进制） | 代码与契约完成（change：`add-nemo-server-engine`）：Parakeet TDT v3 与 Canary 1B Flash 落地（CC-BY-4.0 署名、桌面冻结隐藏、nemo 不进二进制）；CUDA 真机验证与 Docker lock 再生成为移交项。canary-qwen-2.5b（仓库无 .nemo 文件）与 IndicParakeet-7B（仓库访问不可核实）暂缓 |
 
 阶段 2–4 的任务通过 Beads 跟踪（`bd ready` 可见），每条任务描述引用本文。
 
@@ -79,9 +79,13 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 - FireRedASR2-AED 1.1B：中文公开基准第一，自带 VAD/标点/语种识别/时间戳；官方推理代码独立，需 vendored 最小推理集 + fsmn-vad 切分（AED 单次 60s 限制）。
 - Qwen3-ASR 官方 forced-aligner 作为**通用对齐后处理服务**：任何 `supports_timestamps=false` 的模型转写后可选执行对齐，把无时间戳结果升级为带字幕轴的句段。一次投入、全家族受益；对齐失败不影响基础转写成功（遵守 `transcription-lifecycle` 的可选后处理隔离约束）。
 
+**实现程度（2026-10-10）**：引擎部分由 change `add-firered-asr2-aed` 落地——vendored 最小 AED 推理集置于 `backend/vendor/fireredasr2`（上游 Apache-2.0，commit `4e7d9aaf`）；因上游特征库 `kaldi_native_fbank` 无 Windows wheel，特征提取改为 torchaudio 的 Kaldi 兼容 fbank（数值等价性已对比验证：max diff 6.4e-5 相对值），且波形保持 int16 量级以匹配随模型分发的全局 CMVN（[-1,1] 归一会使模型听到静音——已实测）。词级时间戳聚合句段（间隔 >0.8s 或 40 字断句），长音频 fsmn-vad 切分 ≤59s。macOS 真机经完整后端路径验证（75s 单遍 + 185s 分块，六种导出）。forced-aligner 通用后处理**拆分为后续独立 change**（需单独设计任务选项、管线阶段与失败隔离）。
+
 ## 阶段 4：NeMo 引擎（仅 Docker/server）
 
 Parakeet TDT 0.6B v3、Canary-Qwen-2.5B、Canary-1B-Flash、IndicParakeet-7B。`nemo_toolkit` 体积大且 CUDA-only，**不进 PyInstaller 桌面二进制**，只注册到 server/Docker 构建；registry 以 `supported_devices=["cuda"]` 过滤，桌面端不可见。CC-BY-4.0 署名义务在此阶段随模型引入落地。
+
+**实现程度（2026-10-10）**：change `add-nemo-server-engine` 落地 **Parakeet TDT 0.6B v3**（25 个欧洲语言、词级时间戳、单遍长音频）与 **Canary 1B Flash**（英德法西、10 分钟分块）——`NemoASRBackend`（restore_from 本地 `.nemo` 权重、CUDA 显式选择、防御式输出归一、VAD 切分偏移）、registry 条目带 CC-BY-4.0 `attribution` 署名（模型详情渲染）、冻结桌面经 `sys.frozen` 过滤完全隐藏、`requirements-docker.in` 增加 `nemo-toolkit==3.0.0`（无 `[asr]` extra：其 one-logger 依赖在 Python 3.14 无发行版，已实测）、build_binary 静态断言 nemo 不进桌面二进制。**暂缓**：canary-qwen-2.5b（仓库仅 transformers 格式、无 `.nemo` 文件，restore_from 不适用）、IndicParakeet-7B（AI4B 仓库不可核实/需申请访问）。**移交项**：CUDA 真机验证（本仓库无 CUDA runner）与 `requirements-docker.lock` 再生成。
 
 ## 明确排除项
 

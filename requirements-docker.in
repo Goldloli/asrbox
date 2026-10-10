@@ -24,3 +24,8 @@ pyannote.audio
 opencc-python-reimplemented
 sse-starlette
 fastmcp
+# Server/Docker-only ASR engine (roadmap stage 4). CUDA-only inference, far too
+# large for the desktop binary; the desktop locks never include it. The [asr]
+# extra is intentionally omitted: its one-logger dependency publishes no Python
+# 3.14 wheels and the core nemo.collections.asr models ship in the base package.
+nemo-toolkit==3.0.0

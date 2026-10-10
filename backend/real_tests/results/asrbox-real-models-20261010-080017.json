@@ -1,0 +1,18 @@
+{
+  "created_at": "2026-10-10T08:00:17.194673+00:00",
+  "total": 1,
+  "passed": 0,
+  "failed": 1,
+  "items": [
+    {
+      "model_name": "firered-asr2-aed",
+      "ok": false,
+      "preferred_source": "modelscope",
+      "installed_source": "modelscope",
+      "installed_repo_id": "xukaituo/FireRedASR2-AED",
+      "exports": [],
+      "deleted": false,
+      "error": "Task f7173087-27aa-4386-a3e3-e6dd47f2ee29 failed for firered-asr2-aed: {'id': 'f7173087-27aa-4386-a3e3-e6dd47f2ee29', 'filename': 'zh-sample-75s.wav', 'source': 'local', 'audio_path': 'uploads/f7173087-27aa-4386-a3e3-e6dd47f2ee29.wav', 'normalized_audio_path': None, 'status': 'failed', 'progress': 100.0, 'language': 'auto', 'model_name': 'firered-asr2-aed', 'provider_id': None, 'duration_ms': 75000, 'text': None, 'error': \"'numpy.ndarray' object has no attribute 'numpy'\", 'error_code': 'MODEL_LOAD_FAILED', 'source_kind': 'managed', 'options': {'output_formats': ['txt', 'srt', 'vtt', 'ass', 'json', 'markdown'], 'audio_metadata': {'duration_ms': 75000, 'format': 'wav', 'audio_codec': 'pcm_s16le', 'sample_rate': 16000, 'channels': 1, 'has_audio_stream': True, 'audio_stream_count': 1}, 'audio_quality': {'duration_ms': 75000, 'format': 'wav', 'audio_codec': 'pcm_s16le', 'sample_rate': 16000, 'channels': 1, 'has_audio_stream': True, 'audio_stream_count': 1, 'mean_volume_db': -27.6, 'peak_volume_db': -10.1, 'near_silence': False, 'warnings': [], 'supported_format': True, 'needs_normalization': False, 'will_chunk': False, 'chunk_count': 1}, 'error_code': 'MODEL_LOAD_FAILED'}, 'segments': [], 'created_at': '2026-10-10T08:00:11.141320', 'updated_at': '2026-10-10T08:00:16.350424', 'completed_at': None, 'batch_id': None}"
+    }
+  ]
+}

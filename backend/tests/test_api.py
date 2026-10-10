@@ -2577,6 +2577,13 @@ def test_build_binary_dry_run_and_server_args() -> None:
     assert any(entry.endswith("cif_predictor.py:funasr/models/paraformer") for entry in add_data)
     assert "--copy-metadata" not in command
     assert command[command.index("--exclude-module") + 1] == "torchcodec"
+    # The vendored FireRedASR inference set ships with the desktop binary...
+    hidden = [command[index + 1] for index, token in enumerate(command) if token == "--hidden-import"]
+    assert "backend.vendor.fireredasr2" in hidden
+    assert "backend.vendor.fireredasr2.models.module.conformer_encoder" in hidden
+    # ...while nemo_toolkit must never enter it (server/Docker-only runtime).
+    assert all("nemo" not in name for name in hidden)
+    assert all("nemo" not in token for token in collect_data)
 
     args = parse_args(["--host", "127.0.0.1", "--port", "17495", "--parent-pid", "123", "--keep-running-sentinel", "/tmp/asrbox.keep"])
     assert args.host == "127.0.0.1"

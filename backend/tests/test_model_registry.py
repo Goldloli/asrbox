@@ -8,6 +8,8 @@ def test_registered_models_declare_devices_matching_engine_paths() -> None:
         "transformers_speech_lm",
         "mlx_whisper",
         "funasr",
+        "firered_asr",
+        "nemo",
     }
     expected_devices_by_model = {
         "whisper-base": ["cpu", "cuda", "mps"],
@@ -34,6 +36,9 @@ def test_registered_models_declare_devices_matching_engine_paths() -> None:
         "paraformer-zh": ["cpu", "cuda"],
         "fun-asr-nano": ["cpu", "cuda"],
         "faster-whisper-distil-large-v3": ["cpu", "cuda"],
+        "firered-asr2-aed": ["cpu", "cuda"],
+        "parakeet-tdt-0.6b-v3": ["cuda"],
+        "canary-1b-flash": ["cuda"],
     }
 
     configs = get_all_model_configs()
@@ -138,11 +143,51 @@ def test_every_registered_model_declares_a_license() -> None:
     }
     for config in get_all_model_configs():
         assert config.license, config.model_name
-        assert config.attribution is None
+        if config.engine == "nemo":
+            # CC-BY-4.0 models carry their attribution duty into the catalog.
+            assert config.attribution, config.model_name
+        else:
+            assert config.attribution is None
     for name in stage2_names:
         config = get_model_config(name)
         assert config is not None
         assert config.license == "Apache-2.0"
+
+
+def test_nemo_entries_are_hidden_on_frozen_desktop(monkeypatch) -> None:
+    import sys as sys_module
+
+    from backend.backends import registry
+
+    monkeypatch.setattr(sys_module, "frozen", True, raising=False)
+    frozen_names = {config.model_name for config in registry.get_all_model_configs()}
+    assert "parakeet-tdt-0.6b-v3" not in frozen_names
+    assert "canary-1b-flash" not in frozen_names
+    assert "firered-asr2-aed" in frozen_names
+
+    monkeypatch.setattr(sys_module, "frozen", False, raising=False)
+    server_names = {config.model_name for config in registry.get_all_model_configs()}
+    assert {"parakeet-tdt-0.6b-v3", "canary-1b-flash"} <= server_names
+
+
+def test_nemo_entries_match_verified_repo_facts() -> None:
+    parakeet = get_model_config("parakeet-tdt-0.6b-v3")
+    assert parakeet is not None
+    assert parakeet.engine == "nemo"
+    assert len(parakeet.languages) == 25
+    assert "en" in parakeet.languages and "de" in parakeet.languages
+    assert parakeet.supported_devices == ["cuda"]
+    assert parakeet.license == "CC-BY-4.0"
+    assert "CC-BY-4.0" in parakeet.attribution
+    assert parakeet.required_files == ["parakeet-tdt-0.6b-v3.nemo"]
+    assert parakeet.source_candidates[0].repo_id == "nvidia/parakeet-tdt-0.6b-v3"
+
+    canary = get_model_config("canary-1b-flash")
+    assert canary is not None
+    assert canary.languages == ["en", "de", "fr", "es"]
+    assert canary.supported_devices == ["cuda"]
+    assert canary.license == "CC-BY-4.0"
+    assert canary.required_files == ["canary-1b-flash.nemo"]
 
 
 def test_paraformer_zh_entry_matches_verified_repo_facts() -> None:
@@ -185,3 +230,22 @@ def test_faster_whisper_distil_entry_declares_english_only() -> None:
     assert config.supports_word_timestamps is True
     assert config.repo_id == "Systran/faster-distil-whisper-large-v3"
     assert all(candidate.source == "huggingface" for candidate in config.source_candidates)
+
+
+def test_firered_entry_matches_verified_repo_facts() -> None:
+    config = get_model_config("firered-asr2-aed")
+    assert config is not None
+    assert config.engine == "firered_asr"
+    assert config.languages == ["auto", "zh", "en"]
+    assert config.supports_timestamps is True
+    assert config.supports_word_timestamps is True
+    assert config.supports_diarization is False
+    assert config.supports_streaming is False
+    assert config.license == "Apache-2.0"
+    assert config.source_candidates[0].source == "modelscope"
+    assert config.source_candidates[0].repo_id == "xukaituo/FireRedASR2-AED"
+    assert config.source_candidates[-1].source == "huggingface"
+    assert config.source_candidates[-1].repo_id == "FireRedTeam/FireRedASR2-AED"
+    # The ModelScope repo ships no config.yaml and the loader reads model args from
+    # model.pth.tar, so completeness is judged on the four files both repos carry.
+    assert config.required_files == ["cmvn.ark", "dict.txt", "model.pth.tar", "train_bpe1000.model"]

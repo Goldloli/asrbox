@@ -62,7 +62,7 @@ def _adapter_config(adapter: str) -> ASRModelConfig:
 def test_plan_chunks_without_limit_keeps_single_chunk() -> None:
     adapter = BaseSpeechLMAdapter()
     audio = _FakeAudio(600)
-    assert _plan_speech_lm_chunks(adapter, "audio.wav", audio) == [(audio, 0.0)]
+    assert _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio) == [(audio, 0.0)]
 
 
 def test_plan_chunks_short_audio_skips_vad(monkeypatch) -> None:
@@ -73,7 +73,7 @@ def test_plan_chunks_short_audio_skips_vad(monkeypatch) -> None:
         raise AssertionError("VAD must not run for audio within the limit")
 
     monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", fail)
-    assert _plan_speech_lm_chunks(adapter, "audio.wav", audio) == [(audio, 0.0)]
+    assert _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio) == [(audio, 0.0)]
 
 
 def test_plan_chunks_splits_long_audio_at_vad_spans(monkeypatch) -> None:
@@ -85,7 +85,7 @@ def test_plan_chunks_splits_long_audio_at_vad_spans(monkeypatch) -> None:
         lambda path: [(1.0, 31.0), (40.0, 100.0)],
     )
 
-    chunks = _plan_speech_lm_chunks(adapter, "audio.wav", audio)
+    chunks = _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio)
 
     assert [round(offset, 2) for _chunk, offset in chunks] == [1.0, 40.0, 70.0]
     lengths = [len(chunk) / 16000 for chunk, _offset in chunks]
@@ -102,7 +102,7 @@ def test_plan_chunks_fails_when_vad_unavailable_for_limited_model(monkeypatch) -
     monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: None)
 
     with pytest.raises(RuntimeError, match="fsmn-vad"):
-        _plan_speech_lm_chunks(adapter, "audio.wav", audio)
+        _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio)
 
 
 def test_resolve_language_raises_for_models_without_detection() -> None:

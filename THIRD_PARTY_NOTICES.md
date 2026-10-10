@@ -39,6 +39,8 @@ The source-built Docker image installs ffmpeg/ffprobe from Debian packages rathe
 | MLX Whisper | Apple Silicon local inference | Check upstream package license |
 | Pyannote Audio | Optional diarization path | Check upstream package and model licenses |
 | MOSS-Transcribe-Diarize | End-to-end transcription + diarization inference helpers | Apache 2.0 (package and model) |
+| FireRedASR2S (vendored `backend/vendor/fireredasr2`) | Minimal FireRedASR2-AED inference set from `https://github.com/FireRedTeam/FireRedASR2S` at commit `4e7d9aaf4482a47cec1724807026b9b151926eb5` | Apache 2.0; local adaptations: `kaldi_native_fbank` replaced by torchaudio's Kaldi-compatible fbank (upstream package publishes no Windows wheels), waveform kept at int16 magnitude for CMVN calibration, LLM/ELM/CLI paths removed |
+| NeMo Toolkit (server/Docker builds only, `requirements-docker.in`) | NeMo ASR engine for Parakeet/Canary models | Apache 2.0 (package); models under CC-BY-4.0 with attribution | Never ships in the desktop binary (size and CUDA-only inference) |
 | OpenCC | Chinese text conversion | Check upstream package license |
 
 ## Models
@@ -66,6 +68,9 @@ Before adding a model to the catalog or bundling a model:
 | Cohere Transcribe 2B (`cohere-transcribe-2b`) | ModelScope mirror (primary); HF `CohereLabs/cohere-transcribe-03-2026` (gated: access approval required) | Apache 2.0 (per model card front-matter; the repo ships no standalone LICENSE file) | 14 languages including Chinese; explicit language required, no timestamps; HF downloads fail with a gated-repo state when no token is configured |
 | ARK-ASR 0.6B / 3B (`ark-asr-0.6b`, `ark-asr-3b`) | HF `Edge0/ARK-ASR-0.6B` / `Edge0/ARK-ASR-3B` (formerly `AutoArk-AI`; repo carries the Apache 2.0 tag) | Apache 2.0 | 19 languages including Chinese and English; runs the repository custom inference code (`trust_remote_code`) downloaded with the snapshot |
 | Voxtral Mini 3B (`voxtral-mini-3b`) | HF `mistralai/Voxtral-Mini-3B-2507` | Apache 2.0 | 8 languages (no Chinese); auto language detection; processor requires `mistral-common[audio] >= 1.8.1` |
+| FireRedASR2 AED 1.1B (`firered-asr2-aed`) | ModelScope `xukaituo/FireRedASR2-AED` (primary); HF `FireRedTeam/FireRedASR2-AED` | Apache 2.0 (inference code and model weights) | Chinese, English, and code-switching with word-level timestamps; inference code vendored at `backend/vendor/fireredasr2` (see below), feature extraction adapted to torchaudio's Kaldi fbank |
+| Parakeet TDT 0.6B v3 (`parakeet-tdt-0.6b-v3`) | HF `nvidia/parakeet-tdt-0.6b-v3` (.nemo weights) | CC-BY-4.0 | 25 European languages with word-level timestamps; server/Docker-only engine (CUDA), attribution shown in model details |
+| Canary 1B Flash (`canary-1b-flash`) | HF `nvidia/canary-1b-flash` (.nemo weights) | CC-BY-4.0 | English, German, French, Spanish with word-level timestamps; server/Docker-only engine (CUDA), attribution shown in model details; not yet verified on a CUDA machine |
 
 ## Release Checklist
 

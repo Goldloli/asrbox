@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -183,7 +184,7 @@ def _speech_lm_config(
 
 
 def get_all_model_configs() -> list[ASRModelConfig]:
-    return [
+    return _visible_on_this_runtime([
         _whisper_config("base", "openai/whisper-base", 290),
         _whisper_config("small", "openai/whisper-small", 967),
         _whisper_config("medium", "openai/whisper-medium", 3060),
@@ -356,7 +357,78 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             "3b",
             ["auto", "en", "fr", "de", "es", "it", "pt", "nl", "hi"],
         ),
-    ]
+        ASRModelConfig(
+            model_name="firered-asr2-aed",
+            display_name="FireRedASR2 AED 1.1B",
+            engine="firered_asr",
+            source="modelscope",
+            repo_id="xukaituo/FireRedASR2-AED",
+            model_size="1.1b",
+            size_mb=4400,
+            supported_devices=["cpu", "cuda"],
+            languages=["auto", "zh", "en"],
+            runtime="firered",
+            supports_timestamps=True,
+            supports_word_timestamps=True,
+            license="Apache-2.0",
+            # The HF fallback downloads with allow_patterns (ModelScope ignores
+            # them); config.yaml exists only in the HF repo and the loader reads
+            # the model args from model.pth.tar, so completeness needs just the
+            # four files the ModelScope repo also ships.
+            allow_patterns=["cmvn.ark", "config.yaml", "dict.txt", "model.pth.tar", "train_bpe1000.model"],
+            required_files=["cmvn.ark", "dict.txt", "model.pth.tar", "train_bpe1000.model"],
+            source_candidates=[
+                ModelSourceCandidate("modelscope", "xukaituo/FireRedASR2-AED", priority=0, verified=True),
+                ModelSourceCandidate("huggingface", "FireRedTeam/FireRedASR2-AED", priority=10, verified=True),
+            ],
+        ),
+        ASRModelConfig(
+            model_name="parakeet-tdt-0.6b-v3",
+            display_name="Parakeet TDT 0.6B v3",
+            engine="nemo",
+            source="huggingface",
+            repo_id="nvidia/parakeet-tdt-0.6b-v3",
+            model_size="0.6b",
+            size_mb=2509,
+            supported_devices=["cuda"],
+            languages=["en", "de", "fr", "es", "it", "nl", "pt", "pl", "ru", "uk", "cs", "sv", "da", "fi", "et", "lv", "lt", "sl", "sk", "hu", "ro", "bg", "hr", "el", "mt"],
+            runtime="nemo",
+            supports_timestamps=True,
+            supports_word_timestamps=True,
+            license="CC-BY-4.0",
+            attribution="Parakeet TDT 0.6B v3 by NVIDIA. Used under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/). No changes to the weights.",
+            allow_patterns=["parakeet-tdt-0.6b-v3.nemo"],
+            required_files=["parakeet-tdt-0.6b-v3.nemo"],
+            source_candidates=[ModelSourceCandidate("huggingface", "nvidia/parakeet-tdt-0.6b-v3", priority=10, verified=True)],
+        ),
+        ASRModelConfig(
+            model_name="canary-1b-flash",
+            display_name="Canary 1B Flash",
+            engine="nemo",
+            source="huggingface",
+            repo_id="nvidia/canary-1b-flash",
+            model_size="1b",
+            size_mb=3541,
+            supported_devices=["cuda"],
+            languages=["en", "de", "fr", "es"],
+            runtime="nemo",
+            supports_timestamps=True,
+            supports_word_timestamps=True,
+            license="CC-BY-4.0",
+            attribution="Canary 1B Flash by NVIDIA. Used under CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/). No changes to the weights.",
+            allow_patterns=["canary-1b-flash.nemo"],
+            required_files=["canary-1b-flash.nemo"],
+            source_candidates=[ModelSourceCandidate("huggingface", "nvidia/canary-1b-flash", priority=10, verified=True)],
+        ),
+    ])
+
+
+def _visible_on_this_runtime(configs: list[ASRModelConfig]) -> list[ASRModelConfig]:
+    if getattr(sys, "frozen", False):
+        # The desktop binary never ships nemo_toolkit (too large, CUDA-only), so its
+        # catalog must not offer engine entries that cannot run there at all.
+        return [config for config in configs if config.engine != "nemo"]
+    return configs
 
 
 def get_model_config(model_name: str) -> ASRModelConfig | None:
