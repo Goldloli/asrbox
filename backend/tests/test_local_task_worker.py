@@ -213,6 +213,143 @@ def test_stalled_local_worker_is_terminated_and_reported(tmp_path: Path, monkeyp
     assert terminated
 
 
+def _heartbeat_worker_harness(tmp_path: Path, monkeypatch, task_id: str):
+    import time as time_module
+
+    from backend.services import tasks
+
+    monkeypatch.setenv("ASRBOX_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("ASRBOX_LOCAL_WORKER_STALL_SECONDS", "1")
+    monkeypatch.setattr(
+        tasks.settings_service,
+        "get_settings",
+        lambda db: SimpleNamespace(vad=False, word_timestamps=False, max_concurrent_local_tasks=1),
+    )
+    monkeypatch.setattr(
+        tasks,
+        "_local_worker_inputs",
+        lambda db, row, audio_path: ([{"audio_path": "chunk.wav", "start_ms": 0, "end_ms": 1000}], []),
+    )
+
+    terminated: list[str] = []
+
+    class HungProcess:
+        def __init__(self, *args, **kwargs) -> None:
+            self.returncode = None
+
+        def poll(self):
+            return None
+
+        def terminate(self) -> None:
+            terminated.append("terminate")
+
+        def kill(self) -> None:
+            terminated.append("kill")
+
+        def wait(self, timeout=None) -> int:
+            return 0
+
+    monkeypatch.setattr(tasks.subprocess, "Popen", lambda *args, **kwargs: HungProcess())
+    heartbeat_file = tmp_path / "cache" / "task-workers" / task_id / "heartbeat.json"
+    heartbeat_file.parent.mkdir(parents=True, exist_ok=True)
+    return tasks, heartbeat_file, terminated, time_module
+
+
+def test_active_heartbeat_survives_stall_limit_but_hits_hard_cap(tmp_path: Path, monkeypatch) -> None:
+    import threading
+    import time as time_module
+
+    import pytest
+
+    from backend.services.errors import ASRboxError
+
+    tasks, heartbeat_file, terminated, _ = _heartbeat_worker_harness(tmp_path, monkeypatch, "active-task")
+    monkeypatch.setattr(tasks, "LOCAL_WORKER_LIVENESS_SECONDS", 0.2)
+    stop = threading.Event()
+
+    def beat() -> None:
+        started = time_module.monotonic()
+        while not stop.is_set():
+            payload = {"at": time_module.time(), "cpu": 100.0 + (time_module.monotonic() - started) * 3, "completed": 0, "total": 1}
+            heartbeat_file.write_text(json.dumps(payload), encoding="utf-8")
+            stop.wait(0.05)
+
+    thread = threading.Thread(target=beat, daemon=True)
+    thread.start()
+    row = SimpleNamespace(id="active-task", model_name="whisper-base", language=None, options_json="{}")
+    commits: list[int] = []
+    fake_db = SimpleNamespace(commit=lambda: commits.append(1))
+    started = time_module.monotonic()
+    try:
+        with pytest.raises(ASRboxError) as excinfo:
+            tasks._transcribe_local_subprocess(fake_db, row, Path("audio.wav"))
+    finally:
+        stop.set()
+        thread.join(timeout=2)
+
+    elapsed = time_module.monotonic() - started
+    assert excinfo.value.code == "LOCAL_WORKER_STALLED"
+    # The stall limit is 1s and the hard cap 3s: a stall under ~2.5s would mean the
+    # heartbeat activity was ignored; the cap bounds the busy-loop case.
+    assert elapsed >= 2.5
+    assert terminated
+    assert commits  # liveness kept refreshing the task row while the worker was active
+
+
+def test_frozen_heartbeat_stalls_at_the_configured_limit(tmp_path: Path, monkeypatch) -> None:
+    import time as time_module
+
+    import pytest
+
+    from backend.services.errors import ASRboxError
+
+    tasks, heartbeat_file, terminated, _ = _heartbeat_worker_harness(tmp_path, monkeypatch, "frozen-task")
+    # The heartbeat exists but its CPU time never advances: a wedged-but-alive process.
+    heartbeat_file.write_text(json.dumps({"at": time_module.time(), "cpu": 42.0, "completed": 0, "total": 1}), encoding="utf-8")
+    row = SimpleNamespace(id="frozen-task", model_name="whisper-base", language=None, options_json="{}")
+    started = time_module.monotonic()
+    with pytest.raises(ASRboxError) as excinfo:
+        tasks._transcribe_local_subprocess(None, row, Path("audio.wav"))
+    elapsed = time_module.monotonic() - started
+
+    assert excinfo.value.code == "LOCAL_WORKER_STALLED"
+    assert elapsed < 2.5
+    assert terminated
+
+
+def test_local_worker_heartbeat_reports_cpu_and_stops_with_the_run(tmp_path: Path, monkeypatch) -> None:
+    import time as time_module
+
+    from backend.services import local_task_worker
+
+    monkeypatch.setattr(local_task_worker, "HEARTBEAT_SECONDS", 0.05)
+
+    def burning_transcribe(model_name: str, audio_path: str, options: dict) -> TranscriptionResult:
+        deadline = time_module.monotonic() + 0.2
+        while time_module.monotonic() < deadline:
+            sum(index * index for index in range(5000))
+        return TranscriptionResult(
+            text=Path(audio_path).stem,
+            segments=[TranscriptSegment(id=1, start=0.0, end=1.0, text=Path(audio_path).stem)],
+        )
+
+    monkeypatch.setattr(local_task_worker, "transcribe_with_local_model", burning_transcribe)
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text(
+        json.dumps({"model_name": "whisper-base", "options": {}, "inputs": [{"audio_path": "chunk.wav"}]}),
+        encoding="utf-8",
+    )
+
+    assert local_task_worker.run_local_task_worker(request_path, result_path) == 0
+
+    heartbeat = json.loads((tmp_path / "heartbeat.json").read_text(encoding="utf-8"))
+    assert heartbeat["cpu"] > 0
+    assert heartbeat["completed"] in (0, 1)
+    assert heartbeat["total"] == 1
+    assert json.loads(result_path.read_text(encoding="utf-8"))["status"] == "completed"
+
+
 @pytest.mark.parametrize(
     ("cuda_available", "mps_available", "expected_device", "accelerated"),
     [

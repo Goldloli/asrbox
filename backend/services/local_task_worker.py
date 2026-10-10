@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
 from backend.services.transcribe import transcribe_with_local_model
+
+HEARTBEAT_SECONDS = 5.0
 
 
 def _write_state(path: Path, payload: dict[str, Any]) -> None:
@@ -13,6 +17,25 @@ def _write_state(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_suffix(f"{path.suffix}.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     os.replace(temporary, path)
+
+
+def _start_heartbeat(result_file: Path, progress_of) -> threading.Event:
+    """A live process is not a working process: inference deadlocks keep daemons running.
+    The heartbeat exposes the worker's accumulated CPU time, which advances while any
+    real inference (CPU or GPU-driven) runs and freezes when the process is wedged."""
+    stop = threading.Event()
+    heartbeat_file = result_file.parent / "heartbeat.json"
+
+    def beat() -> None:
+        while not stop.wait(HEARTBEAT_SECONDS):
+            completed, total = progress_of()
+            _write_state(
+                heartbeat_file,
+                {"at": time.time(), "cpu": time.process_time(), "completed": completed, "total": total},
+            )
+
+    threading.Thread(target=beat, name="worker-heartbeat", daemon=True).start()
+    return stop
 
 
 def run_local_task_worker(request_path: str | Path, result_path: str | Path) -> int:
@@ -29,18 +52,22 @@ def run_local_task_worker(request_path: str | Path, result_path: str | Path) -> 
         if not inputs:
             raise ValueError("Local transcription worker requires at least one input")
         _write_state(result_file, {"status": "running", "completed": 0, "total": len(inputs), "results": []})
-        for item in inputs:
-            result = transcribe_with_local_model(model_name, str(item["audio_path"]), options)
-            results.append(result.model_dump(mode="json"))
-            _write_state(
-                result_file,
-                {
-                    "status": "running",
-                    "completed": len(results),
-                    "total": len(inputs),
-                    "results": results,
-                },
-            )
+        stop_heartbeat = _start_heartbeat(result_file, lambda: (len(results), len(inputs)))
+        try:
+            for item in inputs:
+                result = transcribe_with_local_model(model_name, str(item["audio_path"]), options)
+                results.append(result.model_dump(mode="json"))
+                _write_state(
+                    result_file,
+                    {
+                        "status": "running",
+                        "completed": len(results),
+                        "total": len(inputs),
+                        "results": results,
+                    },
+                )
+        finally:
+            stop_heartbeat.set()
         _write_state(
             result_file,
             {

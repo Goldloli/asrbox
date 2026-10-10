@@ -54,6 +54,13 @@ LOCAL_CHUNK_WINDOW_MS = 2 * 60 * 1000
 LOCAL_CHUNK_OVERLAP_MS = 2 * 1000
 LOCAL_WORKER_POLL_SECONDS = 0.2
 DEFAULT_LOCAL_WORKER_STALL_SECONDS = 20 * 60
+# A heartbeat counts as activity only after the worker burned this much extra CPU: the
+# heartbeat thread itself costs microseconds per beat, so a wedged process never reaches
+# the floor while any real inference (CPU or GPU-driven) passes it within seconds.
+LOCAL_WORKER_ACTIVITY_CPU_FLOOR = 2.0
+# Even a heartbeat that keeps burning CPU (a busy loop) must not pin the local queue forever.
+LOCAL_WORKER_HARD_STALL_MULTIPLIER = 3
+LOCAL_WORKER_LIVENESS_SECONDS = 30
 
 
 def _local_worker_stall_seconds() -> int:
@@ -626,6 +633,14 @@ def _read_worker_state(path: Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _read_worker_heartbeat(worker_dir: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads((worker_dir / "heartbeat.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 def _terminate_worker(process: subprocess.Popen) -> None:
     if process.poll() is not None:
         return
@@ -783,7 +798,12 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
     process: subprocess.Popen | None = None
     stderr_file = stderr_path.open("w", encoding="utf-8")
     stall_limit = _local_worker_stall_seconds()
+    hard_stall_limit = stall_limit * LOCAL_WORKER_HARD_STALL_MULTIPLIER
     last_progress_at = time.monotonic()
+    # Heartbeat activity: a slow-but-working worker keeps burning CPU, a wedged one does not.
+    activity_reference_cpu: float | None = None
+    last_active_at = time.monotonic()
+    last_liveness_at = time.monotonic()
 
     def stderr_excerpt() -> str:
         stderr_file.flush()
@@ -820,6 +840,7 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
                 published = _publish_local_worker_progress(db, row, chunks, results, published)
                 if published != published_before or state.get("status") in {"completed", "failed"}:
                     last_progress_at = time.monotonic()
+                    last_active_at = last_progress_at
                 if state.get("status") == "completed":
                     process.wait(timeout=5)
                     return _combine_local_worker_results(row, inputs, results)
@@ -830,21 +851,41 @@ def _transcribe_local_subprocess(db: Session, row: TranscriptionTask, audio_path
                         stage="transcribing",
                         stderr_excerpt=stderr_excerpt(),
                     )
+            heartbeat = _read_worker_heartbeat(worker_dir)
+            heartbeat_cpu = heartbeat.get("cpu") if heartbeat else None
+            if isinstance(heartbeat_cpu, (int, float)):
+                if activity_reference_cpu is None or heartbeat_cpu < activity_reference_cpu:
+                    activity_reference_cpu = heartbeat_cpu
+                elif heartbeat_cpu - activity_reference_cpu >= LOCAL_WORKER_ACTIVITY_CPU_FLOOR:
+                    activity_reference_cpu = heartbeat_cpu
+                    last_active_at = time.monotonic()
             return_code = process.poll()
             if return_code is not None:
                 state = _read_worker_state(result_path)
                 detail = str((state or {}).get("error") or f"Local transcription worker exited with code {return_code}")
                 raise ASRboxError("MODEL_LOAD_FAILED", detail, stage="transcribing", stderr_excerpt=stderr_excerpt())
-            if time.monotonic() - last_progress_at > stall_limit:
+            now = time.monotonic()
+            result_idle = now - last_progress_at
+            if result_idle > hard_stall_limit or (result_idle > stall_limit and now - last_active_at > stall_limit):
                 # A hung worker (e.g. a device-level inference deadlock) must not
-                # pin the task in transcribing and block the whole local queue.
+                # pin the task in transcribing and block the whole local queue. A
+                # heartbeat that keeps burning CPU buys the hard limit only: slow
+                # inference survives, a busy loop does not.
                 _terminate_worker(process)
                 raise ASRboxError(
                     "LOCAL_WORKER_STALLED",
-                    f"Local transcription worker produced no progress for {stall_limit} seconds and was terminated",
+                    f"Local transcription worker produced no chunk progress for {int(result_idle)} seconds"
+                    f" (worker activity idle {int(now - last_active_at)} seconds) and was terminated",
                     stage="transcribing",
                     stderr_excerpt=stderr_excerpt(),
                 )
+            if (db is not None and result_idle >= LOCAL_WORKER_LIVENESS_SECONDS
+                    and now - last_active_at <= stall_limit and now - last_liveness_at >= LOCAL_WORKER_LIVENESS_SECONDS):
+                # Slow-but-active inference keeps the task row visibly alive without
+                # inventing progress: updated_at refreshes, progress stays chunk-based.
+                row.updated_at = _utc_now()
+                db.commit()
+                last_liveness_at = now
             time.sleep(LOCAL_WORKER_POLL_SECONDS)
     finally:
         if process is not None:
