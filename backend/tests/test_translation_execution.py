@@ -12,6 +12,7 @@ import pytest
 
 from backend.app import create_app
 from backend.database.models import TranslationBatch, TranslationRun, TranslationVersion
+from backend.models import TranslationCreateRequest
 from backend.services import translation as svc, llm_providers, llm_compatibility
 from backend.tests.test_translation_service import setup, create, complete
 
@@ -720,6 +721,130 @@ def test_repeated_placeholder_labels_do_not_split(setup, monkeypatch):
     assert db.get(TranslationRun, run.id).status == 'completed'
     assert calls == [list(range(1, 13))]
     assert published_texts(db, run.id)[2:4] == ['[music]', '[music]']
+
+
+def create_to(setup, target_code):
+    db, task, provider, version = setup
+    return svc.create_run(db, task.id, TranslationCreateRequest(provider_id=provider.id,
+        source_version_id=version.id, source_language={'kind': 'preset', 'code': 'en'},
+        target_language={'kind': 'preset', 'code': target_code}))
+
+
+def test_alignment_hits_per_segment_criteria_boundaries():
+    echo = ('A moving company was hired to relocate', 'A moving company was hired to relocate')
+    assert svc.alignment_hits([echo], frozenset({'cjk'})) == [0]
+    # Same script as the target (English into French) stays untouched, and so does an
+    # unmapped target: echo detection only judges what it can prove.
+    assert svc.alignment_hits([echo], frozenset({'latin'})) == []
+    assert svc.alignment_hits([echo], None) == []
+    assert svc.alignment_hits([('short name', 'short name')], frozenset({'cjk'})) == []
+    already_target = ('这是一段已经处于目标语言的完整台词内容', '这是一段已经处于目标语言的完整台词内容')
+    assert svc.alignment_hits([already_target], frozenset({'cjk'})) == []
+    assert svc.alignment_hits([('some source cue', '（注意：根据要求保留原文。）')], None) == [0]
+    assert svc.alignment_hits([('some source cue', '(Note: this cue needs a careful reformulation.)')], None) == [0]
+    assert svc.alignment_hits([('some source cue', '（无翻译）')], None) == [0]
+    assert svc.alignment_hits([('some source cue', '(no translation)')], None) == [0]
+    assert svc.alignment_hits([('some source cue', '(laughs)')], None) == []
+    assert svc.alignment_hits([('some source cue', '（掌声）')], None) == []
+    assert svc.alignment_hits([('[music]', '[music]')], frozenset({'cjk'})) == []
+
+
+def test_echoed_source_splits_and_publishes_aligned_text(setup, monkeypatch):
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {5: lines[4]['text']}, calls)
+    run = create_to(setup, 'zh-Hans')
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+
+
+def test_meta_comment_leak_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {4: '（注意：根据要求，本段保持原文不动。）'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+
+
+def test_placeholder_translation_splits_before_publishing(setup, monkeypatch):
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 12)
+    calls = []
+    drifting_guard(setup, monkeypatch, {7: '（无翻译）'}, calls)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13)), list(range(1, 7)), list(range(7, 13))]
+    assert published_texts(db, run.id) == [f'译 {line["text"]}' for line in lines]
+
+
+def test_verbatim_names_and_target_language_text_do_not_split(setup, monkeypatch):
+    db = setup[0]
+    segments = cross_word_source(db, setup[3], 12)
+    already_target = '这是一段已经处于目标语言里的完整台词内容，应当原样返回。'
+    segments[4]['text'] = already_target
+    setup[3].segments_json = json.dumps(segments)
+    db.commit()
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        return drifted_reply(targets, {3: 'Albert Einstein', 5: already_target})
+    mock_transport(monkeypatch, handler)
+    run = create_to(setup, 'zh-Hans')
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13))]
+    texts = published_texts(db, run.id)
+    assert texts[2] == 'Albert Einstein' and texts[4] == already_target
+
+
+def test_same_script_echo_stays_untouched(setup, monkeypatch):
+    # English echoed into a Latin-script target (French) cannot be told apart from a legitimate
+    # verbatim return, so the guard stays conservative and publishes it.
+    db = setup[0]
+    lines = cross_word_source(db, setup[3], 12)
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        return drifted_reply(targets, {5: lines[4]['text']})
+    mock_transport(monkeypatch, handler)
+    run = create(setup)
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    assert db.get(TranslationRun, run.id).status == 'completed'
+    assert calls == [list(range(1, 13))]
+    assert published_texts(db, run.id)[4] == lines[4]['text']
+
+
+def test_unrepairable_echo_fails_without_publishing(setup, monkeypatch):
+    db = setup[0]
+    cross_word_source(db, setup[3], 20)
+    calls = []
+    def handler(request):
+        targets = batch_targets(calls, request)
+        if len(targets) == 1:
+            return ollama_reply([{'segment_id': target['id'], 'text': target['text']} for target in targets])
+        drift = {target['id']: target['text'] for target in targets if target['id'] in (16, 20)}
+        return drifted_reply(targets, drift)
+    mock_transport(monkeypatch, handler)
+    run = create_to(setup, 'zh-Hans')
+    svc.execute_run(run.id, run.attempt)
+    db.expire_all()
+    row = db.get(TranslationRun, run.id)
+    assert (row.status, row.error_code) == ('failed', 'TRANSLATION_ALIGNMENT_UNVERIFIED')
+    assert db.query(TranslationVersion).count() == 0
+    assert [item.status for item in db.query(TranslationBatch).filter_by(run_id=run.id)] == ['completed', 'completed']
 
 
 def test_cross_batch_duplicate_is_repaired_before_publish(setup, monkeypatch):

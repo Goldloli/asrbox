@@ -22,6 +22,7 @@ from backend.models import (
 )
 from backend.services import llm_compatibility, llm_providers, versions
 from backend.services.task_transitions import task_transition_lock
+from backend.translation_languages import LANGUAGE_NAMES
 
 ACTIVE = {"queued", "running"}
 RESUMABLE = {"failed", "cancelled", "interrupted"}
@@ -50,6 +51,44 @@ ALIGNMENT_BLOAT_EXTRA_CHARS = 200
 ALIGNMENT_EDGE_PUNCTUATION = " \t\r\n.,!?;:、。，！？；：\"'“”‘’()（）[]【】-—…·"
 ALIGNMENT_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 ALIGNMENT_DIGIT_ESCAPE = re.compile(r"^[0-9\s\\nrtv]+$")
+# Per-cue pollution from the asrbox-mc1 corpus runs: whole-source echoes, translator's notes
+# leaking into cues, and explicit "no translation" placeholders. These are invisible to the
+# collective criteria above, so they are judged one cue against its own source. Short verbatim
+# returns stay legitimate (names, symbols), and echoes are only flagged when the echoed script
+# cannot belong to the run's target language, which keeps "already in the target language"
+# verbatim returns passing.
+ALIGNMENT_ECHO_MIN_CHARS = 20
+ALIGNMENT_META_WINDOW = 200
+ALIGNMENT_META_MIN_BRACKET = 6
+ALIGNMENT_SCRIPTS = (
+    ("latin", re.compile(r"[\u0041-\u005A\u0061-\u007A\u00C0-\u024F]")),
+    ("cyrillic", re.compile(r"[\u0400-\u04FF]")),
+    ("greek", re.compile(r"[\u0370-\u03FF]")),
+    ("arabic", re.compile(r"[\u0600-\u06FF]")),
+    ("hebrew", re.compile(r"[\u0590-\u05FF]")),
+    ("devanagari", re.compile(r"[\u0900-\u097F]")),
+    ("thai", re.compile(r"[\u0E00-\u0E7F]")),
+    ("hangul", re.compile(r"[\uAC00-\uD7AF]")),
+    ("kana", re.compile(r"[\u3040-\u30FF]")),
+    ("cjk", re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]")),
+)
+TARGET_LANGUAGE_SCRIPTS = {
+    "zh-Hans": frozenset({"cjk"}), "zh-Hant": frozenset({"cjk"}), "ja": frozenset({"cjk", "kana"}),
+    "ko": frozenset({"hangul", "cjk"}), "en": frozenset({"latin"}), "fr": frozenset({"latin"}),
+    "de": frozenset({"latin"}), "es": frozenset({"latin"}), "pt": frozenset({"latin"}),
+    "vi": frozenset({"latin"}), "ru": frozenset({"cyrillic"}), "ar": frozenset({"arabic"}),
+    "hi": frozenset({"devanagari"}), "th": frozenset({"thai"}),
+}
+ALIGNMENT_META_MARKER = re.compile(
+    r"注意[:：]|根据(?:要求|指示|上下文)|按照(?:要求|指示)|翻译(?:要求|规则|说明)|以上是|以下是|"
+    r"原文如下|译文如下|[Nn]otes?[:：]|as requested|per (?:the |your )?(?:request|instruction)|"
+    r"according to (?:the )?(?:request|instruction|prompt)|无法翻译|未能翻译|没有翻译|不予翻译"
+)
+ALIGNMENT_PLACEHOLDER = re.compile(
+    r"^(?:无翻译|未翻译|无法翻译|没有翻译|没有译文|待翻译|"
+    r"no translation|not translated|untranslated|translation unavailable|skipped|omitted)[.。]?$",
+    re.IGNORECASE,
+)
 
 
 class TranslationError(RuntimeError):
@@ -257,11 +296,50 @@ def _degenerate(text):
             or (ALIGNMENT_DIGIT_ESCAPE.match(text) and len(set(text)) <= 3))
 
 
-def alignment_hits(pairs):
+def _dominant_script(text):
+    best, best_count = None, 0
+    for name, pattern in ALIGNMENT_SCRIPTS:
+        count = len(pattern.findall(text))
+        if count > best_count:
+            best, best_count = name, count
+    return best if best_count else None
+
+
+def target_language_scripts(target_language):
+    """Scripts a faithful translation into this run's target language may use, or None when the
+    target cannot be mapped to a script (auto or unknown custom name) - echo detection then
+    stays disabled rather than risking false positives."""
+    if not isinstance(target_language, dict):
+        return None
+    code = target_language.get("code") if target_language.get("kind") == "preset" else None
+    if code is None and target_language.get("kind") == "custom":
+        name = str(target_language.get("name") or "").lower()
+        code = next((known for known, label in LANGUAGE_NAMES.items() if label.lower() == name), None)
+    return TARGET_LANGUAGE_SCRIPTS.get(code)
+
+
+def _meta_comment(text):
+    for opening in re.finditer(r"[（(]", text):
+        window = text[opening.start() + 1:opening.start() + 1 + ALIGNMENT_META_WINDOW]
+        closing = re.search(r"[（）()]", window)
+        if closing:
+            window = window[:closing.start()]
+        if len(window) >= ALIGNMENT_META_MIN_BRACKET and ALIGNMENT_META_MARKER.search(window):
+            return True
+    return False
+
+
+def _placeholder_text(text):
+    return ALIGNMENT_PLACEHOLDER.match(text) is not None
+
+
+def alignment_hits(pairs, target_scripts=None):
     """Cues whose translation fails content sanity, as sorted zero-based positions in `pairs`.
     Structurally valid output can still misplace content: neighbours may share runs their
     sources do not (sliding windows), one translation may be rendered at several unrelated
     cues, a cue may degrade to filler, or the text may balloon past any cross-language ratio.
+    Single cues can also carry pollution no collective signal exposes - the source echoed back
+    verbatim in a script the target language cannot use, a translator's note, or a placeholder.
     Pure and side-effect free so the same judgements serve the per-batch guard and the
     pre-publish pass over the assembled version."""
     hits = set()
@@ -299,6 +377,15 @@ def alignment_hits(pairs):
             hits.add(index)
         if len(cores[index]) > ALIGNMENT_BLOAT_EXTRA_CHARS + ALIGNMENT_BLOAT_RATIO * len(sources[index]):
             hits.add(index)
+        if (target_scripts and len(sources[index]) >= ALIGNMENT_ECHO_MIN_CHARS
+                and _normalized_text(text) == sources[index]):
+            script = _dominant_script(cores[index])
+            if script and script not in target_scripts:
+                hits.add(index)
+        if _meta_comment(_normalized_text(text)):
+            hits.add(index)
+        if _placeholder_text(cores[index]):
+            hits.add(index)
     return sorted(hits)
 
 
@@ -310,7 +397,7 @@ def alignment_bloated(pairs):
     return output_chars > ALIGNMENT_BLOAT_EXTRA_CHARS + ALIGNMENT_BLOAT_RATIO * source_chars
 
 
-def _content_misaligned(parsed, batch):
+def _content_misaligned(parsed, batch, target_scripts=None):
     """Batch-scope guard: a structurally valid multi-target response that misplaces content
     is split deterministically instead of becoming a checkpoint."""
     if len(parsed) < 2:
@@ -319,7 +406,7 @@ def _content_misaligned(parsed, batch):
     if len(targets) != len(parsed):
         return True
     pairs = [(target["text"], item["text"]) for target, item in zip(targets, parsed, strict=True)]
-    return bool(alignment_hits(pairs)) or alignment_bloated(pairs)
+    return bool(alignment_hits(pairs, target_scripts)) or alignment_bloated(pairs)
 
 
 class _StaleRun(Exception):
@@ -357,6 +444,7 @@ def _translate_batch(db, provider, run_id, attempt, batch):
             raise _StaleRun()
         get_task(db, run.task_id, writable=True)
         messages = messages_for(run, batch)
+        target_scripts = target_language_scripts(json.loads(run.target_language_json))
         db.rollback()  # release the read transaction during network waits
     target_ids = [s["id"] for s in batch["targets"]]
     timeout = LOCAL_REQUEST_TIMEOUT if llm_compatibility.resolved(provider).protocol == "ollama" else REMOTE_REQUEST_TIMEOUT
@@ -379,7 +467,7 @@ def _translate_batch(db, provider, run_id, attempt, batch):
         if exc.code not in SPLIT_RETRYABLE_TRANSLATION or len(target_ids) < 2:
             raise
         return split_and_retry()
-    if _content_misaligned(parsed, batch):
+    if _content_misaligned(parsed, batch, target_scripts):
         return split_and_retry()
     return parsed
 
@@ -516,10 +604,12 @@ def _repair_alignment(db, provider, run_id, attempt, segments, parsed):
     run fails instead of publishing subtitles that do not line up with their source segments.
     Paid protocols only repair after an explicit resume: an automatic repair there would be an
     automatic paid request, which a run must never make on its own."""
+    run = db.get(TranslationRun, run_id)
+    target_scripts = target_language_scripts(json.loads(run.target_language_json)) if run else None
     pairs = [(segments[index]["text"], item["text"]) for index, item in enumerate(parsed)]
     if alignment_bloated(pairs):
         fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
-    flagged = alignment_hits(pairs)
+    flagged = alignment_hits(pairs, target_scripts)
     if not flagged:
         return {}
     if len(flagged) > ALIGNMENT_MAX_REPAIRS:
@@ -535,7 +625,7 @@ def _repair_alignment(db, provider, run_id, attempt, segments, parsed):
         repairs[segments[position]["id"]] = translated[0]["text"]
     remaining = [(segments[index]["text"], repairs.get(item["segment_id"], item["text"]))
                  for index, item in enumerate(parsed)]
-    if alignment_hits(remaining) or alignment_bloated(remaining):
+    if alignment_hits(remaining, target_scripts) or alignment_bloated(remaining):
         fail("TRANSLATION_ALIGNMENT_UNVERIFIED", "Translated subtitles do not match their source segments")
     return repairs
 

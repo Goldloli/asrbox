@@ -6,6 +6,7 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ### Fixed
 
+- 翻译完整性校验新增三条逐段判据：整段译文回显源文（译文与源文一致、长度达标且文字系统与目标语言不兼容）、模型元评论外泄（括注内出现指向翻译指令的说明，如「（注意：根据要求…）」「(Note: …)」）、占位符译文（整段为「（无翻译）」类占位文本）。三类污染此前逃过全部批量判据仍被发布；名称/符号/已是目标语言的合法原样返回不受影响。
 - 更新间接依赖 source-map-js 到 1.2.2，修复 GHSA-68fv-2mgg-jv7q（高危：索引化 source-map section 偏移可造成事件循环拒绝服务），在保持现有依赖审计门禁的前提下解除对 CI 的阻塞。
 
 ## [0.3.4] - 2026-09-24
