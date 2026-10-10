@@ -13,6 +13,7 @@ build/
 *.spec
 data/
 !backend/data/
+!backend/vendor/fireredasr2/data/
 frontend-audit-screenshots/
 playwright-report/
 test-results/
