@@ -110,8 +110,9 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - 受维护的路由、字段和事件只有在同步更新 OpenSpec、producer、typed consumer、contract test 和项目负责维护的文档后才能变更。
 - 新增响应字段必须同时声明到 FastAPI 的 `response_model`（pydantic 模型）：service 层产出但模型未声明的字段会被静默丢弃，且必须在 API 测试中断言该字段存在（binary smoke 等发布门禁不覆盖全部字段）。
 - 面向前端的 LLM 流式响应使用每请求 SSE（如 chat 的 delta/done/error 事件，worker 线程经有界 queue 桥接到 async 生成器）；全局 `/events` 的事件类型集合是冻结 contract，不得为单请求流式场景扩展它。带 `on_delta` 的 LLM 调用强制上游 `stream=True`，上游返回整段 JSON 时一次性回调全文，调用方无需区分。
-- 新增随应用分发的数据文件（如 `backend/data/` 下的知识库）时，必须同步：`.gitignore` 反排除（仓库根 `data/` 规则会误伤）、`backend/build_binary.py` 的 `--add-data`、`_MEIPASS` 冻结路径解析，并覆盖 frozen 路径测试与打包静态断言。
+- 新增任何与仓库根 ignore 规则同名的目录树（`data/`、`build/`、`dist/` 等；vendored 代码与数据文件均可能中招）时，必须用 `git status --ignored` 确认新文件全部被跟踪：本地已存在的文件会让测试全绿，而干净检出（CI）缺文件——v0.4.0 发布时 `backend/vendor/fireredasr2/data/` 的 Python 模块就是这样漏进 CI 才暴露的。随应用分发的数据文件（如 `backend/data/` 下的知识库）还必须同步：`backend/build_binary.py` 的 `--add-data`、`_MEIPASS` 冻结路径解析，并覆盖 frozen 路径测试与打包静态断言。
 - 新增或修改本地 ASR 引擎与模型 adapter 时，行为测试必须覆盖经 backend 的真实分发路径（只调用 adapter 内部方法会漏掉分发/装配缺陷），并在冻结二进制上确认对应 runtime 探针为 true、至少一条真实转写跑通。
+- 新增 server/Docker 专属引擎（不随桌面二进制分发的运行时，如 NeMo）时：registry 条目按真实能力标注 `supported_devices`，冻结桌面在 registry 出口经 `sys.frozen` 隐藏条目（而非显示不可用），不进入桌面 lock 与 hidden imports，并在 `backend/build_binary.py` 用静态断言防回归；CI 无法覆盖的能力（如无 CUDA runner）必须留下机器可读的移交清单（参照 `backend/real_tests/results/nemo-cuda-verification-pending.md`），不得静默宣称可用。
 - 模型完整性检查的分词器/处理器文件按 adapter 声明（如 Mistral 的 `tekken.json`、远程代码仓库的 `*.py`），不得假设通用 tokenizer 文件组；新增模型的源候选默认 ModelScope 主源 + HF 备源，gated 仓库以镜像为主源并保留机器可读的受限失败态。
 - registry 未声明 `mps` 的模型不得让 `device_map="auto"` 落到 MPS：加载按声明的设备集合显式选择设备（无 CUDA 时用 CPU）。
 - 新增 transformers 原生模型时，其模型子模块必须加入 `backend/build_binary.py` 的 hidden imports（含 `AutoProcessor` 依赖的 processor/feature_extractor 子模块），并随冻结包冒烟验证。
@@ -143,6 +144,7 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 依赖与生成文件规则：
 
 - Python 依赖变更从适当的 `requirements-*.in` 文件开始，并包含重新生成的 lock file；不要只手动编辑 `requirements.txt`。macOS 运行时使用 `requirements-runtime.lock`（Apple Silicon + Python 3.13 快照），Windows 使用独立的 `requirements-windows.lock` 快照（runtime+dev 合一，从通过全量测试的 Windows + Python 3.14 环境冻结；3.11/3.13 的 Windows proactor 在取消流式请求后会污染后续连接，3.14 行为与 POSIX 一致），两者保持各自平台可复现。
+- `requirements-docker.in`（Linux CPU 容器运行时，含 server-only 引擎如 nemo-toolkit）变更必须同步再生成 `requirements-docker.lock`：`uv pip compile requirements-docker.in --output-file requirements-docker.lock --python-version 3.13 --python-platform linux --torch-backend cpu --no-emit-index-url`（跨平台解析，macOS 上即可执行）。Dockerfile 严格按 lock 安装，lock 缺包意味着镜像静默缺功能，本地测试与 CI 后端套件都发现不了。
 - 脚本与 npm 命令解析项目 Python 一律使用 `scripts/venv-python.mjs`（Windows 解析 `.venv/Scripts/python.exe`，POSIX 解析 `.venv/bin/python`）；不得硬编码任一平台的 venv 路径。
 - `requirements-windows-cuda.lock` 是 Windows CUDA 加速套件的独立锁：只为 `scripts/build-cuda-kit.py` 的套件构建服务（`pip --target` 安装 cu128 torch 树后裁剪为仅 torch），不进入应用运行环境；其 torch 基线版本必须与 `requirements-windows.lock` 一致（`check-versions.mjs` 强制），其余共享包 pin 保持一致，torch bump 时从干净 Windows + Python 3.14 venv 重新 freeze 并重建套件（Release 的 `cuda-kit` job 自动完成）。
 - 前端依赖变更应更新 `bun.lock` 并运行依赖审计。解决 `bun.lock` 合并冲突（如给 Dependabot 分支合入最新 main）后，`bun install` 第一遍可能丢 `"@asrbox/web/@asrbox/app"` workspace override 条目；提交前必须跑 `bun install --frozen-lockfile` 验证到不动点（报 lockfile 变化就再跑一遍 `bun install` 后重验），否则 CI 的 frozen-lockfile 安装会失败。
@@ -161,6 +163,7 @@ OpenSpec 工作流技能定义在 `.agents/skills/openspec-*/SKILL.md`，Codex �
 - Tauri 或 sidecar 变更：运行 Cargo 检查/测试和桌面启动验证。
 - 依赖或内置代码变更：运行依赖或第三方审计。
 - 模型执行、长音频、冻结二进制或发布资源：只有在涉及相应风险时才运行专用的高成本测试套件。
+- 新增或收紧质量启发式判据（翻译对齐、重复检测等可能误杀合法输出的规则）前，必须在真实运行语料上把误报标定到零并覆盖反例（重复台词、短词、非语音标签等），判据与标定证据一起提交。
 
 合并代码变更前，应运行 `npm run check:open-source`，除非该变更仅涉及文档，或当前环境无法支持该门禁。合并前 CI 必须通过。手动验证应覆盖发生变化的工作流和相邻风险；完整的手动产品回归属于 beta 或 release 验证，不是每个小变更都必须执行。
 

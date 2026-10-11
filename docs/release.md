@@ -67,7 +67,7 @@ git push origin v0.1.0-beta.1
 
 Alternatively, run the Release workflow manually and enter `v0.1.0-beta.1`. Manual dispatch still requires the tag text to match the source version.
 
-Merging `main` alone does not create a release. Do not tag until the intended commit is on GitHub and all gates are green.
+Merging `main` alone does not create a release. Do not tag until the intended commit is on GitHub and all gates are green. Symmetrically, once a version-bump commit lands on `main`, finish the release (tag and publish) in the same batch or revert the bump: leaving `main` on an untagged version makes the README and this guide link to a Release that does not exist (this happened with v0.3.4, which was folded into v0.4.0).
 
 ## Workflow Output
 
