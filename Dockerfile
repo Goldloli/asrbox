@@ -12,7 +12,7 @@ COPY web web
 ENV VITE_ASRBOX_SERVER_URL=same-origin
 RUN bun run build:web
 
-FROM python:3.14-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 
 ARG APP_VERSION=0.4.0
 LABEL org.opencontainers.image.title="ASRbox" \
