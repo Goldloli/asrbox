@@ -11,8 +11,8 @@
   "dependencies": {
     "@asrbox/app": "file:../app",
     "@tanstack/react-query": "^5.104.3",
-    "@tanstack/react-router": "^1.170.44",
-    "lucide-react": "^1.58.0",
+    "@tanstack/react-router": "^1.170.45",
+    "lucide-react": "^1.59.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.0.15"
