@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.3 AS web-builder
+FROM oven/bun:1.4.4 AS web-builder
 
 WORKDIR /src
 COPY package.json bun.lock ./
