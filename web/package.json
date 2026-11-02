@@ -12,7 +12,7 @@
     "@asrbox/app": "file:../app",
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-router": "^1.170.46",
-    "lucide-react": "^1.62.0",
+    "lucide-react": "^1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.0.16"
