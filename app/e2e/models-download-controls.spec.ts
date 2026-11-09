@@ -130,6 +130,52 @@ test('model page expands detailed model intro for a natively diarizing model', a
   await expect(card.getByText('Known limitations')).toBeVisible();
 });
 
+test('model page expands Granite Speech 5.0 facts without claiming Chinese or Apple GPU', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));
+  });
+  await page.route('**/models/status', (route) => route.fulfill({
+    json: {
+      models: [
+        modelStatus({
+          model_name: 'granite-speech-5.0-2b',
+          display_name: 'Granite Speech 5.0 2B',
+          engine: 'transformers_speech_lm',
+          source: 'modelscope',
+          repo_id: 'ibm-granite/granite-speech-5.0-2b',
+          model_size: '2b',
+          size_mb: 4817,
+          languages: ['en', 'fr', 'de', 'es', 'pt', 'ja'],
+          runtime: 'transformers',
+          supported_devices: ['cpu', 'cuda'],
+          downloaded: true,
+          compatible: true,
+        }),
+      ],
+    },
+  }));
+  await page.route('**/models/active-downloads', (route) => route.fulfill({ json: [] }));
+  await page.route('**/models/storage', (route) => route.fulfill({
+    json: { models_dir: '/tmp/asrbox/models', used_bytes: 0, free_bytes: 0, total_bytes: 0, models: [] },
+  }));
+
+  await page.goto('/models');
+  await page.getByRole('button', { name: 'Speech LM' }).click();
+
+  const card = page.locator('article').filter({ hasText: 'Granite Speech 5.0 2B' }).first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Model intro' }).click();
+
+  await expect(card.getByText('Capabilities')).toBeVisible();
+  await expect(card.getByText('English, French, German, Spanish, Portuguese, Japanese', { exact: true })).toBeVisible();
+  await expect(card.getByText(/no Chinese ASR/)).toBeVisible();
+  await expect(card.getByText('No native timestamps; subtitle timeline is approximate')).toBeVisible();
+  await expect(card.getByText('CPU', { exact: true })).toBeVisible();
+  await expect(card.getByText('NVIDIA GPU', { exact: true })).toBeVisible();
+  await expect(card.getByText('Apple GPU (MPS)', { exact: true })).toHaveCount(0);
+  await expect(card.getByText('Apple GPU (MLX)', { exact: true })).toHaveCount(0);
+});
+
 test('model page keeps the model ladder collapsed, then expands and sorts it predictably', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('asrbox-server', JSON.stringify({ state: { serverUrl: 'http://127.0.0.1:17496' }, version: 0 }));

@@ -27,6 +27,7 @@ def test_registered_models_declare_devices_matching_engine_paths() -> None:
         "moss-transcribe-diarize": ["cpu", "cuda"],
         "granite-speech-4.1-2b": ["cpu", "cuda"],
         "granite-speech-4.1-2b-plus": ["cpu", "cuda"],
+        "granite-speech-5.0-2b": ["cpu", "cuda"],
         "cohere-transcribe-2b": ["cpu", "cuda"],
         "ark-asr-0.6b": ["cpu", "cuda"],
         "ark-asr-3b": ["cpu", "cuda"],
@@ -82,6 +83,41 @@ def test_stage2_granite_entries_match_verified_repo_facts() -> None:
         assert config.source_candidates[-1].source == "huggingface"
 
 
+def test_granite_speech_5_entry_matches_verified_repo_facts() -> None:
+    config = get_model_config("granite-speech-5.0-2b")
+    assert config is not None
+    assert config.display_name == "Granite Speech 5.0 2B"
+    assert config.engine == "transformers_speech_lm"
+    assert config.adapter == "granite_speech_5"
+    assert config.languages == ["en", "fr", "de", "es", "pt", "ja"]
+    assert config.supported_devices == ["cpu", "cuda"]
+    assert config.supports_timestamps is False
+    assert config.supports_word_timestamps is False
+    assert config.supports_diarization is False
+    assert config.supports_streaming is False
+    assert config.license == "Apache-2.0"
+    assert config.repo_id == "ibm-granite/granite-speech-5.0-2b"
+    assert config.size_mb == 4817
+    # IBM ships the LoRA-free 5.0 checkpoint as the encoder/LLM shard plus a
+    # separate LM-head shard; both are required for a complete download.
+    assert config.required_files == ["model.safetensors", "out_llm.safetensors"]
+    assert [candidate.source for candidate in config.source_candidates] == ["modelscope", "huggingface"]
+    assert all(candidate.repo_id == "ibm-granite/granite-speech-5.0-2b" for candidate in config.source_candidates)
+    assert config.source_candidates[0].priority == 0
+    assert config.source_candidates[1].priority == 10
+
+    # The 4.1 entries keep their own identities, adapters and catalogs.
+    base = get_model_config("granite-speech-4.1-2b")
+    plus = get_model_config("granite-speech-4.1-2b-plus")
+    assert base is not None and plus is not None
+    assert base.adapter == "granite_speech"
+    assert plus.adapter == "granite_speech_plus"
+    assert base.repo_id == "ibm-granite/granite-speech-4.1-2b"
+    assert plus.repo_id == "ibm-granite/granite-speech-4.1-2b-plus"
+    assert base.required_files is None
+    assert plus.required_files is None
+
+
 def test_stage2_cohere_entry_requires_explicit_language() -> None:
     config = get_model_config("cohere-transcribe-2b")
     assert config is not None
@@ -129,7 +165,7 @@ def test_all_speech_lm_entries_have_registered_adapters() -> None:
         assert config.adapter in _SPEECH_LM_ADAPTERS, config.model_name
         assert speech_lm_compat_spec(config.adapter) is not None, config.model_name
         seen_adapters.add(config.adapter)
-    assert {"qwen3_asr", "moss_transcribe_diarize", "granite_speech", "granite_speech_plus", "cohere_transcribe", "ark_asr", "voxtral_mini"} <= seen_adapters
+    assert {"qwen3_asr", "moss_transcribe_diarize", "granite_speech", "granite_speech_5", "granite_speech_plus", "cohere_transcribe", "ark_asr", "voxtral_mini"} <= seen_adapters
 
 
 def test_every_registered_model_declares_a_license() -> None:

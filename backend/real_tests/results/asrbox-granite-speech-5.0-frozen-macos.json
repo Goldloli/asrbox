@@ -1,0 +1,57 @@
+{
+  "created_at": "2026-11-09T23:19:39.929727+08:00",
+  "binary": "/Users/gejiawei/Desktop/ai_code/ASRbox/dist/asrbox-server/asrbox-server",
+  "binary_bytes": 109345360,
+  "health": {
+    "status": "healthy",
+    "version": "0.4.0",
+    "port": 17494,
+    "backend_type": "web-first",
+    "gpu_available": false,
+    "active_tasks": 0,
+    "data_dir": "/private/tmp/asrbox-frozen-data",
+    "models_dir": "/Users/gejiawei/Desktop/ai_code/ASRbox/data/models"
+  },
+  "runtime": {
+    "granite_speech_available": true,
+    "transformers_qwen3_asr_available": true,
+    "torch_available": true,
+    "torch_cuda_available": false,
+    "torch_mps_available": true
+  },
+  "catalog_entry": {
+    "display_name": "Granite Speech 5.0 2B",
+    "downloaded": true,
+    "compatible": null,
+    "supported_devices": [
+      "cpu",
+      "cuda"
+    ],
+    "languages": [
+      "en",
+      "fr",
+      "de",
+      "es",
+      "pt",
+      "ja"
+    ],
+    "supports_timestamps": false,
+    "preferred_source": "modelscope",
+    "installed_source": "modelscope",
+    "installed_repo_id": "ibm-granite/granite-speech-5.0-2b"
+  },
+  "transcription": {
+    "task_id": "7f8814e1-4930-4992-8a6a-d51ffb4b348b",
+    "elapsed_s": 61.4,
+    "characters": 200,
+    "segments": 3,
+    "status": "completed",
+    "model_name": "granite-speech-5.0-2b",
+    "exports": {
+      "txt": true,
+      "srt": true,
+      "markdown": true
+    },
+    "text": "The quick brown fox jumps over the lazy dog. This is a clear English recording used to verify a new speech recognition model. Please transcribe the sentence with proper punctuation and capitalization."
+  }
+}

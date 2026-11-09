@@ -65,12 +65,14 @@ ASRbox 目前的本地模型目录以 Whisper 系（transformers / faster-whispe
 - ARK-ASR 3B / 0.6B（Apache 2.0；19 语言含中英；`trust_remote_code`）
 - Voxtral Mini 3B 离线版（Apache 2.0；8 语言；30 分钟单遍；processor 依赖 `mistral-common[audio]`）
 
+**2026-11-09 追加**：Granite Speech 5.0 2B（Apache 2.0；en/fr/de/es/pt/ja；无原生时间戳；沿用 4.1 的 prompt 与解析，但按官方模型卡建议把单次推理块收紧到 120 秒）。模型卡注明 transformers ≥4.52.1 原生支持、约 5.05 GB 下载、英语自报 WER 5.06%（非本机实测）。
+
 **核查剔除**（2026-09-20）：
 
 - Belle-2——"Qwen3-ASR 底座的 Belle-2"不存在：HF `BELLE-2` org 实为 Whisper 中文微调系列（2024），前提不成立。
 - MOSS-Transcribe-preview-2B——仅英语、`trust_remote_code`、无输出时间戳/说话人证明，相对 Distil-Whisper + MOSS-Diarize 无边际价值。
 
-**后续候选线索**（未评估）：Granite Speech 5（CTC，transformers ≥5.16）、granite-speech-4.1-2b-nar（非自回归高吞吐，需 remote code + flash attention）、Voxtral Small 24B、Canary-1B-v2（transformers 5.17 新增）。
+**后续候选线索**（未评估）：granite-speech-4.1-2b-nar（非自回归高吞吐，需 remote code + flash attention）、Voxtral Small 24B、Canary-1B-v2（transformers 5.17 新增）、Granite Speech 5.0 470M TurboCTC（encoder-only，低延迟场景，需独立接入与打包验证）。
 
 **实现程度**：引擎重构不改变 `TranscriptionResult` 契约；transformers 升级到 PyPI 5.17.0 并同步两个 runtime lock（Windows lock 需在 Windows 环境按流程冻结）；CC-BY-4.0 署名展示的数据管道（registry `license`/`attribution` 字段 + 详情渲染）已随本阶段落地，阶段 4 引入 CC-BY 模型时直接声明数据即可。
 

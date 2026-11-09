@@ -153,6 +153,7 @@ def _speech_lm_config(
     supports_diarization: bool = False,
     hf_only: bool = False,
     license: str = "Apache-2.0",
+    required_files: list[str] | None = None,
 ) -> ASRModelConfig:
     source_candidates = (
         [ModelSourceCandidate("huggingface", repo_id, priority=10, verified=True)]
@@ -180,6 +181,7 @@ def _speech_lm_config(
         license=license,
         allow_patterns=HF_ASR_ALLOW_PATTERNS,
         source_candidates=source_candidates,
+        required_files=required_files,
     )
 
 
@@ -320,6 +322,19 @@ def get_all_model_configs() -> list[ASRModelConfig]:
             ["en", "fr", "de", "es", "pt"],
             supports_word_timestamps=True,
             supports_diarization=True,
+        ),
+        _speech_lm_config(
+            "granite-speech-5.0-2b",
+            "Granite Speech 5.0 2B",
+            "granite_speech_5",
+            "ibm-granite/granite-speech-5.0-2b",
+            4817,
+            "2b",
+            ["en", "fr", "de", "es", "pt", "ja"],
+            # The 5.0 checkpoint keeps the LM head in a second weight file next to
+            # the encoder/LLM shard; both must be present or the loaded weights are
+            # incomplete.
+            required_files=["model.safetensors", "out_llm.safetensors"],
         ),
         _speech_lm_config(
             "cohere-transcribe-2b",

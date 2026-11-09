@@ -435,6 +435,12 @@ def check_model_compatibility(
                 missing.append("remote code")
             if not _has_weight_files(model_dir):
                 missing.append("weights")
+            # A per-model required-file list lets a new checkpoint pin facts the
+            # generic speech-LM spec cannot know (e.g. a separate LM-head shard)
+            # without tightening the rules for existing speech-LM adapters.
+            for required in model_config.required_files or ():
+                if not _has_any(model_dir, (required,)):
+                    missing.append(required)
             probe_key = spec["runtime_probe_key"]
             if probe_key:
                 probe_ready = _runtime_capability(runtime_snapshot, probe_key, _probe_fallback(probe_key))

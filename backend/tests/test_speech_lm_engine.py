@@ -430,3 +430,183 @@ def test_ark_bad_words_ids_keep_eos_and_mask_control_tokens() -> None:
             return {"<pad>": 0, "<im_start>": 5, "normal": 7}
 
     assert _ark_bad_words_ids(FakeTokenizer()) == [[0], [1], [5]]
+
+
+def test_granite_speech_5_keeps_120s_budget_and_old_adapters_unchanged() -> None:
+    from backend.backends.local_asr import (
+        GraniteSpeech5Adapter,
+        GraniteSpeechAdapter,
+        GraniteSpeechPlusAdapter,
+        speech_lm_compat_spec,
+    )
+
+    assert GraniteSpeech5Adapter.key == "granite_speech_5"
+    assert GraniteSpeech5Adapter.max_chunk_seconds == 120.0
+    # The new entry must not change the existing 4.1 budgets or probe keys.
+    assert GraniteSpeechAdapter.key == "granite_speech"
+    assert GraniteSpeechAdapter.max_chunk_seconds == 180.0
+    assert GraniteSpeechPlusAdapter.key == "granite_speech_plus"
+    assert GraniteSpeechPlusAdapter.max_chunk_seconds == 200.0
+
+    spec = speech_lm_compat_spec("granite_speech_5")
+    assert spec is not None
+    assert spec["runtime_probe_key"] == "granite_speech_available"
+    assert spec["requires_remote_code_files"] is False
+
+
+def test_granite_speech_5_plans_120s_boundary_and_splits_long_vad_span(monkeypatch) -> None:
+    from backend.backends.local_asr import GraniteSpeech5Adapter
+
+    adapter = GraniteSpeech5Adapter()
+
+    def fail_vad(path):
+        raise AssertionError("VAD must not run for audio within the 120s budget")
+
+    audio = _FakeAudio(120)
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", fail_vad)
+    assert _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio) == [(audio, 0.0)]
+
+    audio = _FakeAudio(300)
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: [(0.0, 300.0)])
+    chunks = _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio)
+    assert [round(offset, 2) for _chunk, offset in chunks] == [0.0, 100.0, 200.0]
+    assert [round(len(chunk) / 16000, 2) for chunk, _offset in chunks] == [100.0, 100.0, 100.0]
+    assert [round(offset + len(chunk) / 16000, 2) for chunk, offset in chunks] == [100.0, 200.0, 300.0]
+
+
+def test_granite_speech_5_tail_chunk_offsets_follow_original_audio(monkeypatch) -> None:
+    from backend.backends.local_asr import GraniteSpeech5Adapter
+
+    adapter = GraniteSpeech5Adapter()
+    audio = _FakeAudio(260)
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: [(1.0, 250.0)])
+
+    chunks = _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio)
+
+    assert [round(offset, 2) for _chunk, offset in chunks] == [1.0, 84.0, 167.0]
+    assert [round(len(chunk) / 16000, 2) for chunk, _offset in chunks] == [83.0, 83.0, 83.0]
+    assert round(chunks[-1][1] + len(chunks[-1][0]) / 16000, 2) == 250.0
+
+
+def test_granite_speech_5_fails_when_vad_cannot_split(monkeypatch) -> None:
+    from backend.backends.local_asr import GraniteSpeech5Adapter
+
+    adapter = GraniteSpeech5Adapter()
+    audio = _FakeAudio(300)
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: None)
+    with pytest.raises(RuntimeError, match="fsmn-vad"):
+        _plan_speech_lm_chunks(adapter.max_chunk_seconds, "audio.wav", audio)
+
+
+def test_granite_speech_5_rejects_oversized_chunk_after_vad_fallback(monkeypatch) -> None:
+    from backend.backends.local_asr import GraniteSpeech5Adapter
+
+    adapter = GraniteSpeech5Adapter()
+    audio = _FakeAudio(240)
+    # Zero-length VAD spans make the planner fall back to the raw audio; the
+    # adapter must refuse that oversized pass instead of feeding it to the model.
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: [(0.0, 0.0)])
+    monkeypatch.setattr(BaseSpeechLMAdapter, "load_audio_16k", staticmethod(lambda path: audio))
+
+    with pytest.raises(RuntimeError, match="at most 120s"):
+        adapter.transcribe_chunked(object(), object(), "audio.wav", _adapter_config(adapter.key), {})
+
+
+def test_granite_speech_5_dispatches_through_engine_with_bounded_chunks(monkeypatch) -> None:
+    from backend.backends.registry import get_model_config
+
+    config = get_model_config("granite-speech-5.0-2b")
+    assert config is not None
+
+    processed_audio_samples: list[int] = []
+
+    class FakeShape:
+        shape = (1, 3)
+
+    class FakeTokenizer:
+        def apply_chat_template(self, chat, tokenize, add_generation_prompt):
+            return "PROMPT"
+
+        def decode(self, tokens, add_special_tokens, skip_special_tokens):
+            return "bounded text"
+
+    class FakeProcessor:
+        tokenizer = FakeTokenizer()
+
+        def __call__(self, prompt, audio, return_tensors):
+            processed_audio_samples.append(len(audio))
+            return _NativeInputs({"input_ids": FakeShape()})
+
+    class _FakeOutput(list):
+        def __getitem__(self, key):
+            if isinstance(key, tuple):
+                return self
+            return super().__getitem__(key)
+
+    class FakeModel:
+        def generate(self, **kwargs):
+            return _FakeOutput([0, 0, 0, 0])
+
+    audio = _FakeAudio(260)
+    monkeypatch.setattr(BaseSpeechLMAdapter, "load_audio_16k", staticmethod(lambda path: audio))
+    monkeypatch.setattr(local_asr, "_fsmn_vad_speech_spans", lambda path: [(0.0, 130.0), (140.0, 260.0)])
+
+    backend = TransformersSpeechLMBackend()
+    backend._processors[config.model_name] = FakeProcessor()
+    backend._models[config.model_name] = FakeModel()
+
+    result = backend.transcribe("audio.wav", config, {"language": "en"})
+
+    assert processed_audio_samples and max(processed_audio_samples) <= 120 * 16000
+    assert len(processed_audio_samples) == 3
+    assert [round(segment.start, 2) for segment in result.segments] == [0.0, 65.0, 140.0]
+    assert [round(segment.end, 2) for segment in result.segments] == [65.0, 130.0, 260.0]
+    assert result.text == "bounded text bounded text bounded text"
+    assert result.raw_result_summary == {
+        "engine": "transformers_speech_lm",
+        "adapter": "granite_speech_5",
+        "chunks": 3,
+    }
+
+
+def test_granite_speech_5_load_delegates_to_shared_native_loader(monkeypatch) -> None:
+    from pathlib import Path
+
+    calls: dict = {}
+
+    def fake_loader(model_dir, *, model_attr, load_kwargs, processor_error_label, model_error_label):
+        calls.update(
+            model_dir=model_dir,
+            model_attr=model_attr,
+            load_kwargs=load_kwargs,
+            processor_error_label=processor_error_label,
+            model_error_label=model_error_label,
+        )
+        return object(), object()
+
+    from backend.backends.local_asr import GraniteSpeech5Adapter
+
+    monkeypatch.setattr(local_asr, "_load_native_speech_lm", fake_loader)
+    processor, model = GraniteSpeech5Adapter().load(Path("/tmp/granite-speech-5.0-2b"))
+
+    assert processor is not None and model is not None
+    assert calls["model_dir"] == Path("/tmp/granite-speech-5.0-2b")
+    assert calls["model_attr"] == "AutoModelForSpeechSeq2Seq"
+    assert calls["load_kwargs"] == {"dtype": "auto", "device_map": "auto"}
+    assert "Granite Speech" in calls["processor_error_label"]
+
+
+def test_local_hf_files_only_enforces_offline_flags(monkeypatch) -> None:
+    """Local inference must never silently download missing files at run time."""
+    import os
+
+    from backend.utils.hf_offline_patch import local_hf_files_only
+
+    for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_HUB_DISABLE_TELEMETRY"):
+        monkeypatch.delenv(key, raising=False)
+    with local_hf_files_only():
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
+    assert "HF_HUB_OFFLINE" not in os.environ
+    assert "TRANSFORMERS_OFFLINE" not in os.environ

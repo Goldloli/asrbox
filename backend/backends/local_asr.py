@@ -960,6 +960,28 @@ class GraniteSpeechAdapter(BaseSpeechLMAdapter):
         return SpeechLMChunkOutput(text=text, language=language, segments=segments)
 
 
+class GraniteSpeech5Adapter(GraniteSpeechAdapter):
+    """Granite Speech 5.0 keeps the 4.1 prompt/load/parse path.
+
+    The only behavioral difference is the chunk budget: IBM's model card asks for
+    segments of about two minutes or less, so this adapter enforces 120s while the
+    4.1 adapters keep their existing 180s / 200s budgets.
+    """
+
+    key = "granite_speech_5"
+    max_chunk_seconds = 120.0
+
+    def transcribe_chunk(self, processor, model, chunk_audio, offset: float, model_config: ASRModelConfig, options: dict, language: str | None) -> SpeechLMChunkOutput:
+        # The planner can fall back to the raw audio when VAD yields no usable
+        # spans; never hand that oversized pass to a model limited to 120s.
+        if len(chunk_audio) > int(self.max_chunk_seconds * 16000):
+            raise RuntimeError(
+                f"this model accepts at most {int(self.max_chunk_seconds)}s of audio per pass and "
+                "fsmn-vad chunking could not split it"
+            )
+        return super().transcribe_chunk(processor, model, chunk_audio, offset, model_config, options, language)
+
+
 _GRANITE_PLUS_SYSTEM_PROMPT = (
     "Knowledge Cutoff Date: April 2024.\nToday's Date: December 19, 2024.\n"
     "You are Granite, developed by IBM. You are a helpful AI assistant"
@@ -1573,6 +1595,7 @@ _SPEECH_LM_ADAPTERS: dict[str, BaseSpeechLMAdapter] = {
     Qwen3SpeechLMAdapter.key: Qwen3SpeechLMAdapter(),
     MossTranscribeDiarizeSpeechLMAdapter.key: MossTranscribeDiarizeSpeechLMAdapter(),
     GraniteSpeechAdapter.key: GraniteSpeechAdapter(),
+    GraniteSpeech5Adapter.key: GraniteSpeech5Adapter(),
     GraniteSpeechPlusAdapter.key: GraniteSpeechPlusAdapter(),
     CohereTranscribeAdapter.key: CohereTranscribeAdapter(),
     ArkASRAdapter.key: ArkASRAdapter(),

@@ -568,6 +568,63 @@ def test_qwen3_asr_compatibility_requires_processor_and_transformers_support(tmp
     assert compatible["compatible"] is True
 
 
+def test_granite_speech_5_status_exposes_capability_facts(tmp_path: Path) -> None:
+    client = make_client(tmp_path)
+
+    models = client.get("/models/status").json()["models"]
+    model = next(item for item in models if item["model_name"] == "granite-speech-5.0-2b")
+
+    assert model["display_name"] == "Granite Speech 5.0 2B"
+    assert model["engine"] == "transformers_speech_lm"
+    assert model["languages"] == ["en", "fr", "de", "es", "pt", "ja"]
+    assert model["supported_devices"] == ["cpu", "cuda"]
+    assert model["supports_timestamps"] is False
+    assert model["supports_word_timestamps"] is False
+    assert model["supports_diarization"] is False
+    assert model["supports_streaming"] is False
+    assert model["license"] == "Apache-2.0"
+    assert model["preferred_source"] == "modelscope"
+    assert model["source_candidates"][0]["repo_id"] == "ibm-granite/granite-speech-5.0-2b"
+    assert model["source_candidates"][-1]["source"] == "huggingface"
+    assert model["downloaded"] is False
+    assert model["compatibility_error_code"] == "model_not_downloaded"
+
+
+def test_granite_speech_5_compatibility_requires_both_weight_shards(tmp_path: Path, monkeypatch) -> None:
+    client = make_client(tmp_path)
+    monkeypatch.setattr("backend.services.models.granite_speech_import_error", lambda: None)
+    model_dir = create_downloaded_model(tmp_path, "granite-speech-5.0-2b")
+
+    incomplete = client.get("/models/granite-speech-5.0-2b/compatibility").json()
+    assert incomplete["compatible"] is False
+    assert incomplete["code"] == "missing_files"
+    assert "out_llm.safetensors" in incomplete["missing"]
+
+    (model_dir / "out_llm.safetensors").write_bytes(b"weights")
+    compatible = client.get("/models/granite-speech-5.0-2b/compatibility").json()
+    assert compatible["compatible"] is True
+    assert compatible["missing"] == []
+
+    (model_dir / "tokenizer.json").unlink()
+    (model_dir / "preprocessor_config.json").unlink()
+    body = client.get("/models/granite-speech-5.0-2b/compatibility").json()
+    assert body["compatible"] is False
+    assert "tokenizer" in body["missing"]
+    assert "processor/chat_template" in body["missing"]
+
+    (model_dir / "model.safetensors").unlink()
+    (model_dir / "out_llm.safetensors").unlink()
+    weights = client.get("/models/granite-speech-5.0-2b/compatibility").json()
+    assert weights["compatible"] is False
+    assert "weights" in weights["missing"]
+
+    # Existing 4.1 entries keep the generic speech-LM completeness rules.
+    create_downloaded_model(tmp_path, "granite-speech-4.1-2b")
+    base = client.get("/models/granite-speech-4.1-2b/compatibility").json()
+    assert base["compatible"] is True
+    assert base["missing"] == []
+
+
 def test_funasr_compatibility_reports_missing_runtime_dependencies(tmp_path: Path, monkeypatch) -> None:
     client = make_client(tmp_path)
     create_downloaded_model(tmp_path, "sensevoice-small")
@@ -2581,6 +2638,16 @@ def test_build_binary_dry_run_and_server_args() -> None:
     hidden = [command[index + 1] for index, token in enumerate(command) if token == "--hidden-import"]
     assert "backend.vendor.fireredasr2" in hidden
     assert "backend.vendor.fireredasr2.models.module.conformer_encoder" in hidden
+    # Granite Speech 5.0 reuses the 4.1 model classes, so the frozen binary must
+    # collect the same transformers module set.
+    for granite_module in (
+        "transformers.models.granite_speech",
+        "transformers.models.granite_speech.configuration_granite_speech",
+        "transformers.models.granite_speech.feature_extraction_granite_speech",
+        "transformers.models.granite_speech.modeling_granite_speech",
+        "transformers.models.granite_speech.processing_granite_speech",
+    ):
+        assert granite_module in hidden
     # ...while nemo_toolkit must never enter it (server/Docker-only runtime).
     assert all("nemo" not in name for name in hidden)
     assert all("nemo" not in token for token in collect_data)

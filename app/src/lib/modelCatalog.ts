@@ -41,6 +41,9 @@ export function modelDescription(model: ModelStatus, locale: Locale) {
   if (model.model_name === 'granite-speech-4.1-2b-plus') return zh
     ? '单遍输出说话人归属或词级时间戳（按任务选项切换），欧洲 5 语种；无标点与大小写。'
     : 'Speaker-attributed turns or word-level timestamps in one pass (switched by the task option), 5 European languages; no punctuation or casing.';
+  if (model.model_name === 'granite-speech-5.0-2b') return zh
+    ? 'IBM 2026 新一代多语言模型，英法德西葡 + 日语转写与标点还原；长音频按约两分钟分段，时间轴为近似值。'
+    : 'IBM 2026 multilingual model with transcription and punctuation for English, French, German, Spanish, Portuguese, and Japanese; long audio is segmented at about two minutes and the timeline is approximate.';
   if (model.model_name === 'cohere-transcribe-2b') return zh
     ? '2026 年 3 月英语榜第一的多语言模型（14 语言含中文），速度极快；需手动选择语言，无时间戳。'
     : 'March-2026 English leaderboard champion covering 14 languages including Chinese, very fast; requires an explicit language and has no timestamps.';
@@ -147,6 +150,7 @@ export function isApproximateTimelineModel(modelName: string | null | undefined)
     || modelName === 'fun-asr-nano'
     || modelName === 'granite-speech-4.1-2b'
     || modelName === 'granite-speech-4.1-2b-plus'
+    || modelName === 'granite-speech-5.0-2b'
     || modelName === 'cohere-transcribe-2b'
     || modelName?.startsWith('ark-asr')
     || modelName === 'voxtral-mini-3b';
@@ -157,6 +161,7 @@ export function modelBestFor(model: ModelStatus, locale: Locale) {
   const zh = locale === 'zh';
   if (model.model_name === 'moss-transcribe-diarize') return zh ? '多人会议、说话人区分' : 'meetings, speaker separation';
   if (model.model_name === 'granite-speech-4.1-2b-plus') return zh ? '词级时间轴、说话人归属' : 'word-level timing, speaker attribution';
+  if (model.model_name === 'granite-speech-5.0-2b') return zh ? '英语 / 日语与欧洲语言字幕' : 'English, Japanese, and European-language subtitles';
   if (model.model_name === 'granite-speech-4.1-2b') return zh ? '欧洲语言字幕' : 'European-language subtitles';
   if (model.model_name === 'cohere-transcribe-2b') return zh ? '英语与多语言精度' : 'English and multilingual accuracy';
   if (model.model_name.startsWith('ark-asr')) return zh ? '中英多语种内容' : 'Chinese-English multilingual audio';
@@ -490,6 +495,20 @@ const MODEL_DETAILS: Record<string, LocalizedModelDetails> = {
       languages: 'English, French, German, Spanish, Portuguese (no Chinese)',
       bestFor: ['Precise word-level timing', 'Speaker-labelled transcripts'],
       limitations: ['No Chinese support', 'No punctuation or casing', 'Speakers and timestamps are mutually exclusive modes; speaker numbering restarts per chunk on long audio'],
+    },
+  },
+  'granite-speech-5.0-2b': {
+    zh: {
+      capabilities: ['转写 + 标点与大小写', '英法德西葡 + 日语六语种', '长音频按约两分钟分段处理'],
+      languages: '英、法、德、西、葡、日（无中文 ASR；模型另支持英→中文语音翻译，本站未开放该入口）',
+      bestFor: ['英语、日语与欧洲语言字幕', '需要标点还原的转写'],
+      limitations: ['不支持中文转写', '无原生时间戳，字幕时间轴为近似值', '下载体积约 4.8 GB', '官方基准为自报数据，未经本站实测校准'],
+    },
+    en: {
+      capabilities: ['Transcription with punctuation and casing', 'English, French, German, Spanish, Portuguese, Japanese', 'Long audio segmented at about two minutes'],
+      languages: 'English, French, German, Spanish, Portuguese, Japanese (no Chinese ASR; the model also handles English-to-Chinese speech translation, which this app does not expose)',
+      bestFor: ['English, Japanese, and European-language subtitles', 'Transcripts needing punctuation'],
+      limitations: ['No Chinese transcription', 'No native timestamps; subtitle timeline is approximate', 'About 4.8 GB download', 'Official benchmark numbers are self-reported and not calibrated on this machine'],
     },
   },
   'cohere-transcribe-2b': {

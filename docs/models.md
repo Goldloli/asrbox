@@ -1,6 +1,6 @@
 # Local Models
 
-ASRbox registers 25 local speech-recognition models, plus 2 server-only NeMo models that appear only in Docker deployments. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
+ASRbox registers 26 local speech-recognition models, plus 2 server-only NeMo models that appear only in Docker deployments. Model weights are downloaded on demand and are not included in the repository, `.app`, DMG, or Docker image.
 
 ## Storage
 
@@ -48,6 +48,7 @@ Sizes are registry estimates, not exact download promises.
 | `moss-transcribe-diarize` | MOSS-Transcribe-Diarize / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 1,900 MB | No |
 | `granite-speech-4.1-2b` | Granite Speech / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,945 MB | No |
 | `granite-speech-4.1-2b-plus` | Granite Speech Plus / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,225 MB | Yes (task option) |
+| `granite-speech-5.0-2b` | Granite Speech 5 / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 4,817 MB | No |
 | `cohere-transcribe-2b` | Cohere Transcribe / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face (gated) | 4,130 MB | No |
 | `ark-asr-0.6b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 2,600 MB | No |
 | `ark-asr-3b` | ARK-ASR / Transformers | CPU, NVIDIA GPU (CUDA) | ModelScope, then Hugging Face | 8,130 MB | No |
@@ -56,7 +57,7 @@ Sizes are registry estimates, not exact download promises.
 
 The two server-only models run on the NeMo engine and require an NVIDIA GPU (CUDA); they are visible in Docker deployments and hidden in the desktop app: `parakeet-tdt-0.6b-v3` (25 European languages, word-level timestamps, 2,509 MB) and `canary-1b-flash` (English, German, French, Spanish, 3,541 MB). Both are CC-BY-4.0 with attribution shown in the model details, and neither has been verified on a CUDA machine yet.
 
-The estimates add up to roughly 69 GiB. A real all-model installation may use more or less space.
+The estimates add up to roughly 74 GiB. A real all-model installation may use more or less space.
 
 These device labels describe the execution paths supported by each ASRbox engine; they do not assert that the listed accelerator is present or active on the current machine. The runtime keeps its existing automatic selection and fallback behavior, so the device actually used depends on available hardware and runtime support.
 
@@ -133,6 +134,8 @@ This evidence verifies the tested dependency snapshot and machine. Docker build 
 The six models added by the phase-2 catalog expansion were verified the same way in the packaged desktop app on macOS Apple Silicon (2026-09-23) and on Windows x64 (2026-09-23/24). Each model was downloaded through the managed lifecycle and transcribed real media end-to-end: `ark-asr-0.6b` and `ark-asr-3b` on a 60-second Chinese clip (six segments each, with visibly different wording confirming each ran its own weights), `cohere-transcribe-2b` on the Chinese clip with an explicit language (five punctuation-preserving segments; an 18-minute sample re-transcribed identically on Windows), `granite-speech-4.1-2b` on a 30-second English excerpt (punctuated, cased), `granite-speech-4.1-2b-plus` in its default speaker-attribution mode (S01-labelled turns; the word-timestamp mode was verified separately in development with monotonic unwrapped timelines), and `voxtral-mini-3b` with its `tekken.json` tokenizer layout. The frozen binary smoke asserts the runtime probes for every engine family. Evidence: `backend/real_tests/results/asrbox-speech-lm-smoke-20260920.md`.
 
 `firered-asr2-aed` was verified on 2026-10-10 on macOS Apple Silicon through the managed download path (ModelScope source) and the full backend transcription path: a real Chinese clip produced 27 word-timestamped segments (1118 characters) and exported cleanly in all six formats (TXT, SRT, VTT, ASS, JSON, Markdown). Evidence: `backend/real_tests/results/asrbox-real-models-firered-final.md`. The NeMo engine models (`parakeet-tdt-0.6b-v3`, `canary-1b-flash`) are covered by unit and contract tests against stub engines only; CUDA-hardware verification is still pending and tracked in `backend/real_tests/results/nemo-cuda-verification-pending.md`.
+
+`granite-speech-5.0-2b` was verified on 2026-11-09 on macOS Apple Silicon CPU through the managed ModelScope download and the full backend transcription path, using locally synthesized (not human-recorded, not committed) English clear, English noisy, Japanese, and 152-second long audio: every run completed with all six export formats, the 120-second chunked long-audio run covered the final sentence at the exact audio end, and peak memory stayed around 5.3–5.7 GB. A side-by-side run with `granite-speech-4.1-2b` produced identical clear-English text (3.1% script WER for both) and single-digit Japanese character error rates for both, so this sample did not demonstrate a reproducible accuracy advantage for 5.0; the model is listed for its newer upstream release and six-language coverage, not for measured speed or accuracy gains. The macOS frozen sidecar also passed the runtime probe (`granite_speech_available=true`), showed the catalog entry, and completed a real transcription. Evidence: `backend/real_tests/results/asrbox-granite-speech-5.0-verification-20261109.md` and `asrbox-granite-speech-5.0-frozen-macos.md`. Windows in-place upgrade and CUDA verification are still pending.
 
 ## Model Sources and Licenses
 

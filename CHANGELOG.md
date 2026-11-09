@@ -4,6 +4,15 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+### Added
+
+- 本地模型目录新增 **Granite Speech 5.0 2B**（`granite-speech-5.0-2b`，Apache-2.0）：IBM 2026-10-20 发布的多语言模型，英法德西葡 + 日语转写与标点还原，无原生时间戳；沿用既有 speech-LM 引擎与 4.1 的 prompt/解析路径，仅新增独立 adapter 按官方模型卡建议把单次推理块收紧到 **120 秒**（4.1 普通版 180 秒、Plus 200 秒不变）。模型页、选择器、天梯与中英文详情已同步，时间轴明确标注为近似值；ModelScope 主源 + Hugging Face 备源，权重按需下载。
+
+### Changed
+
+- 合入 `v0.4.0` 以来的 Dependabot 分组依赖升级（前端依赖多轮更新、Bun 运行时、Rust/Tauri 依赖含 tokio），无产品行为变化。
+
 ## [0.4.0] - 2026-10-10
 ### Added
 
@@ -369,7 +378,8 @@ All notable ASRbox changes are documented here. The format follows Keep a Change
 - The macOS package is not signed or notarized.
 - Windows and Linux packages are not published.
 
-[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Goldloli/asrbox/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Goldloli/asrbox/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Goldloli/asrbox/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/Goldloli/asrbox/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/Goldloli/asrbox/compare/v0.3.1...v0.3.2
