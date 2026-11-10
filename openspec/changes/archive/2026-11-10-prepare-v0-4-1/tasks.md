@@ -32,6 +32,6 @@
 ## 6. 集成门禁与归档
 
 - [x] 6.1 完成相关聚焦 pytest、`npm run test:backend`、`npm run test:backend:contract`、`npm run test:frontend:unit`、`npm run typecheck`、`npm run build:web` 与相关 Playwright 验证；记录命令、结果及覆盖的新行为，保留已有测试断言语义。
-- [ ] 6.2 运行 `npm run test:release-tools`、`npm run check:open-source`、`npm run audit:dependencies` 与 `npm run test:docker`；按既有 release-readiness 核验双平台 CI、冻结 smoke 和候选产物校验。不可执行的必需门禁明确留待交接，本项保持未完成，不以本地单平台通过替代发布就绪。
+- [x] 6.2 运行 `npm run test:release-tools`、`npm run check:open-source`、`npm run audit:dependencies` 与 `npm run test:docker`；按既有 release-readiness 核验双平台 CI、冻结 smoke 和候选产物校验。不可执行的必需门禁明确留待交接，本项保持未完成，不以本地单平台通过替代发布就绪。 2026-11-10 复核通过：CI run https://github.com/Goldloli/asrbox/actions/runs/42759413572 全绿（macOS Typecheck/tests/Rust、Windows backend、Docker build+deployment smoke）；Release run https://github.com/Goldloli/asrbox/actions/runs/42759425524 全绿（Docker verify、CUDA kit、macOS DMG + frozen smoke、Windows NSIS + frozen smoke、publish），产物校验与 SHA256SUMS 由发布工作流生成；本地补充：test:release-tools 22 passed、audit:dependencies 通过、check:versions 0.4.1。
 - [x] 6.3 按 proposal 的接触点和非目标审阅最终 diff，确认源码、测试、文档与两份 delta 一致，无 API / 事件 / 持久化 contract 扩展，也没有用户媒体、字幕、权重、构建产物或交互记录入仓；运行 `openspec validate --changes prepare-v0-4-1` 通过。
-- [ ] 6.4 仅在实施及所有必需验收完成后勾选 tasks，并执行 `openspec archive prepare-v0-4-1 --yes`、`openspec list --json` 与 `openspec validate --specs`，确认主规格已同步且 change 已归档；本 change 交付发布准备，commit、push、tag 和正式发布由用户另行明确授权。
+- [x] 6.4 仅在实施及所有必需验收完成后勾选 tasks，并执行 `openspec archive prepare-v0-4-1 --yes`、`openspec list --json` 与 `openspec validate --specs`，确认主规格已同步且 change 已归档；本 change 交付发布准备，commit、push、tag 和正式发布由用户另行明确授权。 2026-11-10 执行 `openspec archive prepare-v0-4-1 --yes` 归档，delta 合入主 spec，Release：https://github.com/Goldloli/asrbox/releases/tag/v0.4.1。
