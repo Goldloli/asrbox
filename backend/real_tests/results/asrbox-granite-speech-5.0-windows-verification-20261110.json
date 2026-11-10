@@ -1,0 +1,255 @@
+{
+  "created_at": "2026-11-10T12:41:28+08:00",
+  "task": "4.4",
+  "change": "prepare-v0-4-1",
+  "platform": {
+    "os": "Windows 11 企业版 10.0.22631 x64",
+    "cpu": "Intel Core i9-9900K",
+    "memory_gib": 31.9,
+    "gpu": "NVIDIA GeForce RTX 2060 SUPER 8 GB (driver 560.94, CUDA 12.6)",
+    "python": "3.14.7",
+    "torch": "2.11.0+cpu",
+    "transformers": "5.17.0",
+    "pyinstaller": "6.21.0",
+    "tauri_cli": "2.11.4"
+  },
+  "artifacts": {
+    "sidecar_build": "scripts/build-server.sh -> dist/asrbox-server",
+    "sidecar_bytes": 1088374072,
+    "sidecar_files": 7429,
+    "installer": "tauri/src-tauri/target/release/bundle/nsis/ASRbox_0.4.1_x64-setup.exe",
+    "installer_bytes": 455879544,
+    "install_dir": "%LOCALAPPDATA%\\ASRbox",
+    "install_mode": "NSIS currentUser (per-user, no admin)",
+    "installed_app_exe_bytes": 18966528,
+    "installed_sidecar_bytes": 1088374072,
+    "staged_sidecar_bytes": 1088374072,
+    "staged_sidecar_files": 7430,
+    "staged_files_extra": [
+      ".gitkeep"
+    ],
+    "sidecar_manifest_sha256_installed": "c81d081f44ac509b4f24a3da16ec2fba25ef0789320e8177851f2ce047719700",
+    "sidecar_manifest_sha256_built": "969882838c5bc85238e1a6041e3a04986b40ab38c650560f9291b78be8148658",
+    "sidecar_size_mismatches": [],
+    "sidecar_hash_sample_mismatches": []
+  },
+  "runtime_probe_frozen_build": {
+    "granite_speech_available": true,
+    "granite_speech_plus_available": true,
+    "torch_available": true,
+    "torch_cuda_available": false,
+    "funasr_available": true,
+    "transformers_qwen3_asr_available": true
+  },
+  "runtime_probe_installed": {
+    "granite_speech_available": true,
+    "granite_speech_plus_available": true,
+    "torch_available": true,
+    "torch_cuda_available": false,
+    "funasr_available": true,
+    "cohere_asr_available": true,
+    "voxtral_available": true,
+    "moss_transcribe_diarize_available": true
+  },
+  "catalog_entry": {
+    "model_name": "granite-speech-5.0-2b",
+    "display_name": "Granite Speech 5.0 2B",
+    "local_catalog_entries": 26,
+    "languages": [
+      "en",
+      "fr",
+      "de",
+      "es",
+      "pt",
+      "ja"
+    ],
+    "supported_devices": [
+      "cpu",
+      "cuda"
+    ],
+    "supports_timestamps": false,
+    "downloaded": true,
+    "installed_source": "modelscope",
+    "installed_repo_id": "ibm-granite/granite-speech-5.0-2b",
+    "size_on_disk_mb": 4816.6
+  },
+  "frozen_build_transcription": {
+    "tag": "cpu-frozen-short",
+    "model": "granite-speech-5.0-2b",
+    "file": "en_short.wav",
+    "status": "completed",
+    "audio_seconds": 25.3,
+    "wall_seconds": 503.0,
+    "speed_factor": 0.05,
+    "text_length": 390,
+    "segments": 5,
+    "segment_bounds": {
+      "first_start": 0.0,
+      "last_end": 25.324
+    },
+    "exports": {
+      "txt": 390,
+      "srt": 555,
+      "vtt": 553,
+      "ass": 1129,
+      "json": 3164,
+      "markdown": 492
+    },
+    "task_id": "c7a3771e-1a59-4407-88cf-de050bf03908",
+    "model_name_used": "granite-speech-5.0-2b",
+    "preview": "Good morning everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Please confirm that the microphone level is comfortable, the background noise is minimal, and the resulti"
+  },
+  "installed_transcription": {
+    "tag": "cpu-installed-short",
+    "model": "granite-speech-5.0-2b",
+    "file": "en_short.wav",
+    "status": "completed",
+    "audio_seconds": 25.3,
+    "wall_seconds": 412.2,
+    "speed_factor": 0.061,
+    "text_length": 390,
+    "segments": 5,
+    "segment_bounds": {
+      "first_start": 0.0,
+      "last_end": 25.324
+    },
+    "exports": {
+      "txt": 390,
+      "srt": 555,
+      "vtt": 553,
+      "ass": 1129,
+      "json": 3165,
+      "markdown": 492
+    },
+    "task_id": "1055cf3d-c35c-4173-9059-d82d691a6fd5",
+    "model_name_used": "granite-speech-5.0-2b",
+    "preview": "Good morning everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Please confirm that the microphone level is comfortable, the background noise is minimal, and the resulti"
+  },
+  "old_model_after_upgrade": {
+    "tag": "cpu-installed-41-short",
+    "model": "granite-speech-4.1-2b",
+    "file": "en_short.wav",
+    "status": "completed",
+    "audio_seconds": 25.3,
+    "wall_seconds": 403.7,
+    "speed_factor": 0.063,
+    "text_length": 391,
+    "segments": 5,
+    "segment_bounds": {
+      "first_start": 0.0,
+      "last_end": 25.324
+    },
+    "exports": {
+      "txt": 391,
+      "srt": 556,
+      "vtt": 554,
+      "ass": 1130,
+      "json": 3167,
+      "markdown": 493
+    },
+    "task_id": "9cf64006-7458-4990-9437-d5f6ac639807",
+    "model_name_used": "granite-speech-4.1-2b",
+    "preview": "Good morning, everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Please confirm that the microphone level is comfortable, the background noise is minimal, and the result"
+  },
+  "upgrade": {
+    "paths": "0.3.2 既有安装 -> 0.4.0 覆盖安装 -> 0.4.1 覆盖安装（同一目录）",
+    "baseline_pre_upgrade": {
+      "label": "pre-upgrade-0.3.2-installed",
+      "tables": {
+        "asr_providers": 4,
+        "asr_settings": 1,
+        "chat_messages": 0,
+        "chat_sessions": 0,
+        "llm_providers": 0,
+        "model_benchmarks": 0,
+        "proofreading_runs": 0,
+        "proofreading_suggestions": 0,
+        "schema_migrations": 9,
+        "task_diagnostics": 0,
+        "task_logs": 330,
+        "transcript_segments": 2358,
+        "transcript_versions": 18,
+        "transcription_batches": 0,
+        "transcription_chunks": 120,
+        "transcription_tasks": 18,
+        "translation_batches": 0,
+        "translation_runs": 0,
+        "translation_versions": 0
+      }
+    },
+    "after_0_4_0": {
+      "label": "post-install-0.4.0",
+      "tables": {
+        "asr_providers": 4,
+        "asr_settings": 1,
+        "chat_messages": 0,
+        "chat_sessions": 0,
+        "llm_providers": 0,
+        "model_benchmarks": 0,
+        "proofreading_runs": 0,
+        "proofreading_suggestions": 0,
+        "schema_migrations": 9,
+        "task_diagnostics": 0,
+        "task_logs": 330,
+        "transcript_segments": 2358,
+        "transcript_versions": 18,
+        "transcription_batches": 0,
+        "transcription_chunks": 120,
+        "transcription_tasks": 18,
+        "translation_batches": 0,
+        "translation_runs": 0,
+        "translation_versions": 0
+      }
+    },
+    "after_0_4_1": {
+      "label": "post-upgrade-0.4.1",
+      "tables": {
+        "asr_providers": 4,
+        "asr_settings": 1,
+        "chat_messages": 0,
+        "chat_sessions": 0,
+        "llm_providers": 0,
+        "model_benchmarks": 0,
+        "proofreading_runs": 0,
+        "proofreading_suggestions": 0,
+        "schema_migrations": 9,
+        "task_diagnostics": 0,
+        "task_logs": 330,
+        "transcript_segments": 2358,
+        "transcript_versions": 18,
+        "transcription_batches": 0,
+        "transcription_chunks": 120,
+        "transcription_tasks": 18,
+        "translation_batches": 0,
+        "translation_runs": 0,
+        "translation_versions": 0
+      }
+    },
+    "tables_identical_pre_vs_post": true,
+    "models_identical_pre_vs_post": true,
+    "model_dirs_before": 10,
+    "model_dirs_after_install": 10,
+    "redownload_required": false,
+    "content_level_preservation": {
+      "pre_existing_tasks": 18,
+      "pre_existing_segments": 2358,
+      "pre_existing_versions": 18,
+      "missing_rows": 0,
+      "changed_rows": 0,
+      "asr_settings_hash_identical": true,
+      "default_model_name_after_upgrade": "whisper-base",
+      "tasks_created_after_upgrade_by_verification": 3
+    }
+  },
+  "limits": [
+    "GUI 交互未自动化：安装版验证使用安装目录内同一 sidecar 二进制与真实应用数据目录启动，未通过窗口点击操作。",
+    "验收音频为本机 TTS 合成的英文语音（未入仓），不是真人录音；质量结论不适用于本记录。",
+    "0.4.1 安装包未签名，SmartScreen 提示与签名流程未纳入本记录。",
+    "Windows CPU 长音频（>120 秒）分块未单独复测；该行为在 CUDA 记录中以 150 秒音频覆盖。"
+  ],
+  "test_gates": {
+    "npm run test:backend": "619 passed, 2 skipped (424.7 s)",
+    "npm run test:backend:contract": "12 passed",
+    "npm run test:backend:binary-smoke": "1 passed (49.3 s, ASRBOX_BINARY_SMOKE=1 against dist/asrbox-server)"
+  }
+}

@@ -49,7 +49,7 @@
 
 - 5.0 在 CPU 上单次推理约 30–40 秒（11.6 秒音频，含每次任务冷加载约 20 秒），与 4.1 同量级；峰值内存约 +0.5 GB。
 - 152 秒长音频按 VAD 切块后需约 8 分钟（4.1 约 7 分钟），这是本机 CPU bf16 的现实表现，不是模型卡承诺的时延；发布文档不得据此写性能结论。
-- CUDA 未验证，见 `granite-speech-5.0-cuda-verification-pending.md`；Windows 未验证（task 4.4 未完成）。
+- CUDA 已在 Windows + RTX 2060 SUPER 真机验证，见 `granite-speech-5.0-cuda-verification-20261110.md`；Windows x64 冻结候选与就地升级见 `asrbox-granite-speech-5.0-windows-verification-20261110.md`。
 
 ## 结论
 
@@ -88,4 +88,4 @@
 - `npm run test:release-tools`：22 passed。
 - `bun install --frozen-lockfile`：通过，lock 无改写。
 - bump 后复跑：`npm run test:backend` 621 passed、`npm run test:backend:contract` 12 passed、`bun test app/src` 51 passed、`npm run typecheck` / `npm run build:web` 通过。
-- 未完成门禁：Windows x64 冻结候选与就地升级（task 4.4，移交 `granite-speech-5.0-windows-verification-pending.md`）、Docker 镜像 smoke（网络阻塞）、CUDA 真机（pending 记录）；因此 change 尚未 archive。
+- 后续门禁（2026-11-10）：Windows x64 冻结候选与就地升级（task 4.4）、CUDA 真机（task 4.5）已完成，见 `asrbox-granite-speech-5.0-windows-verification-20261110.md` 与 `granite-speech-5.0-cuda-verification-20261110.md`；仍未完成的是 Docker 镜像 smoke（本次网络阻塞）与 task 6.2 的双平台 CI / 冻结 smoke / 候选产物校验，因此 change 尚未 archive。

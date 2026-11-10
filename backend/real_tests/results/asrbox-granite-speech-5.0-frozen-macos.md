@@ -22,7 +22,7 @@
 
 ## 未覆盖与限制
 
-- 本记录只证明 **macOS Apple Silicon CPU** 的冻结 sidecar 路径；核显/GPU 未声明，也未在 CUDA 环境执行（见 `granite-speech-5.0-cuda-verification-pending.md`）。
-- 未构建/验证 Windows x64 冻结候选与 `0.4.0 → 0.4.1` 就地升级路径（task 4.4 未完成）。
+- 本记录只证明 **macOS Apple Silicon CPU** 的冻结 sidecar 路径；核显/GPU 未声明，也未在 CUDA 环境执行（CUDA 见 `granite-speech-5.0-cuda-verification-20261110.md`）。
+- Windows x64 冻结候选与 `0.4.0 → 0.4.1` 就地升级已完成，见 `asrbox-granite-speech-5.0-windows-verification-20261110.md`（task 4.4）。
 - 未构建完整 Tauri 桌面安装器（DMG/NSIS）；如发布流程需要，按 `docs/release.md` 的双平台门禁另行执行。
 - 真实验收音频为本地合成的英文语音（未入仓），不是真人录音；质量对比结论见 `asrbox-granite-speech-5.0-verification-*.md`。

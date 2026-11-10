@@ -1,0 +1,269 @@
+{
+  "created_at": "2026-11-10T12:41:28+08:00",
+  "task": "4.5",
+  "change": "prepare-v0-4-1",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 2060 SUPER",
+    "vram_mib": 8192,
+    "compute_capability": [
+      7,
+      5
+    ],
+    "driver": "560.94",
+    "driver_cuda": "12.6",
+    "os": "Windows 11 企业版 10.0.22631 x64"
+  },
+  "kit": {
+    "source": "GitHub Release v0.4.0 CUDA kit (asrbox-cuda-kit-windows-x64.zip.part1/part2)",
+    "parts": 2,
+    "part_bytes": [
+      1379924697,
+      1379924696
+    ],
+    "zip_bytes": 2759849393,
+    "zip_sha256": "e373c5c94fc2250780150781e9dad0589079a33a79eb0778ae6d2daf0a9ca3fa",
+    "manifest_kit_version": "0.4.0",
+    "manifest_torch_version": "2.11.0+cu128",
+    "extracted_files": 2285,
+    "extracted_bytes": 4331692019,
+    "check_command": "python scripts/build-cuda-kit.py --check <kit> --manifest cuda-kit-manifest-v0.4.0.json",
+    "check_result": "kit matches manifest: 2285 files, torch 2.11.0+cu128",
+    "torch_version": "2.11.0+cu128",
+    "torch_cuda_runtime": "12.8"
+  },
+  "device_map": "auto",
+  "loaded_model": {
+    "device": "cuda:0",
+    "dtype": "torch.bfloat16",
+    "hf_device_map_full_gpu_run": {},
+    "hf_device_map_offloaded_run": {
+      "model.encoder": "0",
+      "model.projector": "0",
+      "model.language_model.embed_tokens": "0",
+      "model.language_model.layers.0": "0",
+      "model.language_model.layers.1": "0",
+      "model.language_model.layers.2": "0",
+      "model.language_model.layers.3": "0",
+      "model.language_model.layers.4": "0",
+      "model.language_model.layers.5": "0",
+      "model.language_model.layers.6": "0",
+      "model.language_model.layers.7": "0",
+      "model.language_model.layers.8": "0",
+      "model.language_model.layers.9": "0",
+      "model.language_model.layers.10": "cpu",
+      "model.language_model.layers.11": "cpu",
+      "model.language_model.layers.12": "cpu",
+      "model.language_model.layers.13": "cpu",
+      "model.language_model.layers.14": "cpu",
+      "model.language_model.layers.15": "cpu",
+      "model.language_model.layers.16": "cpu",
+      "model.language_model.layers.17": "cpu",
+      "model.language_model.layers.18": "cpu",
+      "model.language_model.layers.19": "cpu",
+      "model.language_model.layers.20": "cpu",
+      "model.language_model.layers.21": "cpu",
+      "model.language_model.layers.22": "cpu",
+      "model.language_model.layers.23": "cpu",
+      "model.language_model.layers.24": "cpu",
+      "model.language_model.layers.25": "cpu",
+      "model.language_model.layers.26": "cpu",
+      "model.language_model.layers.27": "cpu",
+      "model.language_model.layers.28": "cpu",
+      "model.language_model.layers.29": "cpu",
+      "model.language_model.layers.30": "cpu",
+      "model.language_model.layers.31": "cpu",
+      "model.language_model.layers.32": "cpu",
+      "model.language_model.layers.33": "cpu",
+      "model.language_model.layers.34": "cpu",
+      "model.language_model.layers.35": "cpu",
+      "model.language_model.layers.36": "cpu",
+      "model.language_model.layers.37": "cpu",
+      "model.language_model.layers.38": "cpu",
+      "model.language_model.layers.39": "cpu",
+      "model.language_model.norm": "cpu",
+      "model.language_model.rotary_emb": "cpu",
+      "lm_head": "cpu"
+    }
+  },
+  "runs": {
+    "source_http_short": {
+      "tag": "cuda-src-short",
+      "model": "granite-speech-5.0-2b",
+      "file": "en_short.wav",
+      "status": "completed",
+      "audio_seconds": 25.3,
+      "wall_seconds": 66.7,
+      "speed_factor": 0.38,
+      "text_length": 390,
+      "segments": 5,
+      "segment_bounds": {
+        "first_start": 0.0,
+        "last_end": 25.324
+      },
+      "exports": {
+        "txt": 390,
+        "srt": 555,
+        "vtt": 553,
+        "ass": 1129,
+        "json": 3164,
+        "markdown": 492
+      },
+      "task_id": "cea543ec-208e-4e46-9e88-6ddf61809a76",
+      "model_name_used": "granite-speech-5.0-2b",
+      "preview": "Good morning everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Please confirm that the microphone level is comfortable, the background noise is minimal, and the resulti"
+    },
+    "source_dispatch_short": {
+      "tag": "cuda-local-short",
+      "file": "en_short.wav",
+      "audio_seconds": 25.3,
+      "wall_seconds": 28.6,
+      "speed_factor": 0.884,
+      "text_length": 390,
+      "segment_count": 1,
+      "first_segment_start": 0.0,
+      "last_segment_end": 25.325,
+      "tail_coverage_seconds": -0.02,
+      "tail_marker_present": false,
+      "model_device": "cuda:0",
+      "model_dtype": "torch.bfloat16",
+      "hf_device_map": {},
+      "peak_cuda_allocated_mib": 4501.9,
+      "peak_cuda_reserved_mib": 4560.0,
+      "preview": "Good morning everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Pleas"
+    },
+    "source_dispatch_long": {
+      "tag": "cuda-local-long",
+      "file": "en_long.wav",
+      "audio_seconds": 150.0,
+      "wall_seconds": 288.1,
+      "speed_factor": 0.521,
+      "text_length": 2491,
+      "segment_count": 20,
+      "first_segment_start": 0.0,
+      "last_segment_end": 149.98,
+      "tail_coverage_seconds": 0.02,
+      "tail_marker_present": true,
+      "model_device": "cuda:0",
+      "model_dtype": "torch.bfloat16",
+      "hf_device_map": {
+        "model.encoder": "0",
+        "model.projector": "0",
+        "model.language_model.embed_tokens": "0",
+        "model.language_model.layers.0": "0",
+        "model.language_model.layers.1": "0",
+        "model.language_model.layers.2": "0",
+        "model.language_model.layers.3": "0",
+        "model.language_model.layers.4": "0",
+        "model.language_model.layers.5": "0",
+        "model.language_model.layers.6": "0",
+        "model.language_model.layers.7": "0",
+        "model.language_model.layers.8": "0",
+        "model.language_model.layers.9": "0",
+        "model.language_model.layers.10": "cpu",
+        "model.language_model.layers.11": "cpu",
+        "model.language_model.layers.12": "cpu",
+        "model.language_model.layers.13": "cpu",
+        "model.language_model.layers.14": "cpu",
+        "model.language_model.layers.15": "cpu",
+        "model.language_model.layers.16": "cpu",
+        "model.language_model.layers.17": "cpu",
+        "model.language_model.layers.18": "cpu",
+        "model.language_model.layers.19": "cpu",
+        "model.language_model.layers.20": "cpu",
+        "model.language_model.layers.21": "cpu",
+        "model.language_model.layers.22": "cpu",
+        "model.language_model.layers.23": "cpu",
+        "model.language_model.layers.24": "cpu",
+        "model.language_model.layers.25": "cpu",
+        "model.language_model.layers.26": "cpu",
+        "model.language_model.layers.27": "cpu",
+        "model.language_model.layers.28": "cpu",
+        "model.language_model.layers.29": "cpu",
+        "model.language_model.layers.30": "cpu",
+        "model.language_model.layers.31": "cpu",
+        "model.language_model.layers.32": "cpu",
+        "model.language_model.layers.33": "cpu",
+        "model.language_model.layers.34": "cpu",
+        "model.language_model.layers.35": "cpu",
+        "model.language_model.layers.36": "cpu",
+        "model.language_model.layers.37": "cpu",
+        "model.language_model.layers.38": "cpu",
+        "model.language_model.layers.39": "cpu",
+        "model.language_model.norm": "cpu",
+        "model.language_model.rotary_emb": "cpu",
+        "lm_head": "cpu"
+      },
+      "peak_cuda_allocated_mib": 6859.7,
+      "peak_cuda_reserved_mib": 7228.0,
+      "preview": "This long form recording checks how the transcription pipeline handles audio that is longer than 2 minutes. A complete plan should split the speech into sensible chunks, keep the timestamps in order, "
+    },
+    "frozen_installed_cuda_short": {
+      "tag": "cuda-installed-short",
+      "model": "granite-speech-5.0-2b",
+      "file": "en_short.wav",
+      "status": "completed",
+      "audio_seconds": 25.3,
+      "wall_seconds": 40.9,
+      "speed_factor": 0.619,
+      "text_length": 390,
+      "segments": 5,
+      "segment_bounds": {
+        "first_start": 0.0,
+        "last_end": 25.324
+      },
+      "exports": {
+        "txt": 390,
+        "srt": 555,
+        "vtt": 553,
+        "ass": 1129,
+        "json": 3165,
+        "markdown": 492
+      },
+      "task_id": "55b5276d-1463-421f-b62f-ece2fb4bd6ab",
+      "model_name_used": "granite-speech-5.0-2b",
+      "preview": "Good morning everyone. This recording verifies speech recognition on the Windows desktop built of AS-roboc. The system should transcribe this sentence with proper punctuation and capitalization. Please confirm that the microphone level is comfortable, the background noise is minimal, and the resulti"
+    }
+  },
+  "gpu_samples": {
+    "source_http_short": {
+      "samples": 35,
+      "baseline_mib": "1018",
+      "peak_mib": 5612,
+      "peak_utilization_pct": 46,
+      "samples_over_4gib": 13
+    },
+    "frozen_installed_cuda_short": {
+      "samples": 22,
+      "baseline_mib": "499",
+      "peak_mib": 5086,
+      "peak_utilization_pct": 38,
+      "samples_over_4gib": 7
+    }
+  },
+  "parity": {
+    "short_text_length_cpu_and_cuda": [
+      390,
+      390
+    ],
+    "short_text_identical": true,
+    "short_segments_cpu_and_cuda": [
+      5,
+      5
+    ],
+    "frozen_cpu_vs_cuda_short_wall_seconds": [
+      412.2,
+      40.9
+    ],
+    "frozen_cpu_vs_cuda_speedup": 10.08
+  },
+  "observations": [
+    "8 GB 显存下 150 秒长音频触发 accelerate 部分下沉：encoder/projector 与前 10 层 LLM 在 cuda:0，第 10-39 层与 lm_head 在 CPU，峰值分配 6859.7 MiB；短音频为全 GPU（4501.9 MiB）。",
+    "同一 150 秒音频在 worker 子进程（全 GPU 路径）输出 2017 字符/25 段，在进程内部分下沉路径输出 2491 字符/20 段，两者尾部均覆盖到 150.0 秒；混合设备执行会改变解码数值，属预期风险而非崩溃。",
+    "冻结安装版启用 ASRBOX_CUDA_KIT_DIR 后 /runtime/status 的 torch_cuda_available 为 true，与源码 PYTHONPATH 注入结果一致。"
+  ],
+  "limits": [
+    "仅在 RTX 2060 SUPER（sm_75, 8 GB）验证；未覆盖 L4/A100 或更大显存下的全 GPU 常驻。",
+    "未通过 GUI『设置 → 显卡加速』开关完成端到端下载安装套件；套件来自官方 Release 分卷并按 manifest 校验。",
+    "未复测六语种 CUDA 输出；语种覆盖沿用 macOS CPU 证据。"
+  ]
+}
