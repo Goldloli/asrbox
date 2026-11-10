@@ -60,8 +60,8 @@ export async function bumpVersion(root, next, { regenLocks = true } = {}) {
   }
 
   for (const [file, pattern, replacement] of [
-    ["README.md", /(当前源码版本为\s*)`[^`]+`/, `$1\`${next}\``],
-    ["README.en.md", /(current source version is\s*)`[^`]+`/i, `$1\`${next}\``],
+    ["README.zh-CN.md", /(当前源码版本为\s*)`[^`]+`/, `$1\`${next}\``],
+    ["README.md", /(current source version is\s*)`[^`]+`/i, `$1\`${next}\``],
   ]) {
     const filePath = path.join(root, file);
     const contents = await readFile(filePath, "utf8");

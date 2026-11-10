@@ -39,11 +39,11 @@ async function fixture(version, backendVersion = version) {
   );
   await writeFile(
     path.join(root, "README.md"),
-    `当前源码版本为 \`${version}\`\n从 [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}) 下载\n`,
+    `The current source version is \`${version}\`.\nDownload from the [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}).\n`,
   );
   await writeFile(
-    path.join(root, "README.en.md"),
-    `The current source version is \`${version}\`.\nDownload from the [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}).\n`,
+    path.join(root, "README.zh-CN.md"),
+    `当前源码版本为 \`${version}\`\n从 [\`v${version}\` Release](https://github.com/Goldloli/asrbox/releases/tag/v${version}) 下载\n`,
   );
   await writeFile(
     path.join(root, "docs/release.md"),
@@ -106,10 +106,10 @@ test("rejects drift in generated dependency lock versions", async () => {
 test("requires version-matched current release documentation", async () => {
   const staleRoot = await fixture("0.1.0-beta.1");
   await writeFile(
-    path.join(staleRoot, "README.md"),
+    path.join(staleRoot, "README.zh-CN.md"),
     "当前源码版本为 `0.0.9`\n从 [`v0.0.9` Release](https://github.com/Goldloli/asrbox/releases/tag/v0.0.9) 下载\n",
   );
-  await assert.rejects(checkVersions(staleRoot), /README\.md#source: 0\.0\.9/);
+  await assert.rejects(checkVersions(staleRoot), /README\.zh-CN\.md#source: 0\.0\.9/);
 
   const staleReleaseLabelRoot = await fixture("0.1.0-beta.1");
   await writeFile(

@@ -51,27 +51,27 @@ export async function checkVersions(root) {
   );
 
   if (expected) {
-    const readmeZh = await readOptional(path.join(root, "README.md"));
-    const readmeEn = await readOptional(path.join(root, "README.en.md"));
+    const readmeEn = await readOptional(path.join(root, "README.md"));
+    const readmeZh = await readOptional(path.join(root, "README.zh-CN.md"));
     const releaseGuide = await readOptional(path.join(root, "docs/release.md"));
     const releaseNotes = await readOptional(
       path.join(root, `docs/releases/v${expected}.md`),
     );
     versions.set(
       "README.md#source",
-      matchVersion(readmeZh ?? "", /当前源码版本为\s*`([^`]+)`/),
-    );
-    versions.set(
-      "README.md#release",
-      matchVersion(readmeZh ?? "", /releases\/tag\/v([^)\s]+)/),
-    );
-    versions.set(
-      "README.en.md#source",
       matchVersion(readmeEn ?? "", /current source version is\s*`([^`]+)`/i),
     );
     versions.set(
-      "README.en.md#release",
+      "README.md#release",
       matchVersion(readmeEn ?? "", /releases\/tag\/v([^)\s]+)/),
+    );
+    versions.set(
+      "README.zh-CN.md#source",
+      matchVersion(readmeZh ?? "", /当前源码版本为\s*`([^`]+)`/),
+    );
+    versions.set(
+      "README.zh-CN.md#release",
+      matchVersion(readmeZh ?? "", /releases\/tag\/v([^)\s]+)/),
     );
     versions.set(
       "docs/release.md#current",
