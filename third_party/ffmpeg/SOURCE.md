@@ -34,7 +34,7 @@ archive below, verifies the archive SHA-256, extracts `bin/ffmpeg.exe` and
 `checksums.sha256`. CI and release Windows jobs run it before validation;
 `scripts/build-server.sh` invokes it automatically when the files are missing.
 
-- Downloaded archive: https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z
+- Downloaded archive: https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.7z
 - Archive SHA-256: `0fff188997a499b5382e0f66e845d4556c48c54f0113ebed4853d556dbdd7059`
 - Build scripts: https://github.com/GyanD/codexffmpeg, commit `46465995c991fe65c5de853fa79bddec09cd6c37`
 - Build-script source: https://codeload.github.com/GyanD/codexffmpeg/tar.gz/46465995c991fe65c5de853fa79bddec09cd6c37
