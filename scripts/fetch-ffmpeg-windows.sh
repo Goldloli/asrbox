@@ -2,15 +2,21 @@
 # Download and verify the vendored Windows x64 ffmpeg/ffprobe binaries.
 #
 # The binaries themselves are not committed to git (each exceeds GitHub's
-# 100MB file limit); they are fetched from the pinned gyan.dev release archive
-# and verified twice: archive SHA-256 on download, then per-file SHA-256
+# 100MB file limit); they are fetched from the pinned gyan.dev build archive on
+# GitHub and verified twice: archive SHA-256 on download, then per-file SHA-256
 # against third_party/ffmpeg/checksums.sha256 after extraction.
+#
+# The archive is downloaded from the GyanD/codexffmpeg GitHub release for the
+# pinned version. gyan.dev only serves the latest full build under
+# /ffmpeg/builds/packages/, so the pinned 8.1.2 archive there now returns 404
+# and every Windows job failed at fetch time. The release asset is the same
+# byte-identical archive (see ARCHIVE_SHA256 below).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FFMPEG_DIR="$ROOT/third_party/ffmpeg"
 OUT_DIR="$FFMPEG_DIR/win32-x64"
-ARCHIVE_URL="https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z"
+ARCHIVE_URL="https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.7z"
 ARCHIVE_SHA256="0fff188997a499b5382e0f66e845d4556c48c54f0113ebed4853d556dbdd7059"
 ARCHIVE_ROOT="ffmpeg-8.1.2-full_build"
 

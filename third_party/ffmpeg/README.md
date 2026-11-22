@@ -14,7 +14,7 @@ Current macOS arm64 binaries:
 Current Windows x64 binaries:
 
 - Source: gyan.dev FFmpeg builds (`ffmpeg-8.1.2-full_build`)
-- Download URL: `https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z`
+- Download URL: `https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build.7z` (same archive as gyan.dev's pinned `packages/` file, which now 404s)
 - Version checked during vendoring: `8.1.2-full_build-www.gyan.dev`
 - Last reviewed: 2026-09-10
 
